@@ -49,3 +49,9 @@ class ALU(Elaboratable):
         with m.Else():
             m.d.comb += self.o.eq(self.add.o)
         return m
+
+    def ports(self):
+        return [self.op, self.a, self.b, self.o]
+
+    def sim_hooks(self, sim):
+        pass

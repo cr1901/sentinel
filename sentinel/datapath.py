@@ -7,3 +7,9 @@ class DataPath(Elaboratable):
     def elaborate(self, platform):
         m = Module()
         return m
+
+    def ports(self):
+        return []
+
+    def sim_hooks(self, sim):
+        pass

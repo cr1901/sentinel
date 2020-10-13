@@ -73,8 +73,9 @@ def main_runner(parser, args, design, platform=None, name="top", ports=()):
 
     if args.action == "simulate":
         fragment = Fragment.get(design, platform)
-        sim = pysim.Simulator(fragment)
+        sim = Simulator(fragment)
         sim.add_clock(args.sync_period)
+        design.sim_hooks(sim)
         with sim.write_vcd(vcd_file=args.vcd_file, gtkw_file=args.gtkw_file, traces=ports):
             sim.run_until(args.sync_period * args.sync_clocks, run_passive=True)
     # nmigen.cli end
@@ -92,19 +93,16 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.module == "ALU":
-        alu = ALU(width=32)
-        main_runner(parser, args, alu, ports=[alu.op, alu.a, alu.b, alu.o])
+        mod = ALU(width=32)
     elif args.module == "Control":
-        ctrl = Control()
-        main_runner(parser, args, ctrl, ports=[])
+        mod = Control()
     elif args.module == "DataPath":
-        dp = DataPath()
-        main_runner(parser, args, dp, ports=[])
+        mod = DataPath()
     elif args.module == "Decode":
-        decode = Decode()
-        main_runner(parser, args, decode, ports=[])
+        mod = Decode()
     elif args.module == "Top":
-        top = Top()
-        main_runner(parser, args, top, ports=[])
+        mod = Top()
     else:
         assert False
+
+    main_runner(parser, args, mod, ports=mod.ports())
