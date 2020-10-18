@@ -1,5 +1,7 @@
 import sys
 import argparse
+import subprocess
+import re
 
 from nmigen import *
 from nmigen.back import rtlil, cxxrtl, verilog
@@ -10,6 +12,10 @@ from .control import Control
 from .datapath import DataPath
 from .decode import Decode
 from .top import Top
+
+class RunnerError(Exception):
+    pass
+
 
 def main_parser(parser=None):
     # nmigen.cli begin
@@ -42,6 +48,11 @@ def main_parser(parser=None):
         metavar="COUNT", type=int, required=True,
         help="simulate for COUNT 'sync' clock periods")
     # nmigen.cli end
+
+    p_size = p_action.add_parser("size",
+        help="Run a generic synth script to query design size.")
+    p_size.add_argument("-v", "--verbose", action="store_true",
+        help="Show full yosys output, not just stats.")
 
     return parser
 
@@ -79,6 +90,58 @@ def main_runner(parser, args, design, platform=None, name="top", ports=()):
         with sim.write_vcd(vcd_file=args.vcd_file, gtkw_file=args.gtkw_file, traces=ports):
             sim.run_until(args.sync_period * args.sync_clocks, run_passive=True)
     # nmigen.cli end
+
+    if args.action == "size":
+        fragment = Fragment.get(design, platform)
+        rtlil_text = rtlil.convert(fragment, name=name, ports=ports)
+
+        # Created from a combination of nmigen._toolchain.yosys and
+        # nmigen.back.verilog. Script comes from nextpnr-generic.
+        script = []
+        script.append("read_ilang <<rtlil\n{}\nrtlil".format(rtlil_text))
+        script.append("hierarchy -check")
+        script.append("proc")
+        script.append("flatten")
+        script.append("tribuf -logic")
+        script.append("deminout")
+        script.append("synth -run coarse")
+        script.append("memory_map")
+        script.append("opt -full")
+        script.append("techmap -map +/techmap.v")
+        script.append("opt -fast")
+        script.append("dfflegalize -cell $_DFF_P_ 0")
+        script.append("abc -lut 4 -dress")
+        script.append("clean")
+        script.append("hierarchy -check")
+        script.append("stat")
+
+        stdin = "\n".join(script)
+
+        popen = subprocess.Popen(["yosys", "-"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            encoding="utf-8")
+        stdout, stderr = popen.communicate(stdin)
+        if popen.returncode:
+            raise RunnerError(stderr.strip())
+
+        if args.verbose:
+            print(stdout)
+        else:
+            begin_re = re.compile(r"[\d.]+ Printing statistics.")
+            end_re = re.compile(r"End of script.")
+            capture = False
+            # begin_l = 0
+            # end_l = 0
+
+            for i, l in enumerate(stdout.split("\n")):
+                if begin_re.match(l):
+                    capture = True
+
+                if end_re.match(l):
+                    capture = False
+
+                if capture:
+                    print(l)
 
 
 if __name__ == '__main__':
