@@ -24,7 +24,7 @@ class Shifter(Elaboratable):
         self.shift_done = Signal()
         self.op = op
 
-        self.cnt = Signal.like(self.b)
+        self.cnt = Signal(5)
         self.do_shift_rose = Signal()
         self.do_shift_prev = Signal()
 
