@@ -68,6 +68,7 @@ class OpType(enum.Enum):
     CMP_LTU = 11
     CMP_GE = 12
     CMP_GEU = 13
+    NOP = 14
 
 
 class Adder(Unit):
@@ -143,7 +144,7 @@ class CompareGreaterThanEqualUnsigned(Unit):
 class ALU(Elaboratable):
     # Assumes: op is held steady for duration of op.
     def __init__(self, width):
-        self.op  = Signal(OpType)
+        self.op  = Signal(OpType, reset=OpType.NOP)
         self.ready = Signal()
         self.a   = Signal(width)
         self.b   = Signal(width)
@@ -270,6 +271,10 @@ class ALU(Elaboratable):
                     self.o_mux.eq(self.cmp_gteu.o),
                     self.ready_next.eq(1)
                 ]
+            with m.Case():
+                m.d.comb += [
+                    self.ready_next.eq(0)
+                ]
 
         m.d.sync += [
             self.o.eq(self.o_mux),
@@ -281,4 +286,129 @@ class ALU(Elaboratable):
         return [self.op, self.a, self.b, self.o, self.ready]
 
     def sim_hooks(self, sim):
-        pass
+        def out_proc():
+            def expect_prev_op(op_type, o=None, *, ready=True, signed=False):
+                assert OpType((yield self.op)) == op_type
+                yield
+                assert (yield self.ready) == ready
+                if o:
+                    if signed:
+                        assert (yield self.o.as_signed()) == o
+                    else:
+                        assert (yield self.o) == o
+
+            def expect_delayed_curr_op(num_cycles, op_type, o=None, *, signed=False):
+                # From previous op
+                assert OpType((yield self.op)) == op_type
+                assert (yield self.ready)
+
+                # Last delay will be provided by expect_prev_op.
+                for _ in range(num_cycles):
+                    yield
+                    assert not (yield self.ready)
+
+                yield from expect_prev_op(op_type, o, ready=True, signed=signed)
+                yield # Multicycle ops aren't pipelined; need extra cycle
+                      # to send new op.
+
+
+            # Start conditions
+            assert OpType((yield self.op)) == OpType.NOP
+            assert not (yield self.ready)
+            yield from expect_prev_op(OpType.NOP, 0, ready=False)
+
+            yield from expect_prev_op(OpType.ADD, 254)
+
+            yield from expect_prev_op(OpType.SUB, 256)
+
+            yield from expect_prev_op(OpType.AND, 255)
+
+            yield from expect_prev_op(OpType.NOP, ready=False)
+
+            yield from expect_prev_op(OpType.OR, -1, signed=True)
+
+            yield from expect_prev_op(OpType.XOR, 0xffffff00)
+
+            yield from expect_delayed_curr_op(4, OpType.SLL, (255 << 3))
+
+            yield from expect_delayed_curr_op(4, OpType.SRL, (255 >> 3))
+
+            yield from expect_delayed_curr_op(4, OpType.SRA, -0x10000000, signed=True)
+
+            yield from expect_prev_op(OpType.CMP_EQ, 0)
+
+            yield from expect_prev_op(OpType.CMP_NE, 1)
+
+            yield from expect_prev_op(OpType.CMP_LT, 1)
+
+            yield from expect_prev_op(OpType.CMP_LTU, 0)
+
+            yield from expect_prev_op(OpType.CMP_GE, 0)
+
+            yield from expect_prev_op(OpType.CMP_GEU, 1)
+
+            yield from expect_prev_op(OpType.NOP, ready=False)
+
+
+        def in_proc():
+            def start_op(op_type, a=None, b=None):
+                yield self.op.eq(op_type)
+                if a:
+                    yield self.a.eq(a)
+                if b:
+                    yield self.b.eq(b)
+                yield
+
+            def delay_until_ready():
+                assert (yield self.ready)
+
+                yield
+                assert not (yield self.ready)
+
+                while not (yield self.ready):
+                    yield
+
+            yield from start_op(OpType.ADD, 255, -1)
+
+            # The ALU can be pipelined- starting a new op before the old
+            # is ready, but we should wait until ready asserts in the actual
+            # core (1 cycle latency from rdy assert to a new op).
+            #
+            # FIXME: 1-cycle op ready is meaningless, since results will be
+            # overwritten on next cycle (multicycle ops hold their results).
+            yield from start_op(OpType.SUB)
+
+            yield from start_op(OpType.AND)
+
+            yield from start_op(OpType.NOP)
+
+            yield from start_op(OpType.OR)
+
+            yield from start_op(OpType.XOR)
+
+            yield from start_op(OpType.SLL, b=3)
+            yield from delay_until_ready()
+
+            yield from start_op(OpType.SRL)
+            yield from delay_until_ready()
+
+            yield from start_op(OpType.SRA, a=0x80000000)
+            yield from delay_until_ready()
+
+            yield from start_op(OpType.CMP_EQ, a=0, b=1)
+
+            yield from start_op(OpType.CMP_NE)
+
+            yield from start_op(OpType.CMP_LT, a=0x80000000, b=0x7fffffff)
+
+            yield from start_op(OpType.CMP_LTU)
+
+            yield from start_op(OpType.CMP_GE)
+
+            yield from start_op(OpType.CMP_GEU)
+
+            yield from start_op(OpType.NOP)
+
+
+        sim.add_sync_process(in_proc)
+        sim.add_sync_process(out_proc)
