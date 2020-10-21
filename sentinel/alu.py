@@ -16,13 +16,13 @@ class Unit(Elaboratable):
 
 
 class Shifter(Elaboratable):
-    def __init__(self, width, op):
+    def __init__(self, width):
         self.a   = Signal(width)
         self.b   = Signal(width)
         self.o   = Signal(width)
         self.do_shift = Signal()
         self.shift_done = Signal()
-        self.op = op
+        self.op = Signal(OpType)
 
         self.cnt = Signal(5)
         self.do_shift_rose = Signal()
@@ -42,10 +42,15 @@ class Shifter(Elaboratable):
                 ]
             with m.Else():
                 with m.If(self.cnt > 0):
-                    m.d.sync += [
-                        self.o.eq(self.op(self.o)),
-                        self.cnt.eq(self.cnt - 1)
-                    ]
+                    with m.Switch(self.op):
+                        with m.Case(OpType.SLL):
+                            m.d.sync += self.o.eq(self.o.shift_left(1))
+                        with m.Case(OpType.SRL):
+                            m.d.sync += self.o.eq(self.o.shift_right(1))
+                        with m.Case(OpType.SRA):
+                            m.d.sync += self.o.eq(self.o.as_signed() >> 1)
+
+                    m.d.sync += self.cnt.eq(self.cnt - 1)
                 with m.Else():
                     with m.If(self.do_shift):
                         m.d.comb += self.shift_done.eq(1)
@@ -94,21 +99,6 @@ class OR(Unit):
 class XOR(Unit):
     def __init__(self, width):
         super().__init__(width, lambda a, b: a ^ b)
-
-
-class ShiftLeft(Shifter):
-    def __init__(self, width):
-        super().__init__(width, lambda s: s.shift_left(1))
-
-
-class LogicalShiftRight(Shifter):
-    def __init__(self, width):
-        super().__init__(width, lambda s: s >> 1)
-
-
-class ArithmeticShiftRight(Shifter):
-    def __init__(self, width):
-        super().__init__(width, lambda s: s.as_signed() >> 1)
 
 
 class CompareEqual(Unit):
@@ -161,9 +151,7 @@ class ALU(Elaboratable):
         self.bitand = AND(width)
         self.bitor = OR(width)
         self.bitxor = XOR(width)
-        self.sl = ShiftLeft(width)
-        self.lsl = LogicalShiftRight(width)
-        self.asl = ArithmeticShiftRight(width)
+        self.shift = Shifter(width)
         self.cmp_equal = CompareEqual(width)
         self.cmp_not_equal = CompareNotEqual(width)
         self.cmp_lt = CompareLessThan(width)
@@ -178,9 +166,7 @@ class ALU(Elaboratable):
         m.submodules.bitand = self.bitand
         m.submodules.bitor = self.bitor
         m.submodules.bitxor = self.bitxor
-        m.submodules.sl = self.sl
-        m.submodules.lsl = self.lsl
-        m.submodules.asl = self.asl
+        m.submodules.shift = self.shift
         m.submodules.cmp_equal = self.cmp_equal
         m.submodules.cmp_not_equal = self.cmp_not_equal
         m.submodules.cmp_lt = self.cmp_lt
@@ -189,13 +175,15 @@ class ALU(Elaboratable):
         m.submodules.cmp_gteu = self.cmp_gteu
 
         for submod in [self.add, self.sub, self.bitand, self.bitor,
-            self.bitxor, self.sl, self.lsl, self.asl, self.cmp_equal,
+            self.bitxor, self.shift, self.cmp_equal,
             self.cmp_not_equal, self.cmp_lt, self.cmp_ltu, self.cmp_gte,
             self.cmp_gteu]:
             m.d.comb += [
                 submod.a.eq(self.a),
                 submod.b.eq(self.b),
             ]
+
+        m.d.comb += self.shift.op.eq(self.op)
 
         with m.Switch(self.op):
             with m.Case(OpType.ADD):
@@ -225,21 +213,21 @@ class ALU(Elaboratable):
                 ]
             with m.Case(OpType.SLL):
                 m.d.comb += [
-                    self.o_mux.eq(self.sl.o),
-                    self.ready_next.eq(self.sl.shift_done),
-                    self.sl.do_shift.eq(1)
+                    self.o_mux.eq(self.shift.o),
+                    self.ready_next.eq(self.shift.shift_done),
+                    self.shift.do_shift.eq(1)
                 ]
             with m.Case(OpType.SRL):
                 m.d.comb += [
-                    self.o_mux.eq(self.lsl.o),
-                    self.ready_next.eq(self.lsl.shift_done),
-                    self.lsl.do_shift.eq(1)
+                    self.o_mux.eq(self.shift.o),
+                    self.ready_next.eq(self.shift.shift_done),
+                    self.shift.do_shift.eq(1)
                 ]
             with m.Case(OpType.SRA):
                 m.d.comb += [
-                    self.o_mux.eq(self.asl.o),
-                    self.ready_next.eq(self.asl.shift_done),
-                    self.asl.do_shift.eq(1)
+                    self.o_mux.eq(self.shift.o),
+                    self.ready_next.eq(self.shift.shift_done),
+                    self.shift.do_shift.eq(1)
                 ]
             with m.Case(OpType.CMP_EQ):
                 m.d.comb += [
@@ -297,10 +285,10 @@ class ALU(Elaboratable):
                     else:
                         assert (yield self.o) == o
 
-            def expect_delayed_curr_op(num_cycles, op_type, o=None, *, signed=False):
+            def expect_delayed_curr_op(num_cycles, op_type, o=None, *, ready=True, signed=False):
                 # From previous op
                 assert OpType((yield self.op)) == op_type
-                assert (yield self.ready)
+                assert (yield self.ready) == ready
 
                 # Last delay will be provided by expect_prev_op.
                 for _ in range(num_cycles):
@@ -329,11 +317,14 @@ class ALU(Elaboratable):
 
             yield from expect_prev_op(OpType.XOR, 0xffffff00)
 
-            yield from expect_delayed_curr_op(4, OpType.SLL, (255 << 3))
+            yield from expect_prev_op(OpType.NOP, ready=False)
+            yield from expect_delayed_curr_op(4, OpType.SLL, (255 << 3), ready=False)
 
-            yield from expect_delayed_curr_op(4, OpType.SRL, (255 >> 3))
+            yield from expect_prev_op(OpType.NOP, ready=False)
+            yield from expect_delayed_curr_op(4, OpType.SRL, (255 >> 3), ready=False)
 
-            yield from expect_delayed_curr_op(4, OpType.SRA, -0x10000000, signed=True)
+            yield from expect_prev_op(OpType.NOP, ready=False)
+            yield from expect_delayed_curr_op(4, OpType.SRA, -0x10000000, signed=True, ready=False)
 
             yield from expect_prev_op(OpType.CMP_EQ, 0)
 
@@ -360,10 +351,11 @@ class ALU(Elaboratable):
                 yield
 
             def delay_until_ready():
-                assert (yield self.ready)
+                # Unknown if we will be ready or not.
+                # assert (yield self.ready)
 
                 yield
-                assert not (yield self.ready)
+                # assert not (yield self.ready)
 
                 while not (yield self.ready):
                     yield
@@ -375,7 +367,14 @@ class ALU(Elaboratable):
             # core (1 cycle latency from rdy assert to a new op).
             #
             # FIXME: 1-cycle op ready is meaningless, since results will be
-            # overwritten on next cycle (multicycle ops hold their results).
+            # overwritten on next cycle if inputs change. Only if inputs are
+            # kept constant are outputs preserved.
+            # Multicycle ops hold their results if inputs besides OpType
+            # changes. The ALU can't tell the difference between "previous
+            # results still needed" and "the same computation is occurring
+            # twice in a row". The distinction matters for the shifting ops,
+            # which have state/are multicycle (holding previous results is
+            # easier :)).
             yield from start_op(OpType.SUB)
 
             yield from start_op(OpType.AND)
@@ -386,12 +385,17 @@ class ALU(Elaboratable):
 
             yield from start_op(OpType.XOR)
 
+            # Shifts must always begin with a non-shift OpType to indicate the
+            # difference between a previous shift op and new shift op.
+            yield from start_op(OpType.NOP)
             yield from start_op(OpType.SLL, b=3)
             yield from delay_until_ready()
 
+            yield from start_op(OpType.NOP)
             yield from start_op(OpType.SRL)
             yield from delay_until_ready()
 
+            yield from start_op(OpType.NOP)
             yield from start_op(OpType.SRA, a=0x80000000)
             yield from delay_until_ready()
 
@@ -409,6 +413,11 @@ class ALU(Elaboratable):
 
             yield from start_op(OpType.NOP)
 
+            # yield from start_op(OpType.SRA, a=0x80000000, b = 5)
+            # yield from delay_until_ready()
+            #
+            # yield from start_op(OpType.SRA, a=0x80000000, b=1)
+            # yield from delay_until_ready()
 
         sim.add_sync_process(in_proc)
         sim.add_sync_process(out_proc)
