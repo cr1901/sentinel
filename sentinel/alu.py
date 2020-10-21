@@ -15,6 +15,27 @@ class Unit(Elaboratable):
         return m
 
 
+class Logical(Elaboratable):
+    def __init__(self, width):
+        self.a   = Signal(width)
+        self.b   = Signal(width)
+        self.o   = Signal(width)
+        self.op = Signal(OpType)
+
+    def elaborate(self, platform):
+        m = Module()
+
+        with m.Switch(self.op):
+            with m.Case(OpType.AND):
+                m.d.comb += self.o.eq(self.a & self.b)
+            with m.Case(OpType.OR):
+                m.d.comb += self.o.eq(self.a | self.b)
+            with m.Case(OpType.XOR):
+                m.d.comb += self.o.eq(self.a ^ self.b)
+
+        return m
+
+
 class Shifter(Elaboratable):
     def __init__(self, width):
         self.a   = Signal(width)
@@ -148,9 +169,7 @@ class ALU(Elaboratable):
 
         self.add = Adder(width)
         self.sub = Subtractor(width)
-        self.bitand = AND(width)
-        self.bitor = OR(width)
-        self.bitxor = XOR(width)
+        self.logical = Logical(width)
         self.shift = Shifter(width)
         self.cmp_equal = CompareEqual(width)
         self.cmp_not_equal = CompareNotEqual(width)
@@ -163,9 +182,7 @@ class ALU(Elaboratable):
         m = Module()
         m.submodules.add = self.add
         m.submodules.sub = self.sub
-        m.submodules.bitand = self.bitand
-        m.submodules.bitor = self.bitor
-        m.submodules.bitxor = self.bitxor
+        m.submodules.logical = self.logical
         m.submodules.shift = self.shift
         m.submodules.cmp_equal = self.cmp_equal
         m.submodules.cmp_not_equal = self.cmp_not_equal
@@ -174,8 +191,7 @@ class ALU(Elaboratable):
         m.submodules.cmp_gte = self.cmp_gte
         m.submodules.cmp_gteu = self.cmp_gteu
 
-        for submod in [self.add, self.sub, self.bitand, self.bitor,
-            self.bitxor, self.shift, self.cmp_equal,
+        for submod in [self.add, self.sub, self.logical, self.shift, self.cmp_equal,
             self.cmp_not_equal, self.cmp_lt, self.cmp_ltu, self.cmp_gte,
             self.cmp_gteu]:
             m.d.comb += [
@@ -183,6 +199,7 @@ class ALU(Elaboratable):
                 submod.b.eq(self.b),
             ]
 
+        m.d.comb += self.logical.op.eq(self.op)
         m.d.comb += self.shift.op.eq(self.op)
 
         with m.Switch(self.op):
@@ -198,17 +215,17 @@ class ALU(Elaboratable):
                 ]
             with m.Case(OpType.AND):
                 m.d.comb += [
-                    self.o_mux.eq(self.bitand.o),
+                    self.o_mux.eq(self.logical.o),
                     self.ready_next.eq(1)
                 ]
             with m.Case(OpType.OR):
                 m.d.comb += [
-                    self.o_mux.eq(self.bitor.o),
+                    self.o_mux.eq(self.logical.o),
                     self.ready_next.eq(1)
                 ]
             with m.Case(OpType.XOR):
                 m.d.comb += [
-                    self.o_mux.eq(self.bitxor.o),
+                    self.o_mux.eq(self.logical.o),
                     self.ready_next.eq(1)
                 ]
             with m.Case(OpType.SLL):
