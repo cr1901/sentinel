@@ -105,7 +105,7 @@ def main_runner(parser, args, design, platform=None, name="top", ports=()):
         script.append("tribuf -logic")
         script.append("deminout")
         script.append("synth -run coarse")
-        script.append("memory_map")
+        # script.append("memory_map")
         script.append("opt -full")
         script.append("techmap -map +/techmap.v")
         script.append("opt -fast")
