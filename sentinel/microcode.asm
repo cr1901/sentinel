@@ -1,4 +1,4 @@
-space block_ram: width 32, size 224;
+space block_ram: width 32, size 256;
 
 space block_ram;
 origin 0;
