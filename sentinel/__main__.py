@@ -11,8 +11,8 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
-from .microcode import UCodeROM
 from .top import Top
+from .ucoderom import UCodeROM
 
 class RunnerError(Exception):
     pass
