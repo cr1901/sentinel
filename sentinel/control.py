@@ -11,8 +11,15 @@ class Control(Elaboratable):
 
         # Control inputs
         self.vec_adr = Signal.like(self.ucoderom.signals["target"])
+        # Direct 5 high bits of opcode.
         self.opcode = Signal(OpcodeType)
-        self.alu_op = Signal(OpType)
+        # Like ALU.OpType, but is direct concatenation of funct3 and funct7
+        # opcode bits.
+        self.requested_op = Signal(4)
+        # funct12 ECALL (0) or EBREAK (1)
+        self.e_type = Signal(1)
+        # Load should zero-extend, not sign extend.
+        # self.load_unsigned = Signal(1)
 
         # Predicates for test mux.
         self.compare_okay = Signal()
@@ -31,6 +38,7 @@ class Control(Elaboratable):
         self.pc_action = Signal.like(self.ucoderom.signals["pc_action"])
         self.a_src = Signal.like(self.ucoderom.signals["a_src"])
         self.b_src = Signal.like(self.ucoderom.signals["b_src"])
+        self.alu_op = Signal.like(self.ucoderom.signals["alu_op"])
         self.read_reg = Signal.like(self.ucoderom.signals["read_reg"])
         self.write_reg = Signal.like(self.ucoderom.signals["write_reg"])
 
@@ -48,6 +56,7 @@ class Control(Elaboratable):
             self.pc_action.eq(self.ucoderom.signals["pc_action"]),
             self.a_src.eq(self.ucoderom.signals["a_src"]),
             self.b_src.eq(self.ucoderom.signals["b_src"]),
+            self.alu_op.eq(self.ucoderom.signals["alu_op"]),
             self.read_reg.eq(self.ucoderom.signals["read_reg"]),
             self.write_reg.eq(self.ucoderom.signals["write_reg"])
         ]
@@ -74,8 +83,8 @@ class Control(Elaboratable):
         # TODO: Make internally-used signals visible to outside modules
         # for custom insns.
         return [self.vec_adr, self.opcode, self.alu_op, self.test,
-            self.pc_action, self.a_src, self.b_src, self.read_reg,
-            self.write_reg]
+            self.pc_action, self.a_src, self.b_src, self.alu_op,
+            self.read_reg, self.write_reg]
 
     def sim_hooks(self, sim):
         pass

@@ -16,17 +16,21 @@ fields block_ram: {
 
   // false: Unconditionally fail
   // int: Is interrupt line high?
-  cond_test: enum { false = 0; intr; true}, default true;
+  cond_test: enum { false = 0; intr; exception; cmp_okay; true}, default true;
 
   pc_action: enum { hold = 0; inc; load_abs; load_rel; }, default hold;
   a_src: enum { gp = 0; pc; }, default gp;
   b_src: enum { gp = 0; imm; target; }, default gp;
+
+  // Enum layout needs to match ALU.OpType
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_lut; cmp_ge; cmp_geu; nop }, default nop;
 
   read_reg: enum { none = 0; a_src; b_src; }, default none;
   write_reg: bool, default 0;
 };
 
 check_int: jmp_type => vec, cond_test => intr;
+
 
 // Interrupt handler.
 origin 224;
