@@ -11,6 +11,7 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
+from .microcode import UCodeROM
 from .top import Top
 
 class RunnerError(Exception):
@@ -50,9 +51,16 @@ def main_parser(parser=None):
     # nmigen.cli end
 
     p_size = p_action.add_parser("size",
-        help="Run a generic synth script to query design size.")
+        help="Run a generic synth script to query design size")
     p_size.add_argument("-v", "--verbose", action="store_true",
-        help="Show full yosys output, not just stats.")
+        help="Show full yosys output, not just stats")
+
+    p_ucode = p_action.add_parser("microcode",
+        help="Run the microcode assembler (ignores --module arg)")
+    p_ucode.add_argument("-f", "--field-defs",
+        metavar="FDEFS-FILE", help="emit field defines to FDEFS-FILE")
+    p_ucode.add_argument("-x", "--hex",
+        metavar="HEX-FILE", help="emit a hex file")
 
     return parser
 
@@ -143,29 +151,40 @@ def main_runner(parser, args, design, platform=None, name="top", ports=()):
                 if capture:
                     print(l)
 
+    if args.action == "microcode":
+        ucode = UCodeROM(field_defs=args.field_defs, hex=args.hex)
+        ucode._MustUse__used = True
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--module", dest="module",
-        metavar="MODULE", choices=["ALU", "Control", "DataPath", "Decode", "Top"],
-        default = "Top", help="generate code for module.")
+        metavar="MODULE", choices=["ALU", "Control", "DataPath", "Decode",
+            "Top", "UCodeROM"], default = "Top", help="generate code for module.")
 
     # In nmigen.cli, these are passed straight to main_runner. We need
     # different main_runner depending on component.
     main_p = main_parser(parser)
     args = parser.parse_args()
 
-    if args.module == "ALU":
-        mod = ALU(width=32)
-    elif args.module == "Control":
-        mod = Control()
-    elif args.module == "DataPath":
-        mod = DataPath()
-    elif args.module == "Decode":
-        mod = Decode()
-    elif args.module == "Top":
-        mod = Top()
+    if args.action not in ("microcode"):
+        if args.module == "ALU":
+            mod = ALU(width=32)
+        elif args.module == "Control":
+            mod = Control()
+        elif args.module == "DataPath":
+            mod = DataPath()
+        elif args.module == "Decode":
+            mod = Decode()
+        elif args.module == "Top":
+            mod = Top()
+        elif args.module == "UCodeROM":
+            mod = UCodeROM()
+        else:
+            assert False
+        ports = mod.ports()
     else:
-        assert False
+        mod = None
+        ports = None
 
-    main_runner(parser, args, mod, ports=mod.ports())
+    main_runner(parser, args, mod, ports=ports)
