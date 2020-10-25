@@ -41,9 +41,9 @@ class Control(Elaboratable):
         self.a_src = Signal.like(self.ucoderom.signals["a_src"])
         self.b_src = Signal.like(self.ucoderom.signals["b_src"])
         self.alu_op = Signal.like(self.ucoderom.signals["alu_op"])
-        self.read_reg = Signal.like(self.ucoderom.signals["read_reg"])
-        self.write_reg = Signal.like(self.ucoderom.signals["write_reg"])
+        self.reg_op = Signal.like(self.ucoderom.signals["reg_op"])
         self.mem_req = Signal.like(self.ucoderom.signals["mem_req"])
+        self.do_decode = Signal.like(self.ucoderom.signals["do_decode"])
 
     def elaborate(self, platform):
         m = Module()
@@ -60,9 +60,9 @@ class Control(Elaboratable):
             self.a_src.eq(self.ucoderom.signals["a_src"]),
             self.b_src.eq(self.ucoderom.signals["b_src"]),
             self.alu_op.eq(self.ucoderom.signals["alu_op"]),
-            self.read_reg.eq(self.ucoderom.signals["read_reg"]),
-            self.write_reg.eq(self.ucoderom.signals["write_reg"]),
-            self.mem_req.eq(self.ucoderom.signals["mem_req"])
+            self.reg_op.eq(self.ucoderom.signals["reg_op"]),
+            self.mem_req.eq(self.ucoderom.signals["mem_req"]),
+            self.do_decode.eq(self.ucoderom.signals["do_decode"])
         ]
 
         # Connect ucode ROM to sequencer
@@ -88,7 +88,7 @@ class Control(Elaboratable):
         # for custom insns.
         return [self.vec_adr, self.opcode, self.alu_op, self.test,
             self.pc_action, self.a_src, self.b_src, self.alu_op,
-            self.read_reg, self.write_reg, self.mem_req]
+            self.reg_op, self.mem_req, self.do_decode]
 
     def sim_hooks(self, sim):
         pass

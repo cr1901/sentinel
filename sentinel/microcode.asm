@@ -30,9 +30,9 @@ fields block_ram: {
   // Enum layout needs to match ALU.OpType
   alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_lut; cmp_ge; cmp_geu; nop }, default nop;
 
-  read_reg: enum { none = 0; a_src; b_src; }, default none;
-  write_reg: bool, default 0;
+  reg_op: enum { none = 0; read_a_src; read_b_src; write_dst; }, default none;
   mem_req: bool, default 0;
+  do_decode: bool, default 0;
 };
 
 check_int: jmp_type => vec, cond_test => intr;

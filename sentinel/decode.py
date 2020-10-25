@@ -74,7 +74,17 @@ class Decode(Elaboratable):
         self.illegal = Signal()
         self.width = Signal()
         self.custom = Signal()
+        self.requested_op = Signal(4)
+
+        ###
+
         self.opcode = Signal(OpcodeType, reset=0)
+        self.rd = Signal(5)
+        self.funct3 = Signal(3)
+        self.rs1 = Signal(5)
+        self.rs2 = Signal(5)
+        self.funct7 = Signal(7)
+        self.funct12 = Signal(12)
 
         self.definitely_illegal = Signal()
         self.probably_illegal = Signal()
@@ -88,8 +98,15 @@ class Decode(Elaboratable):
 
         m.d.comb += [
             self.immgen.insn.eq(self.insn),
-            self.opcode.eq(self.insn[2:8]),
-            self.definitely_illegal.eq(self.insn.all() | ~self.insn.any() | (self.insn[0:2] != 0b11))
+            self.definitely_illegal.eq(self.insn.all() | ~self.insn.any() | (self.insn[0:2] != 0b11)),
+            # Helpers
+            self.opcode.eq(self.insn[2:7]),
+            self.rd.eq(self.insn[7:12]),
+            self.funct3.eq(self.insn[12:15]),
+            self.rs1.eq(self.insn[15:20]),
+            self.rs2.eq(self.insn[20:25]),
+            self.funct7.eq(self.insn[25:32]),
+            self.funct12.eq(self.insn[20:32])
         ]
 
         with m.If(self.do_decode):
@@ -101,7 +118,24 @@ class Decode(Elaboratable):
             # TODO: Might be worth hoisting comb statements out of m.If?
             with m.Switch(self.opcode):
                 with m.Case(OpcodeType.OP_IMM):
+                    m.d.sync += [
+                        self.src_a.eq(self.rs1),
+                        self.src_b.eq(self.rs2),
+                        self.dst.eq(self.rd)
+                    ]
+
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
+
+                    with m.If((self.funct3 == 1) | (self.funct3 == 5)):
+                        with m.If(self.funct3 == 1):
+                            with m.If(self.funct7 != 0):
+                                m.d.comb += self.probably_illegal.eq(1)
+                        with m.Else():
+                            with m.If((self.funct7 != 0) & (self.funct7 != 0b0100000)):
+                                m.d.comb += self.probably_illegal.eq(1)
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3, self.funct7[-2]))
+                    with m.Else():
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
                 with m.Case(OpcodeType.LUI):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
                 with m.Case(OpcodeType.AUIPC):
