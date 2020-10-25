@@ -21,6 +21,8 @@ fields block_ram: {
   // alu_ready: Is alu_ready (mainly for shifts)?
   // true: Unconditionally succeed
   cond_test: enum { false = 0; intr; exception; cmp_okay; mem_valid; alu_ready; true}, default true;
+  // Invert test
+  invert_test: bool, default 0;
 
   pc_action: enum { hold = 0; inc; load_abs; load_rel; }, default hold;
   a_src: enum { gp = 0; pc; }, default gp;
@@ -37,7 +39,7 @@ fields block_ram: {
 
 check_int: jmp_type => vec, cond_test => intr, target => save_pc;
 fetch:
-wait_for_ack: mem_req => 1, cond_test => false, jmp_type => direct, target => wait_for_ack;
+wait_for_ack: mem_req => 1, invert_test => 1, cond_test => mem_valid, jmp_type => direct, target => wait_for_ack;
 
 
 // Interrupt handler.

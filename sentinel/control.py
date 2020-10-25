@@ -30,12 +30,14 @@ class Control(Elaboratable):
         # misaligned insn.
         self.exception = Signal()
         self.interrupt = Signal()
-        self.test = Signal() # Output of test mux.
+        self.raw_test = Signal() # Output of test mux.
+        self.test = Signal() # Possibly-inverted test result.
 
         # Internally-used microcode signals
         self.target = Signal.like(self.ucoderom.signals["target"])
         self.jmp_type = Signal.like(self.ucoderom.signals["jmp_type"])
         self.cond_test = Signal.like(self.ucoderom.signals["cond_test"])
+        self.invert_test = Signal.like(self.ucoderom.signals["invert_test"])
 
         # Control outputs- mostly from microcode ROM.
         self.pc_action = Signal.like(self.ucoderom.signals["pc_action"])
@@ -45,6 +47,9 @@ class Control(Elaboratable):
         self.reg_op = Signal.like(self.ucoderom.signals["reg_op"])
         self.mem_req = Signal.like(self.ucoderom.signals["mem_req"])
         self.do_decode = Signal.like(self.ucoderom.signals["do_decode"])
+
+        # Enums from microcode ROM.
+        self.CondTest = self.ucoderom.fields["cond_test"]
 
     def elaborate(self, platform):
         m = Module()
@@ -58,6 +63,7 @@ class Control(Elaboratable):
             self.target.eq(self.ucoderom.signals["target"]),
             self.jmp_type.eq(self.ucoderom.signals["jmp_type"]),
             self.cond_test.eq(self.ucoderom.signals["cond_test"]),
+            self.invert_test.eq(self.ucoderom.signals["invert_test"]),
             self.pc_action.eq(self.ucoderom.signals["pc_action"]),
             self.a_src.eq(self.ucoderom.signals["a_src"]),
             self.b_src.eq(self.ucoderom.signals["b_src"]),
@@ -88,6 +94,28 @@ class Control(Elaboratable):
             self.sequencer.opcode_adr.eq(self.mapper.map_adr),
             self.sequencer.vec_adr.eq(self.vec_adr)
         ]
+
+        # Test mux
+        with m.Switch(self.cond_test):
+            with m.Case(self.CondTest.false):
+                m.d.comb += self.raw_test.eq(0)
+            with m.Case(self.CondTest.intr):
+                m.d.comb += self.raw_test.eq(self.interrupt)
+            with m.Case(self.CondTest.exception):
+                m.d.comb += self.raw_test.eq(self.exception)
+            with m.Case(self.CondTest.cmp_okay):
+                m.d.comb += self.raw_test.eq(self.compare_okay)
+            with m.Case(self.CondTest.mem_valid):
+                m.d.comb += self.raw_test.eq(self.mem_valid)
+            with m.Case(self.CondTest.alu_ready):
+                m.d.comb += self.raw_test.eq(self.alu_ready)
+            with m.Case(self.CondTest.true):
+                m.d.comb += self.raw_test.eq(1)
+
+        with m.If(self.invert_test):
+            m.d.comb += self.test.eq(~self.raw_test)
+        with m.Else():
+            m.d.comb += self.test.eq(self.raw_test)
 
         return m
 

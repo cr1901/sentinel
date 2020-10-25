@@ -71,7 +71,8 @@ class Top(Elaboratable):
             self.control.opcode.eq(self.decode.opcode),
             self.control.requested_op.eq(self.decode.requested_op),
             self.control.e_type.eq(self.decode.e_type),
-            self.req_next.eq(self.control.mem_req)
+            self.req_next.eq(self.control.mem_req),
+            self.control.mem_valid.eq(self.ack)
         ]
 
         m.d.sync += self.req.eq(self.req_next)
@@ -111,7 +112,14 @@ class Top(Elaboratable):
 
     def sim_hooks(self, sim):
         def mem_proc():
+            while not (yield self.req):
+                yield
+            yield # Wait state
+            # NOP implemented as ADDI
             yield self.dat_r.eq(Cat(C(0b11), OpcodeType.OP_IMM, C(0, 25)))
+            yield (self.ack.eq(1))
+            yield
+            yield (self.ack.eq(0))
             yield
             yield
             yield
