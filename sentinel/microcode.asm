@@ -16,7 +16,7 @@ fields block_ram: {
 
   // false: Unconditionally fail
   // int: Is interrupt line high?
-  cond_test: enum { false = 0; intr; exception; cmp_okay; true}, default true;
+  cond_test: enum { false = 0; intr; exception; cmp_okay; mem_valid; true}, default true;
 
   pc_action: enum { hold = 0; inc; load_abs; load_rel; }, default hold;
   a_src: enum { gp = 0; pc; }, default gp;
@@ -27,6 +27,7 @@ fields block_ram: {
 
   read_reg: enum { none = 0; a_src; b_src; }, default none;
   write_reg: bool, default 0;
+  mem_req: bool, default 0;
 };
 
 check_int: jmp_type => vec, cond_test => intr;

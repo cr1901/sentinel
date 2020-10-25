@@ -9,10 +9,14 @@ class Top(Elaboratable):
     def __init__(self):
         self.dat_w = Signal(32)
         self.dat_r = Signal(32)
+        # Registered.
         self.adr = Signal(32)
-        self.we = Signal(32)
+        self.we = Signal(4)
+        # Ask bus to send or recv data.
+        self.req = Signal()
+        self.req_next = Signal()
         # Hold bus until this signal asserts.
-        self.rdy = Signal()
+        self.ack = Signal()
 
         self.alu = ALU(32)
         self.control = Control()
@@ -29,16 +33,24 @@ class Top(Elaboratable):
 
         # Plumbing
         m.d.comb += [
+            self.dat_w.eq(self.datapath.dat_w),
             self.datapath.dat_w.eq(self.alu.o),
             self.decode.insn.eq(self.dat_r)
         ]
 
         # Control
+        m.d.sync += self.req.eq(self.req_next)
+
+        # DataPath.dat_w constantly has traffic. We only want to latch
+        # the address once per mem access, and we want it the address to be
+        # valid synchronous with ready assertion.
+        with m.If(~self.req & self.req_next):
+            m.d.sync += [self.adr.eq(self.datapath.dat_w)]
 
         return m
 
     def ports(self):
-        return [self.dat_w, self.dat_r, self.adr, self.we]
+        return [self.dat_w, self.dat_r, self.adr, self.we, self.req, self.ack]
 
     def sim_hooks(self, sim):
         pass
