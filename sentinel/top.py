@@ -47,6 +47,7 @@ class Top(Elaboratable):
         m.d.comb += [
             self.alu.a.eq(self.a_input),
             self.alu.b.eq(self.b_input),
+            self.alu.op.eq(self.control.alu_op),
             self.control.alu_ready.eq(self.alu.ready)
         ]
 
@@ -67,6 +68,8 @@ class Top(Elaboratable):
 
         # Control conns
         m.d.comb += [
+            self.control.opcode.eq(self.decode.opcode),
+            self.control.requested_op.eq(self.decode.requested_op),
             self.control.e_type.eq(self.decode.e_type),
             self.req_next.eq(self.control.mem_req)
         ]
@@ -75,8 +78,11 @@ class Top(Elaboratable):
 
         # DataPath conns
         m.d.comb += [
+            self.datapath.we.eq(self.control.reg_op == self.RegOp.write_dst),
             self.dat_w.eq(self.datapath.dat_w),
             self.datapath.dat_w.eq(self.alu.o),
+            self.datapath.pc_action.eq(self.control.pc_action),
+            self.datapath.reg_adr.eq(self.reg_adr)
         ]
 
         # DataPath.dat_w constantly has traffic. We only want to latch

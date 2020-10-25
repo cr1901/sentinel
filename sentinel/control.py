@@ -77,6 +77,7 @@ class Control(Elaboratable):
         # Connect mapper to Control.
         m.d.comb += [
             self.mapper.opcode.eq(self.opcode),
+            self.mapper.requested_op.eq(self.requested_op),
             self.mapper.e_type.eq(self.e_type),
         ]
 
@@ -113,11 +114,10 @@ class Mapper(Elaboratable):
         m = Module()
 
         with m.Switch(self.opcode):
+            with m.Case(OpcodeType.OP_IMM):
+                m.d.comb += self.map_adr.eq(8 + self.requested_op)
             with m.Case(OpcodeType.SYSTEM):
-                with m.If(self.e_type == 0):
-                    m.d.comb += self.map_adr.eq(128)
-                with m.Else():
-                    m.d.comb += self.map_adr.eq(129)
+                m.d.comb += self.map_adr.eq(128 + self.e_type)
 
         return m
 
