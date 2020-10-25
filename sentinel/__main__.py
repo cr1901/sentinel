@@ -54,6 +54,8 @@ def main_parser(parser=None):
         help="Run a generic synth script to query design size")
     p_size.add_argument("-v", "--verbose", action="store_true",
         help="Show full yosys output, not just stats")
+    p_size.add_argument("-s", "--show", action="store_true",
+        help="Emit show.dot file for the module")
 
     p_ucode = p_action.add_parser("microcode",
         help="Run the microcode assembler (ignores --module arg)")
@@ -119,7 +121,9 @@ def main_runner(parser, args, design, platform=None, name="top", ports=()):
         script.append("opt -fast")
         script.append("dfflegalize -cell $_DFF_P_ 0")
         script.append("abc -lut 4 -dress")
-        script.append("clean")
+        script.append("clean -purge")
+        if args.show:
+            script.append("show")
         script.append("hierarchy -check")
         script.append("stat")
 
