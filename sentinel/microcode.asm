@@ -35,7 +35,9 @@ fields block_ram: {
   do_decode: bool, default 0;
 };
 
-check_int: jmp_type => vec, cond_test => intr;
+check_int: jmp_type => vec, cond_test => intr, target => save_pc;
+fetch:
+wait_for_ack: mem_req => 1, cond_test => false, jmp_type => direct, target => wait_for_ack;
 
 
 // Interrupt handler.

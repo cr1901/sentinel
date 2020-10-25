@@ -3,7 +3,7 @@ from nmigen import *
 from .alu import ALU
 from .control import Control
 from .datapath import DataPath
-from .decode import Decode
+from .decode import Decode, OpcodeType
 
 class Top(Elaboratable):
     def __init__(self):
@@ -110,4 +110,12 @@ class Top(Elaboratable):
         return [self.dat_w, self.dat_r, self.adr, self.we, self.req, self.ack]
 
     def sim_hooks(self, sim):
-        pass
+        def mem_proc():
+            yield self.dat_r.eq(Cat(C(0b11), OpcodeType.OP_IMM, C(0, 25)))
+            yield
+            yield
+            yield
+            yield
+            yield
+
+        sim.add_sync_process(mem_proc)
