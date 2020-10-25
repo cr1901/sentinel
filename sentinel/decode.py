@@ -73,6 +73,7 @@ class Decode(Elaboratable):
         self.shift = Signal()
         self.illegal = Signal()
         self.width = Signal()
+        self.e_type = Signal()
         self.custom = Signal()
         self.requested_op = Signal(4)
 
@@ -157,7 +158,7 @@ class Decode(Elaboratable):
                 with m.Case(OpcodeType.MISC_MEM):
                     pass
                 with m.Case(OpcodeType.SYSTEM):
-                    pass
+                    m.d.comb += self.e_type.eq(self.funct12[0])
                 with m.Case():
                     m.d.comb += self.probably_illegal.eq(1)
 

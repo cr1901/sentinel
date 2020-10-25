@@ -8,6 +8,7 @@ class Control(Elaboratable):
     def __init__(self):
         self.ucoderom = UCodeROM()
         self.sequencer = Sequencer(self.ucoderom)
+        self.mapper = Mapper()
 
         # Control inputs
         self.vec_adr = Signal.like(self.ucoderom.signals["target"])
@@ -50,6 +51,7 @@ class Control(Elaboratable):
 
         m.submodules.ucoderom = self.ucoderom
         m.submodules.sequencer = self.sequencer
+        m.submodules.mapper = self.mapper
 
         # Propogate ucode control signals
         m.d.comb += [
@@ -72,12 +74,17 @@ class Control(Elaboratable):
             self.sequencer.jmp_type.eq(self.jmp_type)
         ]
 
-        # Connect sequencer to Control.
+        # Connect mapper to Control.
+        m.d.comb += [
+            self.mapper.opcode.eq(self.opcode),
+            self.mapper.e_type.eq(self.e_type),
+        ]
+
+        # Connect sequencer to Control/Mapper.
         m.d.comb += [
             # Test not implemented yet!
             self.sequencer.test.eq(self.test),
-            # Neither is opcode_adr!
-            self.sequencer.opcode_adr.eq(self.opcode << 3),
+            self.sequencer.opcode_adr.eq(self.mapper.map_adr),
             self.sequencer.vec_adr.eq(self.vec_adr)
         ]
 
@@ -92,6 +99,27 @@ class Control(Elaboratable):
 
     def sim_hooks(self, sim):
         pass
+
+
+# Map from Opcode to start location in UCodeROM
+class Mapper(Elaboratable):
+    def __init__(self):
+        self.opcode = Signal(OpcodeType)
+        self.requested_op = Signal(4)
+        self.e_type = Signal(1)
+        self.map_adr = Signal(8)
+
+    def elaborate(self, platform):
+        m = Module()
+
+        with m.Switch(self.opcode):
+            with m.Case(OpcodeType.SYSTEM):
+                with m.If(self.e_type == 0):
+                    m.d.comb += self.map_adr.eq(128)
+                with m.Else():
+                    m.d.comb += self.map_adr.eq(129)
+
+        return m
 
 
 # Microprogram address generation.

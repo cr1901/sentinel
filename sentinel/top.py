@@ -66,6 +66,11 @@ class Top(Elaboratable):
                     m.d.sync += self.b_input.eq(self.decode.dst)
 
         # Control conns
+        m.d.comb += [
+            self.control.e_type.eq(self.decode.e_type),
+            self.req_next.eq(self.control.mem_req)
+        ]
+
         m.d.sync += self.req.eq(self.req_next)
 
         # DataPath conns
