@@ -18,10 +18,19 @@ class Top(Elaboratable):
         # Hold bus until this signal asserts.
         self.ack = Signal()
 
+        ###
+
         self.alu = ALU(32)
         self.control = Control()
         self.datapath = DataPath()
         self.decode = Decode()
+
+        # ALU
+        self.a_input = Signal(32)
+        self.b_input = Signal(32)
+        self.ReadReg = self.control.ucoderom.fields["read_reg"]
+        self.ASrc = self.control.ucoderom.fields["a_src"]
+        self.BSrc = self.control.ucoderom.fields["b_src"]
 
     def elaborate(self, platform):
         m = Module()
@@ -30,6 +39,29 @@ class Top(Elaboratable):
         m.submodules.control = self.control
         m.submodules.datapath = self.datapath
         m.submodules.decode = self.decode
+
+        # ALU conns
+        m.d.comb += [
+            self.alu.a.eq(self.a_input),
+            self.alu.b.eq(self.b_input),
+            self.control.alu_ready.eq(self.alu.ready)
+        ]
+
+        with m.If(self.control.read_reg == self.ReadReg.a_src):
+            with m.Switch(self.control.a_src):
+                with m.Case(self.ASrc.gp):
+                    m.d.sync += self.a_input.eq(self.datapath.dat_r)
+                with m.Case(self.ASrc.pc):
+                    m.d.sync += self.a_input.eq(self.datapath.pc)
+
+        with m.If(self.control.read_reg == self.ReadReg.b_src):
+            with m.Switch(self.control.b_src):
+                with m.Case(self.BSrc.gp):
+                    m.d.sync += self.b_input.eq(self.datapath.dat_r)
+                with m.Case(self.BSrc.imm):
+                    m.d.sync += self.b_input.eq(self.decode.imm)
+                with m.Case(self.BSrc.target):
+                    m.d.sync += self.b_input.eq(self.decode.dst)
 
         # Plumbing
         m.d.comb += [

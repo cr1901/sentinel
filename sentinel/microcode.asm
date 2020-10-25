@@ -16,10 +16,15 @@ fields block_ram: {
 
   // false: Unconditionally fail
   // int: Is interrupt line high?
-  cond_test: enum { false = 0; intr; exception; cmp_okay; mem_valid; true}, default true;
+  // exception: Illegal insn, EBRAK, ECALL, misaligned insn, misaligned ld/st?
+  // mem_valid: Is current dat_r valid? Did write finish?
+  // alu_ready: Is alu_ready (mainly for shifts)?
+  // true: Unconditionally succeed
+  cond_test: enum { false = 0; intr; exception; cmp_okay; mem_valid; alu_ready; true}, default true;
 
   pc_action: enum { hold = 0; inc; load_abs; load_rel; }, default hold;
   a_src: enum { gp = 0; pc; }, default gp;
+  // target is for shifts.
   b_src: enum { gp = 0; imm; target; }, default gp;
 
   // Enum layout needs to match ALU.OpType

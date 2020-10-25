@@ -22,6 +22,7 @@ class Control(Elaboratable):
         # self.load_unsigned = Signal(1)
 
         # Predicates for test mux.
+        self.alu_ready = Signal()
         self.mem_valid = Signal()
         self.compare_okay = Signal()
         # OR of illegal insn, ecall, ebreak, misaligned load/store,
