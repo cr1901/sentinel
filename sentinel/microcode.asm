@@ -59,9 +59,18 @@ fields block_ram: {
 
 check_int: jmp_type => vec, cond_test => intr, target => save_pc;
 fetch:
-wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_valid, jmp_type => direct, target => wait_for_ack;
+wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_valid, \
+                  jmp_type => direct, target => wait_for_ack;
               jmp_type => vec, cond_test => exception, target => save_pc;
+              jmp_type => map;
 
+origin 8;
+imm_ops:
+addi:         reg_op => read_a_src;
+              reg_op => read_b_src, b_src => imm;
+              alu_op => add;
+              reg_op => write_dst, pc_action => inc, cond_test => true, \
+                  jmp_type => direct, target => check_int;
 
 // Interrupt handler.
 origin 224;
