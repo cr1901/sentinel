@@ -4,8 +4,11 @@ space block_ram;
 origin 0;
 
 fields block_ram: {
+  // Target field for direct jmp_type. The micropc jumps to here next
+  // cycle if the test succeeds.
   target: width 8, origin 0, default 0;
 
+  // Various jump types to jump around the microcode program next cycle.
   // cont: Increment upc by 1.
   // nop: Same as cont, but indicate we are using the target field for
   //      something else.
@@ -14,6 +17,7 @@ fields block_ram: {
   // vec: Conditionally jump to vector (hardcoded).
   jmp_type: enum { cont = 0; nop = 0; map; direct; vec; }, default cont;
 
+  // Various tests (valid current cycle) for conditional jumps:
   // false: Unconditionally fail
   // int: Is interrupt line high?
   // exception: Illegal insn, EBRAK, ECALL, misaligned insn, misaligned ld/st?
@@ -21,31 +25,42 @@ fields block_ram: {
   // alu_ready: Is alu_ready (mainly for shifts)?
   // true: Unconditionally succeed
   cond_test: enum { false = 0; intr; exception; cmp_okay; mem_valid; alu_ready; true}, default true;
-  // Invert test
+
+  // Invert the results of the test above. Valid current cycle.
   invert_test: bool, default 0;
 
+  // Modify the PC for the next cycle.
   pc_action: enum { hold = 0; inc; load_abs; load_rel; }, default hold;
+
+  // Latch the A input into the ALU. A input contents vaid next cycle.
   a_src: enum { gp = 0; pc; }, default gp;
-  // target is for shifts.
+
+  // Latch the B input into the ALU. B input contents vaid next cycle.
+  // Target is for shifts.
   b_src: enum { gp = 0; imm; target; }, default gp;
 
   // Enum layout needs to match ALU.OpType
   alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_lut; cmp_ge; cmp_geu; nop }, default nop;
 
+  // Either read or write a register in the register file. _Which_ register
+  // to read/write comes from the decoded insn. Read contents will be on the
+  // data bus the next cycle. Written contents will be valid on the next cycle.
+  // Reads are NOT transparent.
   reg_op: enum { none = 0; read_a_src; read_b_src; write_dst; }, default none;
+
   // Start or continue a memory request. For convenience, an ack will
   // automatically stop a memory request for the cycle after ack, even if
-  // mem_req is enabled.
+  // mem_req is enabled. Valid one cycle later.
   mem_req: bool, default 0;
 
-  // Current mem request is insn fetch.
+  // Current mem request is insn fetch. Valid one cycle later.
   insn_fetch: bool, default 0;
-  do_decode: bool, default 0;
 };
 
 check_int: jmp_type => vec, cond_test => intr, target => save_pc;
 fetch:
 wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_valid, jmp_type => direct, target => wait_for_ack;
+              jmp_type => vec, cond_test => exception, target => save_pc;
 
 
 // Interrupt handler.

@@ -103,7 +103,8 @@ class Top(Elaboratable):
         # Decode conns
         m.d.comb += [
             self.decode.insn.eq(self.dat_r),
-            self.decode.do_decode.eq(self.control.do_decode),
+            # Decode begins automatically.
+            self.decode.do_decode.eq(self.insn_fetch & self.ack),
         ]
 
         with m.If(self.control.reg_op == self.RegOp.read_a_src):
