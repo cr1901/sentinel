@@ -75,7 +75,9 @@ class Top(Elaboratable):
             self.control.mem_valid.eq(self.ack)
         ]
 
-        m.d.sync += self.req.eq(self.req_next)
+        # An ACK stops the request b/c the microcode's to avoid a 1-cycle delay
+        # due to registered REQ signal.
+        m.d.sync += self.req.eq(~self.ack & self.req_next)
 
         # DataPath conns
         m.d.comb += [
