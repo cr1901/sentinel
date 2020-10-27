@@ -98,7 +98,10 @@ class Top(Elaboratable):
         # the address once per mem access, and we want it the address to be
         # valid synchronous with ready assertion.
         with m.If(~self.req & self.req_next):
-            m.d.sync += [self.adr.eq(self.datapath.dat_w)]
+            with m.If(self.insn_fetch_next):
+                m.d.sync += [self.adr.eq(self.datapath.pc)]
+            with m.Else():
+                m.d.sync += [self.adr.eq(self.datapath.dat_w)]
 
         # Decode conns
         m.d.comb += [
