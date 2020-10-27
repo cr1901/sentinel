@@ -37,12 +37,15 @@ fields block_ram: {
   // automatically stop a memory request for the cycle after ack, even if
   // mem_req is enabled.
   mem_req: bool, default 0;
+
+  // Current mem request is insn fetch.
+  insn_fetch: bool, default 0;
   do_decode: bool, default 0;
 };
 
 check_int: jmp_type => vec, cond_test => intr, target => save_pc;
 fetch:
-wait_for_ack: mem_req => 1, invert_test => 1, cond_test => mem_valid, jmp_type => direct, target => wait_for_ack;
+wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_valid, jmp_type => direct, target => wait_for_ack;
 
 
 // Interrupt handler.

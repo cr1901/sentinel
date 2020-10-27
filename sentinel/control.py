@@ -46,6 +46,7 @@ class Control(Elaboratable):
         self.alu_op = Signal.like(self.ucoderom.signals["alu_op"])
         self.reg_op = Signal.like(self.ucoderom.signals["reg_op"])
         self.mem_req = Signal.like(self.ucoderom.signals["mem_req"])
+        self.insn_fetch = Signal.like(self.ucoderom.signals["insn_fetch"])
         self.do_decode = Signal.like(self.ucoderom.signals["do_decode"])
 
         # Enums from microcode ROM.
@@ -70,6 +71,7 @@ class Control(Elaboratable):
             self.alu_op.eq(self.ucoderom.signals["alu_op"]),
             self.reg_op.eq(self.ucoderom.signals["reg_op"]),
             self.mem_req.eq(self.ucoderom.signals["mem_req"]),
+            self.insn_fetch.eq(self.ucoderom.signals["insn_fetch"]),
             self.do_decode.eq(self.ucoderom.signals["do_decode"])
         ]
 

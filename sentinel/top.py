@@ -17,6 +17,8 @@ class Top(Elaboratable):
         self.req_next = Signal()
         # Hold bus until this signal asserts.
         self.ack = Signal()
+        self.insn_fetch = Signal()
+        self.insn_fetch_next = Signal()
 
         ###
 
@@ -72,12 +74,16 @@ class Top(Elaboratable):
             self.control.requested_op.eq(self.decode.requested_op),
             self.control.e_type.eq(self.decode.e_type),
             self.req_next.eq(self.control.mem_req),
+            self.insn_fetch_next.eq(self.control.insn_fetch),
             self.control.mem_valid.eq(self.ack)
         ]
 
         # An ACK stops the request b/c the microcode's to avoid a 1-cycle delay
-        # due to registered REQ signal.
-        m.d.sync += self.req.eq(~self.ack & self.req_next)
+        # due to registered REQ/FETCH signal.
+        m.d.sync += [
+            self.req.eq(~self.ack & self.req_next),
+            self.insn_fetch.eq(~self.ack & self.insn_fetch_next)
+        ]
 
         # DataPath conns
         m.d.comb += [
@@ -110,7 +116,7 @@ class Top(Elaboratable):
         return m
 
     def ports(self):
-        return [self.dat_w, self.dat_r, self.adr, self.we, self.req, self.ack]
+        return [self.dat_w, self.dat_r, self.adr, self.we, self.req, self.ack, self.insn_fetch]
 
     def sim_hooks(self, sim):
         def mem_proc():
