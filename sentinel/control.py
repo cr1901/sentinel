@@ -143,9 +143,9 @@ class Mapper(Elaboratable):
 
         with m.Switch(self.opcode):
             with m.Case(OpcodeType.OP_IMM):
-                m.d.comb += self.map_adr.eq(8 + self.requested_op)
+                m.d.comb += self.map_adr.eq(8)
             with m.Case(OpcodeType.SYSTEM):
-                m.d.comb += self.map_adr.eq(128 + self.e_type)
+                m.d.comb += self.map_adr.eq(128)
 
         return m
 
