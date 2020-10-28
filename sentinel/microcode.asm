@@ -68,14 +68,21 @@ wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_
               jmp_type => map;
 
 origin 8;
-imm_ops:      reg_op => read_a_src;
+imm_ops:
+imm_ops_begin:
+              reg_op => read_a_src;
               // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi_alu;
-              reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi;
+              reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => imm_ops_alu;
 imm_ops_end:
               reg_op => write_dst, pc_action => inc, cond_test => true, \
                   jmp_type => direct, target => check_int;
+imm_ops_alu:
 addi:
               alu_op => add, jmp_type => direct, target => imm_ops_end;
+slli:
+              // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
+              alu_op => sll, jmp_type => direct, cond_test => alu_ready, invert_test => true, target => slli;
+              jmp_type => direct, target => imm_ops_end;
 
 
 

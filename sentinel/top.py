@@ -142,5 +142,12 @@ class Top(Elaboratable):
             yield
             while not (yield self.req):
                 yield
+            yield self.dat_r.eq(Cat(C(0b11), OpcodeType.OP_IMM, C(1, 5), C(1, 3), C(1, 5), C(3, 12)))
+            yield (self.ack.eq(1))
+            yield
+            yield (self.ack.eq(0))
+            yield
+            while not (yield self.req):
+                yield
 
         sim.add_sync_process(mem_proc)
