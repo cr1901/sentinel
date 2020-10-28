@@ -75,6 +75,11 @@ class Decode(Elaboratable):
         self.width = Signal()
         self.e_type = Signal()
         self.custom = Signal()
+
+        # Map from funct3, and funct7, and funct12 bits to a 4-bit ID based on
+        # major opcode.
+        # * For OP/OP_IMM, use a direct concatenation of funct3 and funct7.
+        # * For ECALL/EBREAK, only the low bit of funct12 is used.
         self.requested_op = Signal(4)
 
         ###
@@ -170,4 +175,10 @@ class Decode(Elaboratable):
                 self.width, self.custom, self.opcode]
 
     def sim_hooks(self, sim):
+        pass
+
+
+
+class MinorOpcodeMapper(Elaboratable):
+    def __init__(self):
         pass

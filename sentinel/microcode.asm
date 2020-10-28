@@ -15,7 +15,10 @@ fields block_ram: {
   // map: Use address supplied by opcode.
   // direct: Conditionally use address supplied by target field.
   // vec: Conditionally jump to vector (hardcoded).
-  jmp_type: enum { cont = 0; nop = 0; map; direct; vec; }, default cont;
+  // direct_req: Unconditionally jump to address supplied by target field
+  //             plus an offset based on the current minor opcode.
+  //             See "requested_op" signal.
+  jmp_type: enum { cont = 0; nop = 0; map; direct; vec; direct_req; }, default cont;
 
   // Various tests (valid current cycle) for conditional jumps:
   // false: Unconditionally fail
@@ -65,12 +68,17 @@ wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_
               jmp_type => map;
 
 origin 8;
-imm_ops:
-addi:         reg_op => read_a_src;
-              reg_op => read_b_src, b_src => imm;
-              alu_op => add;
+imm_ops:      reg_op => read_a_src;
+              // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi_alu;
+              reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi;
+imm_ops_end:
               reg_op => write_dst, pc_action => inc, cond_test => true, \
                   jmp_type => direct, target => check_int;
+addi:
+              alu_op => add, jmp_type => direct, target => imm_ops_end;
+
+
+
 
 // Interrupt handler.
 origin 224;

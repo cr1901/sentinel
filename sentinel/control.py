@@ -14,8 +14,7 @@ class Control(Elaboratable):
         self.vec_adr = Signal.like(self.ucoderom.signals["target"])
         # Direct 5 high bits of opcode.
         self.opcode = Signal(OpcodeType)
-        # Like ALU.OpType, but is direct concatenation of funct3 and funct7
-        # opcode bits.
+        # funct* fields converted to a 4-bit ID.
         self.requested_op = Signal(4)
         # funct12 ECALL (0) or EBREAK (1)
         self.e_type = Signal(1)
@@ -92,7 +91,8 @@ class Control(Elaboratable):
             # Test not implemented yet!
             self.sequencer.test.eq(self.test),
             self.sequencer.opcode_adr.eq(self.mapper.map_adr),
-            self.sequencer.vec_adr.eq(self.vec_adr)
+            self.sequencer.vec_adr.eq(self.vec_adr),
+            self.sequencer.req_op.eq(self.requested_op)
         ]
 
         # Test mux
@@ -162,6 +162,7 @@ class Sequencer(Elaboratable):
         self.opcode_adr = Signal.like(self.adr)
         self.vec_adr = Signal.like(self.adr)
         self.next_adr = Signal.like(self.adr)
+        self.req_op = Signal(4)
 
         # If test succeeds, branch in target/vec_adr is taken, otherwise
         # next_adr.
@@ -188,5 +189,7 @@ class Sequencer(Elaboratable):
                     m.d.comb += self.adr.eq(self.vec_adr)
                 with m.Else():
                     m.d.comb += self.adr.eq(self.next_adr)
+            with m.Case(self.JumpType.direct_req):
+                m.d.comb += self.adr.eq(self.target + self.req_op)
 
         return m
