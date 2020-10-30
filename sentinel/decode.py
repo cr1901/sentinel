@@ -142,28 +142,65 @@ class Decode(Elaboratable):
                         m.d.sync += self.requested_op.eq(Cat(self.funct3, self.funct7[-2]))
                     with m.Else():
                         m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
+
                 with m.Case(OpcodeType.LUI):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
+
                 with m.Case(OpcodeType.AUIPC):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
+
                 with m.Case(OpcodeType.OP):
-                    pass
+                    with m.If((self.funct3 == 0) | (self.funct3 == 5)):
+                        with m.If((self.funct7 != 0) & (self.funct7 != 0b0100000)):
+                            m.d.comb += self.probably_illegal.eq(1)
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3, self.funct7[-2]))
+                    with m.Else():
+                        with m.If(self.funct7 != 0):
+                            m.d.comb += self.probably_illegal.eq(1)
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
+
                 with m.Case(OpcodeType.JAL):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.J)
+
                 with m.Case(OpcodeType.JALR):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
+
+                    with m.If(self.funct3 != 0):
+                        m.d.comb += self.probably_illegal.eq(1)
+
                 with m.Case(OpcodeType.BRANCH):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.B)
+
+                    with m.If((self.funct3 == 2) | (self.funct3 == 3)):
+                        m.d.comb += self.probably_illegal.eq(1)
+
                 with m.Case(OpcodeType.LOAD):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
+
+                    with m.If((self.funct3 == 3) | (self.funct3 == 6) | (self.funct3 == 7)):
+                        m.d.comb += self.probably_illegal.eq(1)
+
                 with m.Case(OpcodeType.STORE):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.S)
+
+                    with m.If(self.funct3 >= 3):
+                        m.d.comb += self.probably_illegal.eq(1)
+
                 with m.Case(OpcodeType.CUSTOM_0):
-                    pass
+                    m.d.comb += self.probably_illegal.eq(1)
+
                 with m.Case(OpcodeType.MISC_MEM):
-                    pass
+                    # RS1 and RD should be ignored for FENCE insn in a base impl.
+
+                    with m.If(self.funct3 != 0):
+                        m.d.comb += self.probably_illegal.eq(1)
+
                 with m.Case(OpcodeType.SYSTEM):
                     m.d.comb += self.e_type.eq(self.funct12[0])
+
+                    with m.If((self.funct12[1:] != 0) | (self.rs1 != 0) | (self.rd != 0) | (self.funct3 != 0)):
+                        m.d.comb += self.probably_illegal.eq(1)
+
                 with m.Case():
                     m.d.comb += self.probably_illegal.eq(1)
 

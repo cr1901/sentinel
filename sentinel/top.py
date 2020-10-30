@@ -78,7 +78,10 @@ class Top(Elaboratable):
             self.control.e_type.eq(self.decode.e_type),
             self.req_next.eq(self.control.mem_req),
             self.insn_fetch_next.eq(self.control.insn_fetch),
-            self.control.mem_valid.eq(self.ack)
+            self.control.mem_valid.eq(self.ack),
+
+            # TODO: Spin out into a register of exception sources.
+            self.control.exception.eq(self.decode.illegal)
         ]
 
         # An ACK stops the request b/c the microcode's to avoid a 1-cycle delay
