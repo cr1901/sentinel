@@ -64,13 +64,13 @@ check_int: jmp_type => vec, cond_test => intr, target => save_pc;
 fetch:
 wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
+              // Illegal insn or insn misaligned exception possible
               jmp_type => vec, cond_test => exception, target => save_pc;
-              jmp_type => map;
+              reg_op => read_a, jmp_type => map;
 
 origin 8;
 imm_ops:
 imm_ops_begin:
-              reg_op => read_a;
               reg_op => read_b_latch_a;
               // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi_alu;
               reg_op => latch_b, b_src => imm, jmp_type => direct_req, target => imm_ops_alu;
