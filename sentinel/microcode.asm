@@ -49,7 +49,7 @@ fields block_ram: {
   // to read/write comes from the decoded insn. Read contents will be on the
   // data bus the next cycle. Written contents will be valid on the next cycle.
   // Reads are NOT transparent.
-  reg_op: enum { none = 0; read_a_src; read_b_src; write_dst; }, default none;
+  reg_op: enum { none = 0; read_a; read_b_latch_a; latch_b; write_dst; }, default none;
 
   // Start or continue a memory request. For convenience, an ack will
   // automatically stop a memory request for the cycle after ack, even if
@@ -70,19 +70,23 @@ wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_
 origin 8;
 imm_ops:
 imm_ops_begin:
-              reg_op => read_a_src;
+              reg_op => read_a;
+              reg_op => read_b_latch_a;
               // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi_alu;
-              reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => imm_ops_alu;
+              reg_op => latch_b, b_src => imm, jmp_type => direct_req, target => imm_ops_alu;
 imm_ops_end:
               reg_op => write_dst, pc_action => inc, cond_test => true, \
                   jmp_type => direct, target => check_int;
 imm_ops_alu:
 addi:
               alu_op => add, jmp_type => direct, target => imm_ops_end;
+// Trampolines for multicycle ops are almost zero-cost except for microcode space.
+slli_trampoline:
+              alu_op => sll, jmp_type => direct, target => slli;
 slli:
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
               alu_op => sll, jmp_type => direct, cond_test => alu_ready, invert_test => true, target => slli;
-              jmp_type => direct, target => imm_ops_end;
+              alu_op => sll, jmp_type => direct, target => imm_ops_end; // Hold ALU's results by keeping alu_op the same.
 
 
 

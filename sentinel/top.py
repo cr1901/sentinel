@@ -56,13 +56,13 @@ class Top(Elaboratable):
             self.control.alu_ready.eq(self.alu.ready)
         ]
 
-        with m.If(self.control.reg_op == self.RegOp.read_a_src):
+        with m.If(self.control.reg_op == self.RegOp.read_b_latch_a):
             with m.Switch(self.control.a_src):
                 with m.Case(self.ASrc.gp):
                     m.d.sync += self.a_input.eq(self.datapath.dat_r)
                 with m.Case(self.ASrc.pc):
                     m.d.sync += self.a_input.eq(self.datapath.pc)
-        with m.Elif(self.control.reg_op == self.RegOp.read_b_src):
+        with m.Elif(self.control.reg_op == self.RegOp.latch_b):
             with m.Switch(self.control.b_src):
                 with m.Case(self.BSrc.gp):
                     m.d.sync += self.b_input.eq(self.datapath.dat_r)
@@ -113,9 +113,9 @@ class Top(Elaboratable):
             self.decode.do_decode.eq(self.insn_fetch & self.ack),
         ]
 
-        with m.If(self.control.reg_op == self.RegOp.read_a_src):
+        with m.If(self.control.reg_op == self.RegOp.read_a):
             m.d.comb += self.reg_adr.eq(self.decode.src_a)
-        with m.Elif(self.control.reg_op == self.RegOp.read_b_src):
+        with m.Elif(self.control.reg_op == self.RegOp.read_b_latch_a):
             m.d.comb += self.reg_adr.eq(self.decode.src_b)
         with m.Elif(self.control.reg_op == self.RegOp.write_dst):
             m.d.comb += self.reg_adr.eq(self.decode.dst)
