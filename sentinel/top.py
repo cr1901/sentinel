@@ -1,4 +1,7 @@
+from itertools import repeat, chain
+
 from nmigen import *
+from nmigen.back.pysim import Passive
 
 from .alu import ALU
 from .control import Control
@@ -123,31 +126,36 @@ class Top(Elaboratable):
         return [self.dat_w, self.dat_r, self.adr, self.we, self.req, self.ack, self.insn_fetch]
 
     def sim_hooks(self, sim):
-        def mem_proc():
-            while not (yield self.req):
+        # Reserved for fine-grained testing. Ignores address lines.
+        def mem_proc(insns, *, wait_states=repeat(0), irqs=repeat(False)):
+            yield Passive()
+
+            for insn, ws, irq in zip(insns, wait_states, irqs):
+                # Wait for memory
+                while not (yield self.req):
+                    yield
+
+                # Wait state
+                for _ in range(ws):
+                    yield
+
+                yield self.dat_r.eq(insn)
+                yield (self.ack.eq(1))
                 yield
-            yield # Wait state
-            # NOP implemented as ADDI
-            yield self.dat_r.eq(Cat(C(0b11), OpcodeType.OP_IMM, C(0, 25)))
-            yield (self.ack.eq(1))
-            yield
-            yield (self.ack.eq(0))
-            yield
-            while not (yield self.req):
-                yield
-            yield self.dat_r.eq(Cat(C(0b11), OpcodeType.OP_IMM, C(1, 5), C(0, 3), C(0, 5), C(1, 12)))
-            yield (self.ack.eq(1))
-            yield
-            yield (self.ack.eq(0))
-            yield
-            while not (yield self.req):
-                yield
-            yield self.dat_r.eq(Cat(C(0b11), OpcodeType.OP_IMM, C(1, 5), C(1, 3), C(1, 5), C(3, 12)))
-            yield (self.ack.eq(1))
-            yield
-            yield (self.ack.eq(0))
-            yield
-            while not (yield self.req):
+                yield (self.ack.eq(0))
                 yield
 
-        sim.add_sync_process(mem_proc)
+        insns = [
+            Cat(C(0b11), OpcodeType.OP_IMM, C(0, 25)),
+            Cat(C(0b11), OpcodeType.OP_IMM, C(1, 5), C(0, 3), C(0, 5), C(1, 12)),
+            Cat(C(0b11), OpcodeType.OP_IMM, C(1, 5), C(1, 3), C(1, 5), C(3, 12))
+        ]
+
+        proc = lambda: (yield from mem_proc(insns, wait_states=chain([1], repeat(0))))
+        sim.add_sync_process(proc)
+
+
+class TopMem(Elaboratable):
+    def __init__(self):
+
+        self.top = Top()
