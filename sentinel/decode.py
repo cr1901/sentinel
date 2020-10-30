@@ -118,18 +118,18 @@ class Decode(Elaboratable):
         with m.If(self.do_decode):
             m.d.sync += [
                 self.illegal.eq(self.definitely_illegal | self.probably_illegal),
-                self.imm.eq(self.immgen.imm)
+                self.imm.eq(self.immgen.imm),
+
+                # For now, unconditionally propogate these and rely on
+                # microcode program to ignore when necessary.
+                self.src_a.eq(self.rs1),
+                self.src_b.eq(self.rs2),
+                self.dst.eq(self.rd)
             ]
 
             # TODO: Might be worth hoisting comb statements out of m.If?
             with m.Switch(self.opcode):
                 with m.Case(OpcodeType.OP_IMM):
-                    m.d.sync += [
-                        self.src_a.eq(self.rs1),
-                        self.src_b.eq(self.rs2),
-                        self.dst.eq(self.rd)
-                    ]
-
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
 
                     with m.If((self.funct3 == 1) | (self.funct3 == 5)):
@@ -144,9 +144,13 @@ class Decode(Elaboratable):
                         m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
 
                 with m.Case(OpcodeType.LUI):
+                    m.d.sync += self.dst.eq(self.rd)
+
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
 
                 with m.Case(OpcodeType.AUIPC):
+                    m.d.sync += self.dst.eq(self.rd)
+
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
 
                 with m.Case(OpcodeType.OP):
