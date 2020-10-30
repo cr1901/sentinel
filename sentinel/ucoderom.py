@@ -70,10 +70,10 @@ class UCodeROM(Elaboratable):
             self.create_field_enums_and_signals(space)
 
             if self.hex:
-                space.write_hex_file("microcode.hex")
+                space.write_hex_file(self.hex)
 
             if self.field_defs:
-                with open("microcode.fdef", 'w') as f:
+                with open(self.field_defs, 'w') as f:
                     space.write_fdef(f)
 
     def create_mem_init(self, space):
