@@ -1,0 +1,16 @@
+[project]
+name = "sentinel"
+version = "0.1.0"
+description = "Embedded RISC-V implementation written in Amaranth"
+authors = [
+    {name = "William D. Jones", email = "thor0505@comcast.net"},
+]
+dependencies = [
+    "m5meta>=1.0.4",
+    "m5pre>=1.0.3",
+    "amaranth @ git+https://github.com/whitequark/amaranth@amaranth-cli",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+

@@ -3,9 +3,9 @@ import argparse
 import subprocess
 import re
 
-from nmigen import *
-from nmigen.back import rtlil, cxxrtl, verilog
-from nmigen.sim import *
+from amaranth import *
+from amaranth.back import rtlil, cxxrtl, verilog
+from amaranth.sim import *
 
 from .alu import ALU
 from .control import Control
@@ -19,7 +19,7 @@ class RunnerError(Exception):
 
 
 def main_parser(parser=None):
-    # nmigen.cli begin
+    # amaranth.cli begin
     if parser is None:
         parser = argparse.ArgumentParser()
 
@@ -48,7 +48,7 @@ def main_parser(parser=None):
     p_simulate.add_argument("-c", "--clocks", dest="sync_clocks",
         metavar="COUNT", type=int, required=True,
         help="simulate for COUNT 'sync' clock periods")
-    # nmigen.cli end
+    # amaranth.cli end
 
     p_size = p_action.add_parser("size",
         help="Run a generic synth script to query design size")
@@ -68,7 +68,7 @@ def main_parser(parser=None):
 
 
 def main_runner(parser, args, design, platform=None, name="top", ports=()):
-    # nmigen.cli begin
+    # amaranth.cli begin
     if args.action == "generate":
         fragment = Fragment.get(design, platform)
         generate_type = args.generate_type
@@ -99,14 +99,14 @@ def main_runner(parser, args, design, platform=None, name="top", ports=()):
         design.sim_hooks(sim)
         with sim.write_vcd(vcd_file=args.vcd_file, gtkw_file=args.gtkw_file, traces=ports):
             sim.run_until(args.sync_period * args.sync_clocks, run_passive=True)
-    # nmigen.cli end
+    # amaranth.cli end
 
     if args.action == "size":
         fragment = Fragment.get(design, platform)
         rtlil_text = rtlil.convert(fragment, name=name, ports=ports)
 
-        # Created from a combination of nmigen._toolchain.yosys and
-        # nmigen.back.verilog. Script comes from nextpnr-generic.
+        # Created from a combination of amaranth._toolchain.yosys and
+        # amaranth.back.verilog. Script comes from nextpnr-generic.
         script = []
         script.append("read_ilang <<rtlil\n{}\nrtlil".format(rtlil_text))
         script.append("hierarchy -check")
@@ -166,7 +166,7 @@ if __name__ == '__main__':
         metavar="MODULE", choices=["ALU", "Control", "DataPath", "Decode",
             "Top", "UCodeROM"], default = "Top", help="generate code for module.")
 
-    # In nmigen.cli, these are passed straight to main_runner. We need
+    # In amaranth.cli, these are passed straight to main_runner. We need
     # different main_runner depending on component.
     main_p = main_parser(parser)
     args = parser.parse_args()

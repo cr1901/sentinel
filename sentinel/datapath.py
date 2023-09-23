@@ -1,6 +1,6 @@
 import enum
 
-from nmigen import *
+from amaranth import *
 
 class PcAction(enum.Enum):
     HOLD = 0

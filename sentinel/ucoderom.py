@@ -4,7 +4,7 @@ from pathlib import Path
 from collections import OrderedDict
 from operator import attrgetter
 
-from nmigen import *
+from amaranth import *
 from m5pre import *
 from m5meta import *
 
@@ -60,7 +60,7 @@ class UCodeROM(Elaboratable):
         # "block_ram" for consistency.
         assert(len(self.m5meta.spaces) == 1)
 
-        # pass3- Create enums and signals for nmigen code. Optionally
+        # pass3- Create enums and signals for amaranth code. Optionally
         # generate extra files for debugging.
         for name, space in self.m5meta.spaces.items():
             assert(space.name == "block_ram")

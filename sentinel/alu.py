@@ -1,6 +1,6 @@
 import enum
 
-from nmigen import *
+from amaranth import *
 
 class Unit(Elaboratable):
     def __init__(self, width, op):

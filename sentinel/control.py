@@ -1,4 +1,4 @@
-from nmigen import *
+from amaranth import *
 
 from .decode import OpcodeType
 from .alu import OpType
@@ -124,7 +124,7 @@ class Control(Elaboratable):
         # for custom insns.
         return [self.vec_adr, self.opcode, self.alu_op, self.test,
             self.pc_action, self.a_src, self.b_src, self.alu_op,
-            self.reg_op, self.mem_req, self.do_decode]
+            self.reg_op, self.mem_req]  # , self.do_decode]
 
     def sim_hooks(self, sim):
         pass

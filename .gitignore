@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.egg-info
+/dist
+
+# pdm
+/.pdm-plugins
+/.pdm-python
+/.venv
+
+# pytest
+/.pytest_cache
+
+# Amaranth
+/build*
+
+# GtkWave
+*.vcd
+*.gtkw

@@ -1,7 +1,7 @@
 from itertools import repeat, chain
 
-from nmigen import *
-from nmigen.back.pysim import Passive
+from amaranth import *
+from amaranth.sim import Passive
 
 from .alu import ALU
 from .control import Control
@@ -113,7 +113,7 @@ class Top(Elaboratable):
         m.d.comb += [
             self.decode.insn.eq(self.dat_r),
             # Decode begins automatically.
-            self.decode.do_decode.eq(self.insn_fetch & self.ack),
+            # self.decode.do_decode.eq(self.insn_fetch & self.ack),
         ]
 
         with m.If(self.control.reg_op == self.RegOp.read_a):
