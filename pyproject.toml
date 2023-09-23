@@ -14,3 +14,21 @@ requires-python = ">=3.11"
 readme = "README.md"
 license = {text = "MIT"}
 
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src/",
+]
+markers = [
+  "clks: tuple of clocks to register for simulator.",
+  "module: top-level module to simulate."
+]
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "flake8>=6.1.0",
+    "pytest>=7.4.2",
+]
