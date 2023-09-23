@@ -76,7 +76,7 @@ class Control(Component):
 
         # Connect ucode ROM to sequencer
         m.d.comb += [
-            self.ucoderom.adr.eq(self.sequencer.adr),
+            self.ucoderom.addr.eq(self.sequencer.adr),
             self.sequencer.target.eq(self.target),
             self.sequencer.jmp_type.eq(self.jmp_type)
         ]

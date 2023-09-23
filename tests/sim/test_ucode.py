@@ -1,6 +1,6 @@
 from io import StringIO
 
-from sentinel.ucoderom import *
+from sentinel.ucoderom import UCodeROM
 
 
 M5META_TEST_FILE = StringIO("""
