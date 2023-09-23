@@ -126,9 +126,6 @@ class Control(Elaboratable):
             self.pc_action, self.a_src, self.b_src, self.alu_op,
             self.reg_op, self.mem_req]  # , self.do_decode]
 
-    def sim_hooks(self, sim):
-        pass
-
 
 # Map from Opcode to start location in UCodeROM
 class Mapper(Elaboratable):

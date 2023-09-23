@@ -32,9 +32,6 @@ class ImmediateGenerator(Elaboratable):
     def ports(self):
         return [self.insn, self.imm_type, self.imm]
 
-    def sim_hooks(self, sim):
-        pass
-
 
 class OpcodeType(enum.Enum):
     OP_IMM = 0b00100
@@ -198,9 +195,6 @@ class Decode(Elaboratable):
         return [self.insn, self.do_decode, self.src_a, self.src_b,
                 self.reg_or_imm, self.imm, self.dst, self.illegal,
                 self.width, self.custom, self.opcode]
-
-    def sim_hooks(self, sim):
-        pass
 
 
 

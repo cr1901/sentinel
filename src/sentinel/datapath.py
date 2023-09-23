@@ -64,9 +64,6 @@ class RegFile(Elaboratable):
     def ports(self):
         return [self.adr, self.dat_r, self.dat_w, self.we]
 
-    def sim_hooks(self, sim):
-        pass
-
 
 class DataPath(Elaboratable):
     def __init__(self):
@@ -101,6 +98,3 @@ class DataPath(Elaboratable):
     def ports(self):
         return [self.reg_adr, self.dat_w, self.dat_r, self.we, self.pc,
                 self.pc_action]
-
-    def sim_hooks(self, sim):
-        pass

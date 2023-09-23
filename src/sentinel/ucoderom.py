@@ -38,8 +38,6 @@ class UCodeROM(Elaboratable):
     def ports(self):
         return [*self.signals.values(), self.adr] # , self.dat_r]
 
-    def sim_hooks(self):
-        pass
 
     # Like M5Meta.assemble(), but pass3 is more flexible and tailored to my
     # needs.

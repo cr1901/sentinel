@@ -33,21 +33,6 @@ def main_parser(parser=None):
     p_generate.add_argument("generate_file",
         metavar="FILE", type=argparse.FileType("w"), nargs="?",
         help="write generated code to FILE")
-
-    p_simulate = p_action.add_parser(
-        "simulate", help="simulate the design")
-    p_simulate.add_argument("-v", "--vcd-file",
-        metavar="VCD-FILE", type=argparse.FileType("w"),
-        help="write execution trace to VCD-FILE")
-    p_simulate.add_argument("-w", "--gtkw-file",
-        metavar="GTKW-FILE", type=argparse.FileType("w"),
-        help="write GTKWave configuration to GTKW-FILE")
-    p_simulate.add_argument("-p", "--period", dest="sync_period",
-        metavar="TIME", type=float, default=1e-6,
-        help="set 'sync' clock domain period to TIME (default: %(default)s)")
-    p_simulate.add_argument("-c", "--clocks", dest="sync_clocks",
-        metavar="COUNT", type=int, required=True,
-        help="simulate for COUNT 'sync' clock periods")
     # amaranth.cli end
 
     p_size = p_action.add_parser("size",
@@ -91,14 +76,6 @@ def main_runner(parser, args, design, platform=None, name="top", ports=()):
             args.generate_file.write(output)
         else:
             print(output)
-
-    if args.action == "simulate":
-        fragment = Fragment.get(design, platform)
-        sim = Simulator(fragment)
-        sim.add_clock(args.sync_period)
-        design.sim_hooks(sim)
-        with sim.write_vcd(vcd_file=args.vcd_file, gtkw_file=args.gtkw_file, traces=ports):
-            sim.run_until(args.sync_period * args.sync_clocks, run_passive=True)
     # amaranth.cli end
 
     if args.action == "size":
