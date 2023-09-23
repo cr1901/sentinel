@@ -128,69 +128,6 @@ class Top(Elaboratable):
     def ports(self):
         return [self.dat_w, self.dat_r, self.adr, self.we, self.req, self.ack, self.insn_fetch]
 
-    def sim_hooks(self, sim):
-        # Reserved for fine-grained testing. Ignores address lines.
-        def mem_proc_aux(insns, *, wait_states=repeat(0), irqs=repeat(False)):
-            yield Passive()
-
-            for insn, curr_regs, ws, irq in zip(insns, regs, wait_states, irqs):
-                # Wait for memory
-                while not (yield self.req):
-                    yield
-
-                # Wait state
-                for _ in range(ws):
-                    yield
-
-                # Send insn to CPU
-                yield self.dat_r.eq(insn)
-                yield (self.ack.eq(1))
-                yield
-                yield (self.ack.eq(0))
-                yield
-
-        def cpu_proc_aux(regs):
-            def check_regs(curr):
-                # GP registers
-                for r_id in range(32):
-                    # print((r_id, (yield self.datapath.regfile.mem[r_id]), curr[r_id]))
-                    assert (yield self.datapath.regfile.mem[r_id]) == (curr[r_id])
-
-                # Program Counter
-                # print((yield self.datapath.pc), curr[-1])
-                assert (yield self.datapath.pc) == curr[-1]
-
-            for curr in regs:
-                # Wait for insn.
-                while not (yield self.req):
-                    yield
-
-                # Check results as new insn begins (i.e. prev results).
-                yield from check_regs(curr)
-
-                # Wait for memory to respond.
-                while not (yield self.ack):
-                    yield
-                yield
-
-        insns = [
-            Cat(C(0b11), OpcodeType.OP_IMM, C(0, 25)),
-            Cat(C(0b11), OpcodeType.OP_IMM, C(1, 5), C(0, 3), C(0, 5), C(1, 12)),
-            Cat(C(0b11), OpcodeType.OP_IMM, C(1, 5), C(1, 3), C(1, 5), C(3, 12))
-        ]
-
-        regs = [
-            [0]*32 + [0],
-            [0]*32 + [4],
-            [0, 1] + [0]*30 + [8],
-            [0, 8] + [0]*30 + [0x0c]
-        ]
-
-        mem_proc = lambda: (yield from mem_proc_aux(insns, wait_states=chain([1], repeat(0))))
-        cpu_proc = lambda: (yield from cpu_proc_aux(regs))
-        sim.add_sync_process(mem_proc)
-        sim.add_sync_process(cpu_proc)
-
 
 class TopMem(Elaboratable):
     def __init__(self):
