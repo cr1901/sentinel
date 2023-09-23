@@ -10,8 +10,8 @@ from sentinel.decode import OpcodeType
 
 @pytest.mark.module(Top())
 @pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.xfail
-def test_alu(sim_mod):
+# @pytest.mark.xfail
+def test_top(sim_mod):
     sim, m = sim_mod
 
     # Reserved for fine-grained testing. Ignores address lines.

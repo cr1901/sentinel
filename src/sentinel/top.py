@@ -33,9 +33,9 @@ class Top(Elaboratable):
         # ALU
         self.a_input = Signal(32)
         self.b_input = Signal(32)
-        self.RegOp = self.control.ucoderom.fields["reg_op"]
-        self.ASrc = self.control.ucoderom.fields["a_src"]
-        self.BSrc = self.control.ucoderom.fields["b_src"]
+        self.RegOp = self.control.ucoderom.fields.reg_op
+        self.ASrc = self.control.ucoderom.fields.a_src
+        self.BSrc = self.control.ucoderom.fields.b_src
 
         # Decode
         self.reg_adr = Signal(5)

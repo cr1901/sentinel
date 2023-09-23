@@ -1,17 +1,19 @@
 from amaranth import *
+from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .decode import OpcodeType
 from .alu import OpType
 from .ucoderom import UCodeROM
 
-class Control(Elaboratable):
+
+class Control(Component):
     def __init__(self):
         self.ucoderom = UCodeROM()
         self.sequencer = Sequencer(self.ucoderom)
         self.mapper = Mapper()
 
         # Control inputs
-        self.vec_adr = Signal.like(self.ucoderom.signals["target"])
+        self.vec_adr = Signal.like(self.ucoderom.fields.target)
         # Direct 5 high bits of opcode.
         self.opcode = Signal(OpcodeType)
         # funct* fields converted to a 4-bit ID.
@@ -33,22 +35,22 @@ class Control(Elaboratable):
         self.test = Signal() # Possibly-inverted test result.
 
         # Internally-used microcode signals
-        self.target = Signal.like(self.ucoderom.signals["target"])
-        self.jmp_type = Signal.like(self.ucoderom.signals["jmp_type"])
-        self.cond_test = Signal.like(self.ucoderom.signals["cond_test"])
-        self.invert_test = Signal.like(self.ucoderom.signals["invert_test"])
+        self.target = Signal.like(self.ucoderom.fields.target)
+        self.jmp_type = Signal.like(self.ucoderom.fields.jmp_type)
+        self.cond_test = Signal.like(self.ucoderom.fields.cond_test)
+        self.invert_test = Signal.like(self.ucoderom.fields.invert_test)
 
         # Control outputs- mostly from microcode ROM.
-        self.pc_action = Signal.like(self.ucoderom.signals["pc_action"])
-        self.a_src = Signal.like(self.ucoderom.signals["a_src"])
-        self.b_src = Signal.like(self.ucoderom.signals["b_src"])
-        self.alu_op = Signal.like(self.ucoderom.signals["alu_op"])
-        self.reg_op = Signal.like(self.ucoderom.signals["reg_op"])
-        self.mem_req = Signal.like(self.ucoderom.signals["mem_req"])
-        self.insn_fetch = Signal.like(self.ucoderom.signals["insn_fetch"])
+        self.pc_action = Signal.like(self.ucoderom.fields.pc_action)
+        self.a_src = Signal.like(self.ucoderom.fields.a_src)
+        self.b_src = Signal.like(self.ucoderom.fields.b_src)
+        self.alu_op = Signal.like(self.ucoderom.fields.alu_op)
+        self.reg_op = Signal.like(self.ucoderom.fields.reg_op)
+        self.mem_req = Signal.like(self.ucoderom.fields.mem_req)
+        self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
 
         # Enums from microcode ROM.
-        self.CondTest = self.ucoderom.fields["cond_test"]
+        self.CondTest = self.ucoderom.fields.cond_test
 
     def elaborate(self, platform):
         m = Module()
@@ -59,17 +61,17 @@ class Control(Elaboratable):
 
         # Propogate ucode control signals
         m.d.comb += [
-            self.target.eq(self.ucoderom.signals["target"]),
-            self.jmp_type.eq(self.ucoderom.signals["jmp_type"]),
-            self.cond_test.eq(self.ucoderom.signals["cond_test"]),
-            self.invert_test.eq(self.ucoderom.signals["invert_test"]),
-            self.pc_action.eq(self.ucoderom.signals["pc_action"]),
-            self.a_src.eq(self.ucoderom.signals["a_src"]),
-            self.b_src.eq(self.ucoderom.signals["b_src"]),
-            self.alu_op.eq(self.ucoderom.signals["alu_op"]),
-            self.reg_op.eq(self.ucoderom.signals["reg_op"]),
-            self.mem_req.eq(self.ucoderom.signals["mem_req"]),
-            self.insn_fetch.eq(self.ucoderom.signals["insn_fetch"]),
+            self.target.eq(self.ucoderom.fields.target),
+            self.jmp_type.eq(self.ucoderom.fields.jmp_type),
+            self.cond_test.eq(self.ucoderom.fields.cond_test),
+            self.invert_test.eq(self.ucoderom.fields.invert_test),
+            self.pc_action.eq(self.ucoderom.fields.pc_action),
+            self.a_src.eq(self.ucoderom.fields.a_src),
+            self.b_src.eq(self.ucoderom.fields.b_src),
+            self.alu_op.eq(self.ucoderom.fields.alu_op),
+            self.reg_op.eq(self.ucoderom.fields.reg_op),
+            self.mem_req.eq(self.ucoderom.fields.mem_req),
+            self.insn_fetch.eq(self.ucoderom.fields.insn_fetch),
         ]
 
         # Connect ucode ROM to sequencer
@@ -151,11 +153,11 @@ class Mapper(Elaboratable):
 class Sequencer(Elaboratable):
     def __init__(self, ucoderom):
         # Get info required from ucoderom.
-        self.target = Signal.like(ucoderom.signals["target"])
-        self.jmp_type = Signal.like(ucoderom.signals["jmp_type"])
-        self.JumpType = ucoderom.fields["jmp_type"]
+        self.target = Signal.like(ucoderom.fields.target)
+        self.jmp_type = Signal.like(ucoderom.fields.jmp_type)
+        self.JumpType = ucoderom.fields.jmp_type
 
-        self.adr = Signal.like(ucoderom.signals["target"])
+        self.adr = Signal.like(ucoderom.fields.target)
         self.opcode_adr = Signal.like(self.adr)
         self.vec_adr = Signal.like(self.adr)
         self.next_adr = Signal.like(self.adr)
