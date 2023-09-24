@@ -3,12 +3,44 @@ from io import IOBase
 from pathlib import Path
 from itertools import tee, zip_longest
 
-from amaranth import unsigned, Signal, Memory, Module
+from amaranth import unsigned, Memory, Module
 from amaranth.lib.data import StructLayout
 from amaranth.lib.wiring import Signature, In, Out, Component
 from amaranth.utils import log2_int
 from m5pre import M5Pre
 from m5meta import M5Meta
+
+
+class UCodeROMControlGasket(Component):
+    @property
+    def signature(self):
+        return Signature({
+            "vec_adr": Out(self.ucoderom.fields.shape()["cond_test"].shape),
+            "alu_op": Out(self.ucoderom.fields.shape()["alu_op"].shape),
+            # "test": Out(self.ucoderom.fields.shape()["test"].shape),
+            "pc_action": Out(self.ucoderom.fields.shape()["pc_action"].shape),
+            "a_src": Out(self.ucoderom.fields.shape()["a_src"].shape),
+            "b_src": Out(self.ucoderom.fields.shape()["b_src"].shape),
+            "reg_op": Out(self.ucoderom.fields.shape()["reg_op"].shape),
+            "mem_req": Out(self.ucoderom.fields.shape()["mem_req"].shape),
+        })
+
+    def __init__(self, ucoderom):
+        self.ucoderom = ucoderom
+        super().__init__()
+
+    def elaborate(self, platform):
+        m = Module()
+        m.d.comb += [
+            self.vec_adr.eq(self.ucoderom.fields.cond_test),
+            self.alu_op.eq(self.ucoderom.fields.alu_op),
+            self.test.eq(self.ucoderom.fields.test),
+            self.pc_action.eq(self.ucoderom.fields.pc_action),
+            self.a_src.eq(self.ucoderom.fields.a_src),
+            self.b_src.eq(self.ucoderom.fields.b_src),
+            self.reg_op.eq(self.ucoderom.fields.reg_op),
+            self.mem_req.eq(self.ucoderom.fields.mem_req),
+        ]
 
 
 class UCodeROM(Component):
@@ -17,7 +49,7 @@ class UCodeROM(Component):
         return Signature({
             "addr": Out(log2_int(self.ucode_mem.depth)),
             "fields": In(self.field_layout)
-        })
+        }).flip()
 
     @staticmethod
     def main_microcode_file():

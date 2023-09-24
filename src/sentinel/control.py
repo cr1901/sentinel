@@ -1,12 +1,26 @@
-from amaranth import *
-from amaranth.lib.wiring import Component, Signature, In, Out
+from amaranth import Signal, Elaboratable, Module
+from amaranth.lib.wiring import Component, Signature, In
 
-from .decode import OpcodeType
-from .alu import OpType
-from .ucoderom import UCodeROM
+from .decode import OpcodeType, DecodeControlGasket
+from .alu import ALUControlGasket
+from .ucoderom import UCodeROM, UCodeROMControlGasket
+
+
+def control_signature(ucoderom):
+    return Signature({
+        "alu": In(ALUControlGasket.signature),
+        "ucode": In(UCodeROMControlGasket(ucoderom).signature),
+        "decode": In(DecodeControlGasket.signature),
+    })
 
 
 class Control(Component):
+    @property
+    def signature(self):
+        return control_signature(self.ucoderom)
+
+    # self.opcode
+
     def __init__(self):
         self.ucoderom = UCodeROM()
         self.sequencer = Sequencer(self.ucoderom)
@@ -31,8 +45,8 @@ class Control(Component):
         # misaligned insn.
         self.exception = Signal()
         self.interrupt = Signal()
-        self.raw_test = Signal() # Output of test mux.
-        self.test = Signal() # Possibly-inverted test result.
+        self.raw_test = Signal()  # Output of test mux.
+        # self.test = Signal() # Possibly-inverted test result.
 
         # Internally-used microcode signals
         self.target = Signal.like(self.ucoderom.fields.target)
@@ -51,6 +65,8 @@ class Control(Component):
 
         # Enums from microcode ROM.
         self.CondTest = self.ucoderom.fields.shape()["cond_test"].shape
+
+        super().__init__()
 
     def elaborate(self, platform):
         m = Module()
@@ -91,7 +107,7 @@ class Control(Component):
         # Connect sequencer to Control/Mapper.
         m.d.comb += [
             # Test not implemented yet!
-            self.sequencer.test.eq(self.test),
+            # self.sequencer.test.eq(self.test),
             self.sequencer.opcode_adr.eq(self.mapper.map_adr),
             self.sequencer.vec_adr.eq(self.vec_adr),
             self.sequencer.req_op.eq(self.requested_op)
@@ -114,19 +130,12 @@ class Control(Component):
             with m.Case(self.CondTest.true):
                 m.d.comb += self.raw_test.eq(1)
 
-        with m.If(self.invert_test):
-            m.d.comb += self.test.eq(~self.raw_test)
-        with m.Else():
-            m.d.comb += self.test.eq(self.raw_test)
+        # with m.If(self.invert_test):
+        #     m.d.comb += self.test.eq(~self.raw_test)
+        # with m.Else():
+        #     m.d.comb += self.test.eq(self.raw_test)
 
         return m
-
-    def ports(self):
-        # TODO: Make internally-used signals visible to outside modules
-        # for custom insns.
-        return [self.vec_adr, self.opcode, self.alu_op, self.test,
-            self.pc_action, self.a_src, self.b_src, self.alu_op,
-            self.reg_op, self.mem_req]  # , self.do_decode]
 
 
 # Map from Opcode to start location in UCodeROM

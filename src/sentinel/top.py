@@ -1,4 +1,5 @@
 from amaranth import Signal, Elaboratable, Module
+from amaranth.lib.wiring import Component, Signature, Out, In
 
 from .alu import ALU
 from .control import Control
@@ -6,19 +7,24 @@ from .datapath import DataPath
 from .decode import Decode
 
 
-class Top(Elaboratable):
-    def __init__(self):
-        self.dat_w = Signal(32)
-        self.dat_r = Signal(32)
+class Top(Component):
+    signature = Signature({
+        "dat_w": Out(32),
+        "dat_r": In(32),
         # Registered.
-        self.adr = Signal(32)
-        self.we = Signal(4)
+        "adr": Out(32),
+        "we": Out(1),
         # Ask bus to send or recv data.
-        self.req = Signal()
-        self.req_next = Signal()
+        "req": Out(1),
         # Hold bus until this signal asserts.
-        self.ack = Signal()
-        self.insn_fetch = Signal()
+        "ack": In(1),
+        "insn_fetch": Out(1)
+    })
+
+    def __init__(self):
+        super().__init__()
+
+        self.req_next = Signal()
         self.insn_fetch_next = Signal()
 
         ###
@@ -122,10 +128,6 @@ class Top(Elaboratable):
             m.d.comb += self.reg_adr.eq(self.decode.dst)
 
         return m
-
-    def ports(self):
-        return [self.dat_w, self.dat_r, self.adr, self.we, self.req, self.ack,
-                self.insn_fetch]
 
 
 class TopMem(Elaboratable):

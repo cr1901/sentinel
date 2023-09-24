@@ -1,13 +1,30 @@
 import enum
 
-from amaranth import *
+from amaranth import Signal, Module, Cat, Value, C, Elaboratable
+from amaranth.lib.wiring import Component, Signature, In, Out
 
-class ImmediateGenerator(Elaboratable):
+
+class InsnImmFormat(enum.Enum):
+    R = 0
+    I = 1  # noqa: E741
+    S = 2
+    B = 3  # Accepted in place of S.
+    U = 4
+    J = 5  # Accepted in place of U.
+
+
+ImmediateGeneratorSignature = Signature({
+    "insn": Out(32),
+    "imm_type": Out(InsnImmFormat),
+    "imm": In(32)
+})
+
+
+class ImmediateGenerator(Component):
+    signature = ImmediateGeneratorSignature.flip()
+
     def __init__(self):
-        self.insn = Signal(32)
-        self.imm_type = Signal(InsnImmFormat)
-        self.imm = Signal(32)
-
+        super().__init__()
         self.sign = Signal()
 
     def elaborate(self, platform):
@@ -17,20 +34,26 @@ class ImmediateGenerator(Elaboratable):
 
         with m.Switch(self.imm_type):
             with m.Case(InsnImmFormat.I):
-                m.d.comb += self.imm.eq(Cat(self.insn[20:31], Repl(self.sign, 21)))
+                m.d.comb += self.imm.eq(Cat(self.insn[20:31],
+                                        Value.replicate(self.sign, 21)))
             with m.Case(InsnImmFormat.S):
-                m.d.comb += self.imm.eq(Cat(self.insn[7], self.insn[8:12], self.insn[25:31], Repl(self.sign, 21)))
+                m.d.comb += self.imm.eq(Cat(self.insn[7], self.insn[8:12],
+                                        self.insn[25:31],
+                                        Value.replicate(self.sign, 21)))
             with m.Case(InsnImmFormat.B):
-                m.d.comb += self.imm.eq(Cat(C(0), self.insn[8:12], self.insn[25:31], self.insn[7], Repl(self.sign, 20)))
+                m.d.comb += self.imm.eq(Cat(C(0), self.insn[8:12],
+                                        self.insn[25:31], self.insn[7],
+                                        Value.replicate(self.sign, 20)))
             with m.Case(InsnImmFormat.U):
-                m.d.comb += self.imm.eq(Cat(C(0, 12), self.insn[12:20], self.insn[20:30], self.sign))
+                m.d.comb += self.imm.eq(Cat(C(0, 12), self.insn[12:20],
+                                        self.insn[20:30], self.sign))
             with m.Case(InsnImmFormat.J):
-                m.d.comb += self.imm.eq(Cat(C(0), self.insn[21:25], self.insn[25:31], self.insn[20], self.insn[12:20], Repl(self.sign, 12)))
+                m.d.comb += self.imm.eq(Cat(C(0), self.insn[21:25],
+                                        self.insn[25:31], self.insn[20],
+                                        self.insn[12:20],
+                                        Value.replicate(self.sign, 12)))
 
         return m
-
-    def ports(self):
-        return [self.insn, self.imm_type, self.imm]
 
 
 class OpcodeType(enum.Enum):
@@ -48,16 +71,37 @@ class OpcodeType(enum.Enum):
     SYSTEM = 0b11100
 
 
-class InsnImmFormat(enum.Enum):
-    R = 0
-    I = 1
-    S = 2
-    B = 3 # Accepted in place of S.
-    U = 4
-    J = 5 # Accepted in place of U.
+DecodeSignature = Signature({
+    "do_decode": Out(1),
+    "insn": Out(32),
+    "src_a": In(5),
+    "src_b": In(5),
+    "imm": In(32),
+    "dst": In(5),
+    "illegal": In(1),
+    "width": In(1),
+    "custom": In(1),
+    "opcode": In(OpcodeType)
+})
 
 
-class Decode(Elaboratable):
+class DecodeControlGasket(Component):
+    signature = Signature({
+        "opcode": Out(OpcodeType)
+    })
+
+    def __init__(self, decode):
+        self.decode = decode
+        super().__init__()
+
+    def elaborate(self, platform):
+        m = Module()
+        m.d.comb += self.opcode.eq(self.decode.opcode)
+
+
+class Decode(Component):
+    signature = DecodeSignature.flip()
+
     def __init__(self):
         # Shared with data bus- use do_decode to ignore.
         self.do_decode = Signal()
@@ -101,7 +145,8 @@ class Decode(Elaboratable):
 
         m.d.comb += [
             self.immgen.insn.eq(self.insn),
-            self.definitely_illegal.eq(self.insn.all() | ~self.insn.any() | (self.insn[0:2] != 0b11)),
+            self.definitely_illegal.eq(self.insn.all() | ~self.insn.any() |
+                                       (self.insn[0:2] != 0b11)),
             # Helpers
             self.opcode.eq(self.insn[2:7]),
             self.rd.eq(self.insn[7:12]),
@@ -114,7 +159,8 @@ class Decode(Elaboratable):
 
         with m.If(self.do_decode):
             m.d.sync += [
-                self.illegal.eq(self.definitely_illegal | self.probably_illegal),
+                self.illegal.eq(self.definitely_illegal |
+                                self.probably_illegal),
                 self.imm.eq(self.immgen.imm),
 
                 # For now, unconditionally propogate these and rely on
@@ -134,24 +180,30 @@ class Decode(Elaboratable):
                             with m.If(self.funct7 != 0):
                                 m.d.comb += self.probably_illegal.eq(1)
                         with m.Else():
-                            with m.If((self.funct7 != 0) & (self.funct7 != 0b0100000)):
+                            with m.If((self.funct7 != 0) &
+                                      (self.funct7 != 0b0100000)):
                                 m.d.comb += self.probably_illegal.eq(1)
-                        m.d.sync += self.requested_op.eq(Cat(self.funct3, self.funct7[-2]))
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
+                                                             self.funct7[-2]))
                     with m.Else():
-                        m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
+                                                             C(0)))
                 with m.Case(OpcodeType.LUI):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
                 with m.Case(OpcodeType.AUIPC):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
                 with m.Case(OpcodeType.OP):
                     with m.If((self.funct3 == 0) | (self.funct3 == 5)):
-                        with m.If((self.funct7 != 0) & (self.funct7 != 0b0100000)):
+                        with m.If((self.funct7 != 0) &
+                                  (self.funct7 != 0b0100000)):
                             m.d.comb += self.probably_illegal.eq(1)
-                        m.d.sync += self.requested_op.eq(Cat(self.funct3, self.funct7[-2]))
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
+                                                             self.funct7[-2]))
                     with m.Else():
                         with m.If(self.funct7 != 0):
                             m.d.comb += self.probably_illegal.eq(1)
-                        m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
+                                                             C(0)))
                 with m.Case(OpcodeType.JAL):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.J)
                 with m.Case(OpcodeType.JALR):
@@ -167,7 +219,8 @@ class Decode(Elaboratable):
                 with m.Case(OpcodeType.LOAD):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
 
-                    with m.If((self.funct3 == 3) | (self.funct3 == 6) | (self.funct3 == 7)):
+                    with m.If((self.funct3 == 3) | (self.funct3 == 6) |
+                              (self.funct3 == 7)):
                         m.d.comb += self.probably_illegal.eq(1)
                 with m.Case(OpcodeType.STORE):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.S)
@@ -177,25 +230,21 @@ class Decode(Elaboratable):
                 with m.Case(OpcodeType.CUSTOM_0):
                     m.d.comb += self.probably_illegal.eq(1)
                 with m.Case(OpcodeType.MISC_MEM):
-                    # RS1 and RD should be ignored for FENCE insn in a base impl.
+                    # RS1 and RD should be ignored for FENCE insn in a base
+                    # impl.
 
                     with m.If(self.funct3 != 0):
                         m.d.comb += self.probably_illegal.eq(1)
                 with m.Case(OpcodeType.SYSTEM):
                     m.d.comb += self.e_type.eq(self.funct12[0])
 
-                    with m.If((self.funct12[1:] != 0) | (self.rs1 != 0) | (self.rd != 0) | (self.funct3 != 0)):
+                    with m.If((self.funct12[1:] != 0) | (self.rs1 != 0) |
+                              (self.rd != 0) | (self.funct3 != 0)):
                         m.d.comb += self.probably_illegal.eq(1)
                 with m.Case():
                     m.d.comb += self.probably_illegal.eq(1)
 
         return m
-
-    def ports(self):
-        return [self.insn, self.do_decode, self.src_a, self.src_b,
-                self.reg_or_imm, self.imm, self.dst, self.illegal,
-                self.width, self.custom, self.opcode]
-
 
 
 class MinorOpcodeMapper(Elaboratable):

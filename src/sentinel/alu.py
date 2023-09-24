@@ -1,12 +1,14 @@
 import enum
 
-from amaranth import *
+from amaranth import Elaboratable, Signal, Module
+from amaranth.lib.wiring import Component, Signature, In, Out
+
 
 class Unit(Elaboratable):
     def __init__(self, width, op):
-        self.a   = Signal(width)
-        self.b   = Signal(width)
-        self.o   = Signal(width)
+        self.a = Signal(width)
+        self.b = Signal(width)
+        self.o = Signal(width)
         self.op = op
 
     def elaborate(self, platform):
@@ -17,9 +19,9 @@ class Unit(Elaboratable):
 
 class Logical(Elaboratable):
     def __init__(self, width):
-        self.a   = Signal(width)
-        self.b   = Signal(width)
-        self.o   = Signal(width)
+        self.a = Signal(width)
+        self.b = Signal(width)
+        self.o = Signal(width)
         self.op = Signal(OpType)
 
     def elaborate(self, platform):
@@ -38,9 +40,9 @@ class Logical(Elaboratable):
 
 class Shifter(Elaboratable):
     def __init__(self, width):
-        self.a   = Signal(width)
-        self.b   = Signal(width)
-        self.o   = Signal(width)
+        self.a = Signal(width)
+        self.b = Signal(width)
+        self.o = Signal(width)
         self.do_shift = Signal()
         self.shift_done = Signal()
         self.op = Signal(OpType)
@@ -53,7 +55,8 @@ class Shifter(Elaboratable):
         m = Module()
 
         m.d.sync += self.do_shift_prev.eq(self.do_shift)
-        m.d.comb += self.do_shift_rose.eq(~(self.do_shift_prev) & self.do_shift)
+        m.d.comb += self.do_shift_rose.eq(~(self.do_shift_prev) &
+                                          self.do_shift)
 
         with m.If(self.do_shift):
             with m.If(self.do_shift_rose):
@@ -152,14 +155,41 @@ class CompareGreaterThanEqualUnsigned(Unit):
         super().__init__(width, lambda a, b: a >= b)
 
 
-class ALU(Elaboratable):
+def alu_signature(width):
+    return Signature({
+        "op": Out(OpType),
+        "ready": In(1),
+        "a": Out(width),
+        "b": Out(width),
+        "o": In(width)
+    })
+
+
+class ALUControlGasket(Component):
+    signature = Signature({
+        "ready": Out(1)
+    })
+
+    def __init__(self, alu):
+        self.alu = alu
+        super().__init__()
+
+    def elaborate(self, platform):
+        m = Module()
+        m.d.comb += self.ready.eq(self.alu.ready)
+
+
+class ALU(Component):
+    @property
+    def signature(self):
+        return alu_signature(self.width).flip()
+
     # Assumes: op is held steady for duration of op.
-    def __init__(self, width):
-        self.op  = Signal(OpType, reset=OpType.NOP)
-        self.ready = Signal()
-        self.a   = Signal(width)
-        self.b   = Signal(width)
-        self.o   = Signal(width)
+    def __init__(self, width: int):
+        self.width = width
+        super().__init__()
+
+        self.op.reset = OpType.NOP
 
         ###
 
@@ -191,9 +221,9 @@ class ALU(Elaboratable):
         m.submodules.cmp_gte = self.cmp_gte
         m.submodules.cmp_gteu = self.cmp_gteu
 
-        for submod in [self.add, self.sub, self.logical, self.shift, self.cmp_equal,
-            self.cmp_not_equal, self.cmp_lt, self.cmp_ltu, self.cmp_gte,
-            self.cmp_gteu]:
+        for submod in [self.add, self.sub, self.logical, self.shift,
+                       self.cmp_equal, self.cmp_not_equal, self.cmp_lt,
+                       self.cmp_ltu, self.cmp_gte, self.cmp_gteu]:
             m.d.comb += [
                 submod.a.eq(self.a),
                 submod.b.eq(self.b),
@@ -286,6 +316,3 @@ class ALU(Elaboratable):
             self.ready.eq(self.ready_next)
         ]
         return m
-
-    def ports(self):
-        return [self.op, self.a, self.b, self.o, self.ready]

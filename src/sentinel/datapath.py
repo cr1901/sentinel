@@ -1,6 +1,8 @@
 import enum
 
-from amaranth import *
+from amaranth import Cat, C, Module, Signal, Elaboratable, Memory
+from amaranth.lib.wiring import Component, Signature, In, Out
+
 
 class PcAction(enum.Enum):
     HOLD = 0
@@ -29,12 +31,19 @@ class ProgramCounter(Elaboratable):
         return m
 
 
-class RegFile(Elaboratable):
+RegFileSignature = Signature({
+    "adr": Out(5),
+    "dat_r": In(32),
+    "dat_w": Out(32),
+    "we": Out(1)
+})
+
+
+class RegFile(Component):
+    signature = RegFileSignature.flip()
+
     def __init__(self):
-        self.adr = Signal(5)
-        self.dat_r = Signal(32)
-        self.dat_w = Signal(32)
-        self.we = Signal()
+        super().__init__()
         self.mem = Memory(width=32, depth=32)
 
     def elaborate(self, platform):
@@ -61,19 +70,22 @@ class RegFile(Elaboratable):
 
         return m
 
-    def ports(self):
-        return [self.adr, self.dat_r, self.dat_w, self.we]
+
+DataPathSignature = Signature({
+    "reg_adr": Out(5),
+    "dat_r": In(32),
+    "dat_w": Out(32),
+    "we": Out(1),
+    "pc": In(32),
+    "pc_action": Out(PcAction)
+})
 
 
-class DataPath(Elaboratable):
+class DataPath(Component):
+    signature = DataPathSignature.flip()
+
     def __init__(self):
-        self.reg_adr = Signal(5)
-        self.dat_w = Signal(32)
-        self.dat_r = Signal(32)
-        self.we = Signal()
-        self.pc = Signal(32)
-        self.pc_action = Signal(PcAction)
-
+        super().__init__()
         self.pc_mod = ProgramCounter()
         self.regfile = RegFile()
 
@@ -94,7 +106,3 @@ class DataPath(Elaboratable):
         ]
 
         return m
-
-    def ports(self):
-        return [self.reg_adr, self.dat_w, self.dat_r, self.we, self.pc,
-                self.pc_action]
