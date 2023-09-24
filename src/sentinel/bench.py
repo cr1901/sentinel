@@ -85,6 +85,7 @@ stat -json
 """)
 
 
+# TODO: verbose and show.dot
 def stats(m: Elaboratable, script: ScriptType | Template):
     rtlil_text = rtlil.convert(m)
 
