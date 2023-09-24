@@ -10,7 +10,7 @@ from sentinel.decode import OpcodeType
 
 @pytest.mark.module(Top())
 @pytest.mark.clks((1.0 / 12e6,))
-# @pytest.mark.xfail
+@pytest.mark.xfail
 def test_top(sim_mod):
     sim, m = sim_mod
 

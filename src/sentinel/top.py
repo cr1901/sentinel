@@ -1,12 +1,10 @@
-from itertools import repeat, chain
-
-from amaranth import *
-from amaranth.sim import Passive
+from amaranth import Signal, Elaboratable, Module
 
 from .alu import ALU
 from .control import Control
 from .datapath import DataPath
-from .decode import Decode, OpcodeType
+from .decode import Decode
+
 
 class Top(Elaboratable):
     def __init__(self):
@@ -33,9 +31,9 @@ class Top(Elaboratable):
         # ALU
         self.a_input = Signal(32)
         self.b_input = Signal(32)
-        self.RegOp = self.control.ucoderom.fields.reg_op
-        self.ASrc = self.control.ucoderom.fields.a_src
-        self.BSrc = self.control.ucoderom.fields.b_src
+        self.RegOp = self.control.ucoderom.fields.shape()["reg_op"].shape
+        self.ASrc = self.control.ucoderom.fields.shape()["a_src"].shape
+        self.BSrc = self.control.ucoderom.fields.shape()["b_src"].shape
 
         # Decode
         self.reg_adr = Signal(5)
@@ -126,7 +124,8 @@ class Top(Elaboratable):
         return m
 
     def ports(self):
-        return [self.dat_w, self.dat_r, self.adr, self.we, self.req, self.ack, self.insn_fetch]
+        return [self.dat_w, self.dat_r, self.adr, self.we, self.req, self.ack,
+                self.insn_fetch]
 
 
 class TopMem(Elaboratable):

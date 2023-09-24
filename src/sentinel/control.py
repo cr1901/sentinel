@@ -50,7 +50,7 @@ class Control(Component):
         self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
 
         # Enums from microcode ROM.
-        self.CondTest = self.ucoderom.fields.cond_test
+        self.CondTest = self.ucoderom.fields.shape()["cond_test"].shape
 
     def elaborate(self, platform):
         m = Module()
@@ -155,7 +155,7 @@ class Sequencer(Elaboratable):
         # Get info required from ucoderom.
         self.target = Signal.like(ucoderom.fields.target)
         self.jmp_type = Signal.like(ucoderom.fields.jmp_type)
-        self.JumpType = ucoderom.fields.jmp_type
+        self.JumpType = ucoderom.fields.shape()["jmp_type"].shape
 
         self.adr = Signal.like(ucoderom.fields.target)
         self.opcode_adr = Signal.like(self.adr)
