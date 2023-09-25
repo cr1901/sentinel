@@ -1,14 +1,14 @@
 from amaranth import Signal, Elaboratable, Module
-from amaranth.lib.wiring import Component, Signature, In
+from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .decode import OpcodeType, DecodeControlGasket
-from .alu import ALUControlGasket
+from .alu import AluCtrlSignature
 from .ucoderom import UCodeROM, UCodeROMControlGasket
 
 
 def control_signature(ucoderom):
     return Signature({
-        "alu": In(ALUControlGasket.signature),
+        "alu": Out(AluCtrlSignature),
         "ucode": In(UCodeROMControlGasket(ucoderom).signature),
         "decode": In(DecodeControlGasket.signature),
     })
@@ -38,7 +38,6 @@ class Control(Component):
         # self.load_unsigned = Signal(1)
 
         # Predicates for test mux.
-        self.alu_ready = Signal()
         self.mem_valid = Signal()
         self.compare_okay = Signal()
         # OR of illegal insn, ecall, ebreak, misaligned load/store,
@@ -58,7 +57,7 @@ class Control(Component):
         self.pc_action = Signal.like(self.ucoderom.fields.pc_action)
         self.a_src = Signal.like(self.ucoderom.fields.a_src)
         self.b_src = Signal.like(self.ucoderom.fields.b_src)
-        self.alu_op = Signal.like(self.ucoderom.fields.alu_op)
+        # self.alu_op = Signal.like(self.ucoderom.fields.alu_op)
         self.reg_op = Signal.like(self.ucoderom.fields.reg_op)
         self.mem_req = Signal.like(self.ucoderom.fields.mem_req)
         self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
@@ -84,7 +83,7 @@ class Control(Component):
             self.pc_action.eq(self.ucoderom.fields.pc_action),
             self.a_src.eq(self.ucoderom.fields.a_src),
             self.b_src.eq(self.ucoderom.fields.b_src),
-            self.alu_op.eq(self.ucoderom.fields.alu_op),
+            self.alu.op.eq(self.ucoderom.fields.alu_op),
             self.reg_op.eq(self.ucoderom.fields.reg_op),
             self.mem_req.eq(self.ucoderom.fields.mem_req),
             self.insn_fetch.eq(self.ucoderom.fields.insn_fetch),
@@ -126,7 +125,7 @@ class Control(Component):
             with m.Case(self.CondTest.mem_valid):
                 m.d.comb += self.raw_test.eq(self.mem_valid)
             with m.Case(self.CondTest.alu_ready):
-                m.d.comb += self.raw_test.eq(self.alu_ready)
+                m.d.comb += self.raw_test.eq(self.alu.ready)
             with m.Case(self.CondTest.true):
                 m.d.comb += self.raw_test.eq(1)
 

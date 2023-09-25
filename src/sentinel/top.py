@@ -1,5 +1,5 @@
 from amaranth import Signal, Elaboratable, Module
-from amaranth.lib.wiring import Component, Signature, Out, In
+from amaranth.lib.wiring import Component, Signature, Out, In, connect
 
 from .alu import ALU
 from .control import Control
@@ -53,11 +53,12 @@ class Top(Component):
         m.submodules.decode = self.decode
 
         # ALU conns
+        connect(m, self.alu.ctrl, self.control.alu)
+
+        # ALU conns
         m.d.comb += [
-            self.alu.a.eq(self.a_input),
-            self.alu.b.eq(self.b_input),
-            self.alu.op.eq(self.control.alu_op),
-            self.control.alu_ready.eq(self.alu.ready)
+            self.alu.data.a.eq(self.a_input),
+            self.alu.data.b.eq(self.b_input),
         ]
 
         with m.If(self.control.reg_op == self.RegOp.read_b_latch_a):
@@ -99,7 +100,7 @@ class Top(Component):
         m.d.comb += [
             self.datapath.we.eq(self.control.reg_op == self.RegOp.write_dst),
             self.dat_w.eq(self.datapath.dat_w),
-            self.datapath.dat_w.eq(self.alu.o),
+            self.datapath.dat_w.eq(self.alu.data.o),
             self.datapath.pc_action.eq(self.control.pc_action),
             self.datapath.reg_adr.eq(self.reg_adr)
         ]

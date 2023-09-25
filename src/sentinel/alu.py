@@ -155,41 +155,36 @@ class CompareGreaterThanEqualUnsigned(Unit):
         super().__init__(width, lambda a, b: a >= b)
 
 
-def alu_signature(width):
+AluCtrlSignature = Signature({
+    "op": Out(OpType, reset=OpType.NOP),
+    "ready": In(1),
+})
+
+
+def alu_data_signature(width):
     return Signature({
-        "op": Out(OpType),
-        "ready": In(1),
         "a": Out(width),
         "b": Out(width),
         "o": In(width)
     })
 
 
-class ALUControlGasket(Component):
-    signature = Signature({
-        "ready": Out(1)
+def alu_signature(width):
+    return Signature({
+        "ctrl": In(AluCtrlSignature),
+        "data": In(alu_data_signature(width))
     })
-
-    def __init__(self, alu):
-        self.alu = alu
-        super().__init__()
-
-    def elaborate(self, platform):
-        m = Module()
-        m.d.comb += self.ready.eq(self.alu.ready)
 
 
 class ALU(Component):
     @property
     def signature(self):
-        return alu_signature(self.width).flip()
+        return alu_signature(self.width)
 
     # Assumes: op is held steady for duration of op.
     def __init__(self, width: int):
         self.width = width
         super().__init__()
-
-        self.op.reset = OpType.NOP
 
         ###
 
@@ -225,14 +220,14 @@ class ALU(Component):
                        self.cmp_equal, self.cmp_not_equal, self.cmp_lt,
                        self.cmp_ltu, self.cmp_gte, self.cmp_gteu]:
             m.d.comb += [
-                submod.a.eq(self.a),
-                submod.b.eq(self.b),
+                submod.a.eq(self.data.a),
+                submod.b.eq(self.data.b),
             ]
 
-        m.d.comb += self.logical.op.eq(self.op)
-        m.d.comb += self.shift.op.eq(self.op)
+        m.d.comb += self.logical.op.eq(self.ctrl.op)
+        m.d.comb += self.shift.op.eq(self.ctrl.op)
 
-        with m.Switch(self.op):
+        with m.Switch(self.ctrl.op):
             with m.Case(OpType.ADD):
                 m.d.comb += [
                     self.o_mux.eq(self.add.o),
@@ -312,7 +307,7 @@ class ALU(Component):
                 ]
 
         m.d.sync += [
-            self.o.eq(self.o_mux),
-            self.ready.eq(self.ready_next)
+            self.data.o.eq(self.o_mux),
+            self.ctrl.ready.eq(self.ready_next)
         ]
         return m
