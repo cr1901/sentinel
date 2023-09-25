@@ -139,7 +139,8 @@ class UCodeROM(Component):
 
         for (curr_n, curr_f), (_, next_f) in curr_next_pairs:
             if curr_f.enum:
-                layout[curr_n] = pyenum.Enum(curr_n, curr_f.enum)
+                nice_keys = {k.upper(): v for k, v in curr_f.enum.items()}
+                layout[curr_n] = pyenum.Enum(curr_n, nice_keys)
             else:
                 layout[curr_n] = unsigned(curr_f.width)
 
@@ -148,3 +149,33 @@ class UCodeROM(Component):
                     unsigned(next_f.origin - (curr_f.origin + curr_f.width))
 
         self.field_layout = StructLayout(layout)
+
+
+# Helper class to propogate dynamically-generated enum classes from
+# microcode file to components that depend on these classes.
+class UCodeFieldClasses:
+    def __init__(self, layout_or_fn):
+        self.shapes = dict()
+
+        # We already have an appropriate layout.
+        if isinstance(layout_or_fn, StructLayout):
+            self.map_field_layout(layout_or_fn)
+        # Load microcode classes from given file.
+        elif isinstance(layout_or_fn, str):
+            self.map_field_layout(UCodeROM(main_file=layout_or_fn)
+                                  .field_layout)
+        # Attempt default from this repo.
+        elif not layout_or_fn:
+            self.map_field_layout(UCodeROM().field_layout)
+        else:
+            raise ValueError("Could not extract dynamically-generated"
+                             f"microcode classes from {type(layout_or_fn)}.\n"
+                             "If using \"amaranth generate\" set the \"ucode\""
+                             "(or similar) parameter to \"\"")
+
+    def map_field_layout(self, layout):
+        for k, v in layout:
+            self.shapes[k] = v.shape
+
+    def __getitem__(self, key):
+        return self.shapes[key]

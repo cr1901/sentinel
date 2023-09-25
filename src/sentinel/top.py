@@ -5,6 +5,7 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
+from .ucoderom import UCodeFieldClasses
 
 
 class Top(Component):
@@ -31,7 +32,8 @@ class Top(Component):
 
         self.alu = ALU(32)
         self.control = Control()
-        self.datapath = DataPath()
+        self.datapath = DataPath(UCodeFieldClasses(
+            self.control.ucoderom.field_layout))
         self.decode = Decode()
 
         # ALU
@@ -61,19 +63,19 @@ class Top(Component):
             self.alu.data.b.eq(self.b_input),
         ]
 
-        with m.If(self.control.reg_op == self.RegOp.read_b_latch_a):
+        with m.If(self.control.reg_op == self.RegOp.READ_B_LATCH_A):
             with m.Switch(self.control.a_src):
-                with m.Case(self.ASrc.gp):
-                    m.d.sync += self.a_input.eq(self.datapath.dat_r)
-                with m.Case(self.ASrc.pc):
-                    m.d.sync += self.a_input.eq(self.datapath.pc)
-        with m.Elif(self.control.reg_op == self.RegOp.latch_b):
+                with m.Case(self.ASrc.GP):
+                    m.d.sync += self.a_input.eq(self.datapath.gp.dat_r)
+                with m.Case(self.ASrc.PC):
+                    m.d.sync += self.a_input.eq(self.datapath.pc.dat_r)
+        with m.Elif(self.control.reg_op == self.RegOp.LATCH_B):
             with m.Switch(self.control.b_src):
-                with m.Case(self.BSrc.gp):
-                    m.d.sync += self.b_input.eq(self.datapath.dat_r)
-                with m.Case(self.BSrc.imm):
+                with m.Case(self.BSrc.GP):
+                    m.d.sync += self.b_input.eq(self.datapath.gp.dat_r)
+                with m.Case(self.BSrc.IMM):
                     m.d.sync += self.b_input.eq(self.decode.imm)
-                with m.Case(self.BSrc.target):
+                with m.Case(self.BSrc.TARGET):
                     m.d.sync += self.b_input.eq(self.decode.dst)
 
         # Control conns
@@ -97,12 +99,11 @@ class Top(Component):
         ]
 
         # DataPath conns
+        connect(m, self.datapath.ctrl, self.control.datapath)
         m.d.comb += [
-            self.datapath.we.eq(self.control.reg_op == self.RegOp.write_dst),
-            self.dat_w.eq(self.datapath.dat_w),
-            self.datapath.dat_w.eq(self.alu.data.o),
-            self.datapath.pc_action.eq(self.control.pc_action),
-            self.datapath.reg_adr.eq(self.reg_adr)
+            self.dat_w.eq(self.datapath.gp.dat_w),
+            self.datapath.gp.dat_w.eq(self.alu.data.o),
+            self.datapath.gp.adr.eq(self.reg_adr)
         ]
 
         # DataPath.dat_w constantly has traffic. We only want to latch
@@ -110,9 +111,9 @@ class Top(Component):
         # valid synchronous with ready assertion.
         with m.If(~self.req & self.req_next):
             with m.If(self.insn_fetch_next):
-                m.d.sync += [self.adr.eq(self.datapath.pc)]
+                m.d.sync += [self.adr.eq(self.datapath.pc.dat_r)]
             with m.Else():
-                m.d.sync += [self.adr.eq(self.datapath.dat_w)]
+                m.d.sync += [self.adr.eq(self.datapath.gp.dat_w)]
 
         # Decode conns
         m.d.comb += [
@@ -121,11 +122,11 @@ class Top(Component):
             # self.decode.do_decode.eq(self.insn_fetch & self.ack),
         ]
 
-        with m.If(self.control.reg_op == self.RegOp.read_a):
+        with m.If(self.control.reg_op == self.RegOp.READ_A):
             m.d.comb += self.reg_adr.eq(self.decode.src_a)
-        with m.Elif(self.control.reg_op == self.RegOp.read_b_latch_a):
+        with m.Elif(self.control.reg_op == self.RegOp.READ_B_LATCH_A):
             m.d.comb += self.reg_adr.eq(self.decode.src_b)
-        with m.Elif(self.control.reg_op == self.RegOp.write_dst):
+        with m.Elif(self.control.reg_op == self.RegOp.WRITE_DST):
             m.d.comb += self.reg_adr.eq(self.decode.dst)
 
         return m
