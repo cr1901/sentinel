@@ -5,33 +5,33 @@ from sentinel.ucoderom import UCodeFieldClasses
 
 
 class ProgramCounter(Elaboratable):
-    def __init__(self, PcAction):
+    def __init__(self, ucode: UCodeFieldClasses):
+        self.ucode = ucode
         self.pc = Signal(32)
-        self.PcAction = PcAction
-        self.action = Signal(self.PcAction)
+        self.action = Signal(self.ucode.PcAction)
         self.dat_w = Signal(30)
 
     def elaborate(self, platform):
         m = Module()
 
         with m.Switch(self.action):
-            with m.Case(self.PcAction.INC):
+            with m.Case(self.ucode.PcAction.INC):
                 m.d.sync += self.pc.eq(self.pc + 4)
-            with m.Case(self.PcAction.LOAD_ABS):
+            with m.Case(self.ucode.PcAction.LOAD_ABS):
                 m.d.sync += self.pc.eq(Cat(C(0, 2), self.dat_w))
-            with m.Case(self.PcAction.LOAD_REL):
+            with m.Case(self.ucode.PcAction.LOAD_REL):
                 m.d.sync += self.pc.eq(self.pc + Cat(C(0, 2), self.dat_w))
 
         return m
 
 
 class RegFile(Elaboratable):
-    def __init__(self, GpAction):
+    def __init__(self, ucode: UCodeFieldClasses):
+        self.ucode = ucode
         self.adr = Signal(5)
         self.dat_r = Signal(32)
         self.dat_w = Signal(32)
-        self.GpAction = GpAction
-        self.action = Signal(self.GpAction)
+        self.action = Signal(self.ucode.RegOp)
         self.mem = Memory(width=32, depth=32)
 
     def elaborate(self, platform):
@@ -53,16 +53,16 @@ class RegFile(Elaboratable):
         with m.Else():
             m.d.comb += [
                 self.dat_r.eq(rdport.data),
-                wrport.en.eq(self.action == self.GpAction.WRITE_DST)
+                wrport.en.eq(self.action == self.ucode.RegOp.WRITE_DST)
             ]
 
         return m
 
 
-def data_path_ctrl_signature(GpAction, PcAction):
+def data_path_ctrl_signature(ucode: UCodeFieldClasses):
     return Signature({
-        "gp_action": Out(GpAction),
-        "pc_action": Out(PcAction)
+        "gp_action": Out(ucode.RegOp),
+        "pc_action": Out(ucode.PcAction)
     })
 
 
@@ -79,16 +79,15 @@ class DataPath(Component):
                 "dat_r": In(32),
                 "dat_w": Out(32),
             })),
-            "ctrl": Out(data_path_ctrl_signature(self.GpAction, self.PcAction))
+            "ctrl": Out(data_path_ctrl_signature(self.ucode))
         }).flip()
 
     def __init__(self, ucode: UCodeFieldClasses):
-        self.GpAction = ucode["reg_op"]
-        self.PcAction = ucode["pc_action"]
+        self.ucode = ucode
         super().__init__()
 
-        self.pc_mod = ProgramCounter(self.PcAction)
-        self.regfile = RegFile(self.GpAction)
+        self.pc_mod = ProgramCounter(ucode)
+        self.regfile = RegFile(ucode)
 
     def elaborate(self, platform):
         m = Module()

@@ -7,40 +7,9 @@ from amaranth import unsigned, Memory, Module
 from amaranth.lib.data import StructLayout
 from amaranth.lib.wiring import Signature, In, Out, Component
 from amaranth.utils import log2_int
+from caseconverter import pascalcase
 from m5pre import M5Pre
 from m5meta import M5Meta
-
-
-class UCodeROMControlGasket(Component):
-    @property
-    def signature(self):
-        return Signature({
-            "vec_adr": Out(self.ucoderom.fields.shape()["cond_test"].shape),
-            "alu_op": Out(self.ucoderom.fields.shape()["alu_op"].shape),
-            # "test": Out(self.ucoderom.fields.shape()["test"].shape),
-            "pc_action": Out(self.ucoderom.fields.shape()["pc_action"].shape),
-            "a_src": Out(self.ucoderom.fields.shape()["a_src"].shape),
-            "b_src": Out(self.ucoderom.fields.shape()["b_src"].shape),
-            "reg_op": Out(self.ucoderom.fields.shape()["reg_op"].shape),
-            "mem_req": Out(self.ucoderom.fields.shape()["mem_req"].shape),
-        })
-
-    def __init__(self, ucoderom):
-        self.ucoderom = ucoderom
-        super().__init__()
-
-    def elaborate(self, platform):
-        m = Module()
-        m.d.comb += [
-            self.vec_adr.eq(self.ucoderom.fields.cond_test),
-            self.alu_op.eq(self.ucoderom.fields.alu_op),
-            self.test.eq(self.ucoderom.fields.test),
-            self.pc_action.eq(self.ucoderom.fields.pc_action),
-            self.a_src.eq(self.ucoderom.fields.a_src),
-            self.b_src.eq(self.ucoderom.fields.b_src),
-            self.reg_op.eq(self.ucoderom.fields.reg_op),
-            self.mem_req.eq(self.ucoderom.fields.mem_req),
-        ]
 
 
 class UCodeROM(Component):
@@ -149,14 +118,13 @@ class UCodeROM(Component):
                     unsigned(next_f.origin - (curr_f.origin + curr_f.width))
 
         self.field_layout = StructLayout(layout)
+        self.field_classes = UCodeFieldClasses(self.field_layout)
 
 
 # Helper class to propogate dynamically-generated enum classes from
 # microcode file to components that depend on these classes.
 class UCodeFieldClasses:
     def __init__(self, layout_or_fn):
-        self.shapes = dict()
-
         # We already have an appropriate layout.
         if isinstance(layout_or_fn, StructLayout):
             self.map_field_layout(layout_or_fn)
@@ -171,11 +139,10 @@ class UCodeFieldClasses:
             raise ValueError("Could not extract dynamically-generated"
                              f"microcode classes from {type(layout_or_fn)}.\n"
                              "If using \"amaranth generate\" set the \"ucode\""
-                             "(or similar) parameter to \"\"")
+                             "(or similar) parameter to \"\" to use default"
+                             "values")
 
     def map_field_layout(self, layout):
+        # These are enum classes, so rename accordingly.
         for k, v in layout:
-            self.shapes[k] = v.shape
-
-    def __getitem__(self, key):
-        return self.shapes[key]
+            self.__dict__[pascalcase(k)] = v.shape

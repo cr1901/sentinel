@@ -9,6 +9,7 @@ dependencies = [
     "m5meta>=1.0.4",
     "m5pre>=1.0.3",
     "amaranth @ git+https://github.com/whitequark/amaranth@amaranth-cli",
+    "case-converter>=1.1.0",
 ]
 requires-python = ">=3.11"
 readme = "README.md"

@@ -3,7 +3,7 @@ from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .decode import OpcodeType, DecodeControlGasket
 from .alu import AluCtrlSignature
-from .ucoderom import UCodeROM, UCodeROMControlGasket, UCodeFieldClasses
+from .ucoderom import UCodeROM, UCodeFieldClasses
 from .datapath import data_path_ctrl_signature
 
 
@@ -12,10 +12,8 @@ def control_signature(ucoderom):
 
     return Signature({
         "alu": Out(AluCtrlSignature),
-        "ucode": In(UCodeROMControlGasket(ucoderom).signature),
         "decode": In(DecodeControlGasket.signature),
-        "datapath": Out(data_path_ctrl_signature(ucode_fields["reg_op"],
-                                                 ucode_fields["pc_action"]))
+        "datapath": Out(data_path_ctrl_signature(ucode_fields))
     })
 
 
@@ -26,8 +24,10 @@ class Control(Component):
 
     # self.opcode
 
-    def __init__(self):
-        self.ucoderom = UCodeROM()
+    def __init__(self, ucode: UCodeFieldClasses = ""):
+        self.ucoderom = UCodeROM(main_file=ucode)
+        # Enums from microcode ROM.
+        self.ucode = self.ucoderom.field_classes
         self.sequencer = Sequencer(self.ucoderom)
         self.mapper = Mapper()
 
@@ -66,9 +66,6 @@ class Control(Component):
         self.reg_op = Signal.like(self.ucoderom.fields.reg_op)
         self.mem_req = Signal.like(self.ucoderom.fields.mem_req)
         self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
-
-        # Enums from microcode ROM.
-        self.CondTest = self.ucoderom.fields.shape()["cond_test"].shape
 
         super().__init__()
 
@@ -119,19 +116,19 @@ class Control(Component):
 
         # Test mux
         with m.Switch(self.cond_test):
-            with m.Case(self.CondTest.FALSE):
+            with m.Case(self.ucode.CondTest.FALSE):
                 m.d.comb += self.raw_test.eq(0)
-            with m.Case(self.CondTest.INTR):
+            with m.Case(self.ucode.CondTest.INTR):
                 m.d.comb += self.raw_test.eq(self.interrupt)
-            with m.Case(self.CondTest.EXCEPTION):
+            with m.Case(self.ucode.CondTest.EXCEPTION):
                 m.d.comb += self.raw_test.eq(self.exception)
-            with m.Case(self.CondTest.CMP_OKAY):
+            with m.Case(self.ucode.CondTest.CMP_OKAY):
                 m.d.comb += self.raw_test.eq(self.compare_okay)
-            with m.Case(self.CondTest.MEM_VALID):
+            with m.Case(self.ucode.CondTest.MEM_VALID):
                 m.d.comb += self.raw_test.eq(self.mem_valid)
-            with m.Case(self.CondTest.ALU_READY):
+            with m.Case(self.ucode.CondTest.ALU_READY):
                 m.d.comb += self.raw_test.eq(self.alu.ready)
-            with m.Case(self.CondTest.TRUE):
+            with m.Case(self.ucode.CondTest.TRUE):
                 m.d.comb += self.raw_test.eq(1)
 
         # with m.If(self.invert_test):
@@ -168,7 +165,7 @@ class Sequencer(Elaboratable):
         # Get info required from ucoderom.
         self.target = Signal.like(ucoderom.fields.target)
         self.jmp_type = Signal.like(ucoderom.fields.jmp_type)
-        self.JumpType = ucoderom.fields.shape()["jmp_type"].shape
+        self.ucode = ucoderom.field_classes
 
         self.adr = Signal.like(ucoderom.fields.target)
         self.opcode_adr = Signal.like(self.adr)
@@ -187,21 +184,21 @@ class Sequencer(Elaboratable):
 
         with m.Switch(self.jmp_type):
             # Also handles self.JumpType.nop
-            with m.Case(self.JumpType.CONT):
+            with m.Case(self.ucode.JmpType.CONT):
                 m.d.comb += self.adr.eq(self.next_adr)
-            with m.Case(self.JumpType.MAP):
+            with m.Case(self.ucode.JmpType.MAP):
                 m.d.comb += self.adr.eq(self.opcode_adr)
-            with m.Case(self.JumpType.DIRECT):
+            with m.Case(self.ucode.JmpType.DIRECT):
                 with m.If(self.test):
                     m.d.comb += self.adr.eq(self.target)
                 with m.Else():
                     m.d.comb += self.adr.eq(self.next_adr)
-            with m.Case(self.JumpType.VEC):
+            with m.Case(self.ucode.JmpType.VEC):
                 with m.If(self.test):
                     m.d.comb += self.adr.eq(self.vec_adr)
                 with m.Else():
                     m.d.comb += self.adr.eq(self.next_adr)
-            with m.Case(self.JumpType.DIRECT_REQ):
+            with m.Case(self.ucode.JmpType.DIRECT_REQ):
                 m.d.comb += self.adr.eq(self.target + self.req_op)
 
         return m
