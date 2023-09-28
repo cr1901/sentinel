@@ -50,7 +50,7 @@ class Control(Component):
         self.exception = Signal()
         self.interrupt = Signal()
         self.raw_test = Signal()  # Output of test mux.
-        # self.test = Signal() # Possibly-inverted test result.
+        self.test = Signal()  # Possibly-inverted test result.
 
         # Internally-used microcode signals
         self.target = Signal.like(self.ucoderom.fields.target)
@@ -59,11 +59,8 @@ class Control(Component):
         self.invert_test = Signal.like(self.ucoderom.fields.invert_test)
 
         # Control outputs- mostly from microcode ROM.
-        # self.pc_action = Signal.like(self.ucoderom.fields.pc_action)
         self.a_src = Signal.like(self.ucoderom.fields.a_src)
         self.b_src = Signal.like(self.ucoderom.fields.b_src)
-        # self.alu_op = Signal.like(self.ucoderom.fields.alu_op)
-        self.reg_op = Signal.like(self.ucoderom.fields.reg_op)
         self.mem_req = Signal.like(self.ucoderom.fields.mem_req)
         self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
 
@@ -82,11 +79,11 @@ class Control(Component):
             self.jmp_type.eq(self.ucoderom.fields.jmp_type),
             self.cond_test.eq(self.ucoderom.fields.cond_test),
             self.invert_test.eq(self.ucoderom.fields.invert_test),
-            # self.pc_action.eq(self.ucoderom.fields.pc_action),
+            self.datapath.pc_action.eq(self.ucoderom.fields.pc_action),
+            self.datapath.gp_action.eq(self.ucoderom.fields.reg_op),
             self.a_src.eq(self.ucoderom.fields.a_src),
             self.b_src.eq(self.ucoderom.fields.b_src),
-            # self.alu.op.eq(self.ucoderom.fields.alu_op),
-            self.reg_op.eq(self.ucoderom.fields.reg_op),
+            self.alu.op.eq(self.ucoderom.fields.alu_op),
             self.mem_req.eq(self.ucoderom.fields.mem_req),
             self.insn_fetch.eq(self.ucoderom.fields.insn_fetch),
         ]
@@ -108,7 +105,7 @@ class Control(Component):
         # Connect sequencer to Control/Mapper.
         m.d.comb += [
             # Test not implemented yet!
-            # self.sequencer.test.eq(self.test),
+            self.sequencer.test.eq(self.test),
             self.sequencer.opcode_adr.eq(self.mapper.map_adr),
             self.sequencer.vec_adr.eq(self.vec_adr),
             self.sequencer.req_op.eq(self.requested_op)
@@ -131,10 +128,10 @@ class Control(Component):
             with m.Case(self.ucode.CondTest.TRUE):
                 m.d.comb += self.raw_test.eq(1)
 
-        # with m.If(self.invert_test):
-        #     m.d.comb += self.test.eq(~self.raw_test)
-        # with m.Else():
-        #     m.d.comb += self.test.eq(self.raw_test)
+        with m.If(self.invert_test):
+            m.d.comb += self.test.eq(~self.raw_test)
+        with m.Else():
+            m.d.comb += self.test.eq(self.raw_test)
 
         return m
 

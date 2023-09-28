@@ -1,24 +1,68 @@
 import pytest
 
+from dataclasses import dataclass
 from itertools import repeat, chain
-from amaranth import Cat, C
 from amaranth.sim import Passive
+from bronzebeard.asm import assemble
 
 from sentinel.top import Top
-from sentinel.decode import OpcodeType
+
+
+@dataclass
+class RV32Regs:
+    @classmethod
+    def from_top_module(cls, m):
+        gpregs = []
+        for r_id in range(32):
+            gpregs.append((yield m.datapath.regfile.mem[r_id]))
+
+        return cls(*gpregs, PC=(yield m.datapath.pc.dat_r))
+
+    R0: int = 0
+    R1: int = 0
+    R2: int = 0
+    R3: int = 0
+    R4: int = 0
+    R5: int = 0
+    R6: int = 0
+    R7: int = 0
+    R8: int = 0
+    R9: int = 0
+    R10: int = 0
+    R11: int = 0
+    R12: int = 0
+    R13: int = 0
+    R14: int = 0
+    R15: int = 0
+    R16: int = 0
+    R17: int = 0
+    R18: int = 0
+    R19: int = 0
+    R20: int = 0
+    R21: int = 0
+    R22: int = 0
+    R23: int = 0
+    R24: int = 0
+    R25: int = 0
+    R26: int = 0
+    R27: int = 0
+    R28: int = 0
+    R29: int = 0
+    R30: int = 0
+    R31: int = 0
+    PC: int = 0
 
 
 @pytest.mark.module(Top())
 @pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.xfail
 def test_top(sim_mod):
     sim, m = sim_mod
 
     # Reserved for fine-grained testing. Ignores address lines.
-    def mem_proc_aux(insns, *, wait_states=repeat(0), irqs=repeat(False)):
+    def mem_proc_aux(insn_mem, *, wait_states=repeat(0), irqs=repeat(False)):
         yield Passive()
 
-        for insn, curr_regs, ws, irq in zip(insns, regs, wait_states, irqs):
+        for curr_regs, ws, irq in zip(regs, wait_states, irqs):
             # Wait for memory
             while not (yield m.req):
                 yield
@@ -28,7 +72,9 @@ def test_top(sim_mod):
                 yield
 
             # Send insn to CPU
-            yield m.dat_r.eq(insn)
+            adr = (yield m.adr)
+            yield m.dat_r.eq(int.from_bytes(insns[adr:adr+4],
+                                            byteorder="little"))
             yield (m.ack.eq(1))
             yield
             yield (m.ack.eq(0))
@@ -36,14 +82,9 @@ def test_top(sim_mod):
 
     def cpu_proc_aux(regs):
         def check_regs(curr):
-            # GP registers
-            for r_id in range(32):
-                # print((r_id, (yield m.datapath.regfile.mem[r_id]), curr[r_id]))
-                assert (yield m.datapath.regfile.mem[r_id]) == (curr[r_id])
-
-            # Program Counter
-            # print((yield m.datapath.pc), curr[-1])
-            assert (yield m.datapath.pc) == curr[-1]
+            expected_regs = curr
+            actual_regs = yield from RV32Regs.from_top_module(m)
+            assert expected_regs == actual_regs
 
         for curr in regs:
             # Wait for insn.
@@ -58,20 +99,23 @@ def test_top(sim_mod):
                 yield
             yield
 
-    insns = [
-        Cat(C(0b11), OpcodeType.OP_IMM, C(0, 25)),
-        Cat(C(0b11), OpcodeType.OP_IMM, C(1, 5), C(0, 3), C(0, 5), C(1, 12)),
-        Cat(C(0b11), OpcodeType.OP_IMM, C(1, 5), C(1, 3), C(1, 5), C(3, 12))
-    ]
+    insns = assemble("""
+        addi x0, x0, 0
+        addi x1, x0, 1
+        slli x1, x1, 3
+    """)
 
     regs = [
-        [0]*32 + [0],
-        [0]*32 + [4],
-        [0, 1] + [0]*30 + [8],
-        [0, 8] + [0]*30 + [0x0c]
+        RV32Regs(),
+        RV32Regs(PC=4),
+        RV32Regs(R1=1, PC=8),
+        RV32Regs(R1=8, PC=0xC)
     ]
 
-    mem_proc = lambda: (yield from mem_proc_aux(insns, wait_states=chain([1], repeat(0))))
-    cpu_proc = lambda: (yield from cpu_proc_aux(regs))
+    def mem_proc():
+        yield from mem_proc_aux(insns, wait_states=chain([1], repeat(0)))
+
+    def cpu_proc():
+        yield from cpu_proc_aux(regs)
 
     sim.run(sync_processes=[mem_proc, cpu_proc])

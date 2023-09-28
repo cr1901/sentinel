@@ -6,7 +6,7 @@ groups = ["default", "dev"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:bda63444d4a2000e9f19a5fcadc2739008a7af04de4586433fff9dcb374523bb"
+content_hash = "sha256:1798fa1c0ce0676b1b38b8896db77f23677bec495371e2ebaf3a87b79728e056"
 
 [[package]]
 name = "amaranth"
@@ -19,6 +19,21 @@ summary = "Amaranth hardware definition language"
 dependencies = [
     "Jinja2~=3.0",
     "pyvcd<0.5,>=0.2.2",
+]
+
+[[package]]
+name = "bronzebeard"
+version = "0.2.1"
+requires_python = ">=3.6"
+summary = "Minimal ecosystem for bare-metal RISC-V development"
+dependencies = [
+    "intelhex",
+    "pyserial",
+    "pyusb",
+]
+files = [
+    {file = "bronzebeard-0.2.1-py3-none-any.whl", hash = "sha256:84f83e226d1c5a345ccded9da5103d0d2f2b686d8709a5ea1e95e52bd72cb3dd"},
+    {file = "bronzebeard-0.2.1.tar.gz", hash = "sha256:e956aa7b7e7ef8b4468c3c5f19c1ce5c0a67f7e98ecef5b8cd2dcef18028b269"},
 ]
 
 [[package]]
@@ -63,6 +78,15 @@ summary = "brain-dead simple config-ini parsing"
 files = [
     {file = "iniconfig-2.0.0-py3-none-any.whl", hash = "sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374"},
     {file = "iniconfig-2.0.0.tar.gz", hash = "sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3"},
+]
+
+[[package]]
+name = "intelhex"
+version = "2.3.0"
+summary = "Python library for Intel HEX files manipulations"
+files = [
+    {file = "intelhex-2.3.0-py2.py3-none-any.whl", hash = "sha256:87cc5225657524ec6361354be928adfd56bcf2a3dcc646c40f8f094c39c07db4"},
+    {file = "intelhex-2.3.0.tar.gz", hash = "sha256:892b7361a719f4945237da8ccf754e9513db32f5628852785aea108dcd250093"},
 ]
 
 [[package]]
@@ -227,6 +251,15 @@ files = [
 ]
 
 [[package]]
+name = "pyserial"
+version = "3.5"
+summary = "Python Serial Port Extension"
+files = [
+    {file = "pyserial-3.5-py2.py3-none-any.whl", hash = "sha256:c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0"},
+    {file = "pyserial-3.5.tar.gz", hash = "sha256:3c77e014170dfffbd816e6ffc205e9842efb10be9f58ec16d3e8675b4925cddb"},
+]
+
+[[package]]
 name = "pytest"
 version = "7.4.2"
 requires_python = ">=3.7"
@@ -240,6 +273,16 @@ dependencies = [
 files = [
     {file = "pytest-7.4.2-py3-none-any.whl", hash = "sha256:1d881c6124e08ff0a1bb75ba3ec0bfd8b5354a01c194ddd5a0a870a48d99b002"},
     {file = "pytest-7.4.2.tar.gz", hash = "sha256:a766259cfab564a2ad52cb1aae1b881a75c3eb7e34ca3779697c23ed47c47069"},
+]
+
+[[package]]
+name = "pyusb"
+version = "1.2.1"
+requires_python = ">=3.6.0"
+summary = "Python USB access module"
+files = [
+    {file = "pyusb-1.2.1-py3-none-any.whl", hash = "sha256:2b4c7cb86dbadf044dfb9d3a4ff69fd217013dbe78a792177a3feb172449ea36"},
+    {file = "pyusb-1.2.1.tar.gz", hash = "sha256:a4cc7404a203144754164b8b40994e2849fde1cfff06b08492f12fff9d9de7b9"},
 ]
 
 [[package]]
