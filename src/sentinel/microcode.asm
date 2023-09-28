@@ -60,33 +60,34 @@ fields block_ram: {
   insn_fetch: bool, default 0;
 };
 
-check_int: jmp_type => vec, cond_test => intr, target => save_pc;
+// check_int: jmp_type => vec, cond_test => intr, target => save_pc;
 fetch:
 wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
               // Illegal insn or insn misaligned exception possible
-              jmp_type => vec, cond_test => exception, target => save_pc;
-              reg_op => read_a, jmp_type => map;
+check_int:    jmp_type => vec, reg_op => read_a, cond_test => exception, target => save_pc;
+              reg_op => read_b_latch_a, jmp_type => map;
 
 origin 8;
 imm_ops:
 imm_ops_begin:
-              reg_op => read_b_latch_a;
               // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi_alu;
               reg_op => latch_b, b_src => imm, jmp_type => direct_req, target => imm_ops_alu;
-imm_ops_end:
-              reg_op => write_dst, pc_action => inc, cond_test => true, \
-                  jmp_type => direct, target => check_int;
+imm_ops_end_fast:
+              reg_op => write_dst, jmp_type => direct, cond_test => true, \
+                  insn_fetch => 1, mem_req => 1, target => fetch;
 imm_ops_alu:
 addi:
-              alu_op => add, jmp_type => direct, target => imm_ops_end;
+              alu_op => add, pc_action => inc, cond_test => true, jmp_type => direct, \
+                target => imm_ops_end_fast;
 // Trampolines for multicycle ops are almost zero-cost except for microcode space.
 slli_trampoline:
               alu_op => sll, jmp_type => direct, target => slli;
 slli:
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
               alu_op => sll, jmp_type => direct, cond_test => alu_ready, invert_test => true, target => slli;
-              alu_op => sll, jmp_type => direct, target => imm_ops_end; // Hold ALU's results by keeping alu_op the same.
+              alu_op => sll, pc_action => inc, cond_test => true, jmp_type => direct, \
+                target => imm_ops_end_fast; // Hold ALU's results by keeping alu_op the same.
 
 
 

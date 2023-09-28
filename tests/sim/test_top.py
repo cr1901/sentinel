@@ -90,6 +90,8 @@ def test_top(sim_mod):
             # Wait for insn.
             while not (yield m.req):
                 yield
+            # First cycle when req is asserted might have stale results.
+            yield
 
             # Check results as new insn begins (i.e. prev results).
             yield from check_regs(curr)
