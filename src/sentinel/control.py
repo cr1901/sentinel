@@ -184,15 +184,13 @@ class Sequencer(Elaboratable):
             with m.Case(self.ucode.JmpType.CONT):
                 m.d.comb += self.adr.eq(self.next_adr)
             with m.Case(self.ucode.JmpType.MAP):
-                m.d.comb += self.adr.eq(self.opcode_adr)
-            with m.Case(self.ucode.JmpType.DIRECT):
                 with m.If(self.test):
                     m.d.comb += self.adr.eq(self.target)
                 with m.Else():
-                    m.d.comb += self.adr.eq(self.next_adr)
-            with m.Case(self.ucode.JmpType.VEC):
+                    m.d.comb += self.adr.eq(self.opcode_adr)
+            with m.Case(self.ucode.JmpType.DIRECT):
                 with m.If(self.test):
-                    m.d.comb += self.adr.eq(self.vec_adr)
+                    m.d.comb += self.adr.eq(self.target)
                 with m.Else():
                     m.d.comb += self.adr.eq(self.next_adr)
             with m.Case(self.ucode.JmpType.DIRECT_REQ):

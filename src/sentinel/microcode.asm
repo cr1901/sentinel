@@ -12,13 +12,12 @@ fields block_ram: {
   // cont: Increment upc by 1.
   // nop: Same as cont, but indicate we are using the target field for
   //      something else.
-  // map: Use address supplied by opcode.
+  // map: Use address supplied by opcode if test fails. Otherwise, direct.
   // direct: Conditionally use address supplied by target field.
-  // vec: Conditionally jump to vector (hardcoded).
   // direct_req: Unconditionally jump to address supplied by target field
   //             plus an offset based on the current minor opcode.
   //             See "requested_op" signal.
-  jmp_type: enum { cont = 0; nop = 0; map; direct; vec; direct_req; }, default cont;
+  jmp_type: enum { cont = 0; nop = 0; map; direct; direct_req; }, default cont;
 
   // Various tests (valid current cycle) for conditional jumps:
   // false: Unconditionally fail
@@ -65,12 +64,12 @@ fetch:
 wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
               // Illegal insn or insn misaligned exception possible
-check_int:    jmp_type => vec, reg_op => read_a, cond_test => exception, target => save_pc;
-              reg_op => read_b_latch_a, jmp_type => map;
+check_int:    jmp_type => map, reg_op => read_a, cond_test => exception, target => save_pc;
 
 origin 8;
 imm_ops:
 imm_ops_begin:
+              reg_op => read_b_latch_a;
               // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi_alu;
               reg_op => latch_b, b_src => imm, jmp_type => direct_req, target => imm_ops_alu;
 imm_ops_end_fast:
