@@ -67,19 +67,18 @@ fields block_ram: {
 fetch:
 wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
-              // reg_op => read_a;
+skip_wait_for_ack: reg_op => read_a;
               // Illegal insn or insn misaligned exception possible
-check_int:    jmp_type => map, reg_op => read_a, cond_test => exception, target => save_pc;
+check_int:    jmp_type => map, reg_op => read_b_latch_a, cond_test => exception, target => save_pc;
 
 origin 8;
 imm_ops:
 imm_ops_begin:
-              reg_op => read_b_latch_a;
               // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi_alu;
               reg_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct_req, target => imm_ops_alu;
 imm_ops_end_fast:
               reg_op => write_dst, jmp_type => direct_zero, cond_test => mem_valid, \
-                  insn_fetch => 1, mem_req => 1, target => check_int;
+                  insn_fetch => 1, mem_req => 1, target => skip_wait_for_ack;
 imm_ops_alu:
 addi:
               alu_op => add, cond_test => true, jmp_type => direct,
@@ -91,7 +90,7 @@ slli:
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
               alu_op => sll, jmp_type => direct, cond_test => alu_ready, invert_test => true, target => slli;
               alu_op => sll, cond_test => true, jmp_type => direct, \
-                target => imm_ops_end_fast; // Hold ALU's results by keeping alu_op the same.
+                  insn_fetch => 1, mem_req => 1, target => imm_ops_end_fast; // Hold ALU's results by keeping alu_op the same.
 
 
 

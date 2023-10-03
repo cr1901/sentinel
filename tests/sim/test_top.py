@@ -97,7 +97,8 @@ def test_top(sim_mod):
 
             # When ACK is asserted, we should always be going to uinsn
             # "check_int".
-            assert (yield m.control.sequencer.adr) == 1
+            assert (yield m.control.sequencer.adr) == 2 or \
+                (yield m.control.sequencer.adr) == 1
             yield
 
             # Check results as new insn begins (i.e. prev results).
