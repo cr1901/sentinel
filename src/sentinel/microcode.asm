@@ -63,9 +63,12 @@ fields block_ram: {
   insn_fetch: bool, default 0;
 };
 
-// check_int: jmp_type => vec, cond_test => intr, target => save_pc;
+#define INSN_FETCH insn_fetch => 1, mem_req => 1
+#define SKIP_WAIT_IF_ACK jmp_type => direct_zero, cond_test => mem_valid, target => skip_wait_for_ack
+#define JUMP_TO_OP_END(trg) cond_test => true, jmp_type => direct, target => trg
+
 fetch:
-wait_for_ack: insn_fetch => 1, mem_req => 1, invert_test => 1, cond_test => mem_valid, \
+wait_for_ack: INSN_FETCH, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
 skip_wait_for_ack: reg_op => read_a;
               // Illegal insn or insn misaligned exception possible
@@ -77,22 +80,17 @@ imm_ops_begin:
               // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi_alu;
               reg_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct_req, target => imm_ops_alu;
 imm_ops_end_fast:
-              reg_op => write_dst, jmp_type => direct_zero, cond_test => mem_valid, \
-                  insn_fetch => 1, mem_req => 1, target => skip_wait_for_ack;
+              reg_op => write_dst, INSN_FETCH, SKIP_WAIT_IF_ACK;
 imm_ops_alu:
 addi:
-              alu_op => add, cond_test => true, jmp_type => direct,
-                  insn_fetch => 1, mem_req => 1, target => imm_ops_end_fast;
+              alu_op => add, INSN_FETCH, JUMP_TO_OP_END(imm_ops_end_fast);
 // Trampolines for multicycle ops are almost zero-cost except for microcode space.
 slli_trampoline:
               alu_op => sll, jmp_type => direct, target => slli;
 slli:
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
               alu_op => sll, jmp_type => direct, cond_test => alu_ready, invert_test => true, target => slli;
-              alu_op => sll, cond_test => true, jmp_type => direct, \
-                  insn_fetch => 1, mem_req => 1, target => imm_ops_end_fast; // Hold ALU's results by keeping alu_op the same.
-
-
+              alu_op => sll, INSN_FETCH, JUMP_TO_OP_END(imm_ops_end_fast); // Hold ALU's results by keeping alu_op the same.
 
 
 // Interrupt handler.
