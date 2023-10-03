@@ -90,16 +90,18 @@ def test_top(sim_mod):
             # Wait for insn.
             while not (yield m.req):
                 yield
-            # First cycle when req is asserted might have stale results.
-            yield
-
-            # Check results as new insn begins (i.e. prev results).
-            yield from check_regs(curr)
 
             # Wait for memory to respond.
             while not (yield m.ack):
                 yield
+
+            # When ACK is asserted, we should always be going to uinsn
+            # "check_int".
+            assert (yield m.control.sequencer.adr) == 1
             yield
+
+            # Check results as new insn begins (i.e. prev results).
+            yield from check_regs(curr)
 
     insns = assemble("""
         addi x0, x0, 0
