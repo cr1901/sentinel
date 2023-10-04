@@ -37,6 +37,8 @@ class RegFile(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
+        adr_prev = Signal.like(self.adr)
+
         # Re: transparent, let's attempt to save some resources for now.
         m.submodules.rdport = rdport = self.mem.read_port(transparent=False)
         m.submodules.wrport = wrport = self.mem.write_port()
@@ -47,8 +49,12 @@ class RegFile(Elaboratable):
             wrport.data.eq(self.dat_w),
         ]
 
+        # We have to simulate a single cycle latency for accessing the zero
+        # reg.
+        m.d.sync += adr_prev.eq(self.adr)
+
         # Zero register logic- ignore writes/return 0 for reads.
-        with m.If(self.adr == 0):
+        with m.If((adr_prev == 0) & (self.adr == 0)):
             m.d.comb += self.dat_r.eq(0)
         with m.Else():
             m.d.comb += [

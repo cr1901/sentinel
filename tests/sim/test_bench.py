@@ -16,7 +16,7 @@ class ALU32(ALU):
 scripts_and_modules = product((ScriptType.GENERIC, ScriptType.SYNTH,
                                ScriptType.ICE40, ScriptType.GOWIN,
                                ScriptType.XC7, ScriptType.CYCLONE5),
-                              (UCodeROM,))
+                              (UCodeROM, Top))
 
 
 @pytest.mark.parametrize("script_type, mod", scripts_and_modules)
