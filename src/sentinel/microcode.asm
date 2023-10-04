@@ -75,31 +75,26 @@ skip_wait_for_ack: reg_op => read_a;
 check_int:    jmp_type => map, reg_op => read_b_latch_a, cond_test => exception, target => save_pc;
 
 origin 8;
+imm_prolog: reg_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, target => imm_ops;
+reg_prolog: reg_op => latch_b, b_src => gp, pc_action => inc, jmp_type => map_funct, target => reg_ops;
+
 imm_ops:
-imm_ops_begin:
-              // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => map_funct, target => addi_alu;
-              reg_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, target => imm_ops_alu;
-imm_ops_alu:
 addi:
-              alu_op => add, INSN_FETCH, JUMP_TO_OP_END(ops_end_fast);
+              alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 // Trampolines for multicycle ops are almost zero-cost except for microcode space.
 slli_trampoline:
               alu_op => sll, jmp_type => direct, target => slli;
+
 slli:
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
               alu_op => sll, jmp_type => direct, cond_test => alu_ready, invert_test => true, target => slli;
-              alu_op => sll, INSN_FETCH, JUMP_TO_OP_END(ops_end_fast); // Hold ALU's results by keeping alu_op the same.
+              alu_op => sll, INSN_FETCH, JUMP_TO_OP_END(fast_epilog); // Hold ALU's results by keeping alu_op the same.
 
-
-origin 24;
 reg_ops:
-reg_ops_begin:
-              reg_op => latch_b, b_src => gp, pc_action => inc, jmp_type => map_funct, target => reg_ops_alu;
-reg_ops_alu:
 add:
-              alu_op => add, INSN_FETCH, JUMP_TO_OP_END(ops_end_fast);
+              alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
-ops_end_fast:
+fast_epilog:
               reg_op => write_dst, INSN_FETCH, SKIP_WAIT_IF_ACK;
 
 // Interrupt handler.
