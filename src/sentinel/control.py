@@ -6,6 +6,8 @@ from .alu import AluCtrlSignature
 from .ucoderom import UCodeROM, UCodeFieldClasses
 from .datapath import data_path_ctrl_signature
 
+from .ucodefields import JmpType, CondTest
+
 
 def control_signature(ucoderom):
     ucode_fields = UCodeFieldClasses(ucoderom.field_layout)
@@ -113,17 +115,17 @@ class Control(Component):
 
         # Test mux
         with m.Switch(self.cond_test):
-            with m.Case(self.ucode.CondTest.FALSE):
+            with m.Case(CondTest.FALSE):
                 m.d.comb += self.raw_test.eq(0)
-            with m.Case(self.ucode.CondTest.INTR):
+            with m.Case(CondTest.INTR):
                 m.d.comb += self.raw_test.eq(self.interrupt)
-            with m.Case(self.ucode.CondTest.EXCEPTION):
+            with m.Case(CondTest.EXCEPTION):
                 m.d.comb += self.raw_test.eq(self.exception)
-            with m.Case(self.ucode.CondTest.CMP_OKAY):
+            with m.Case(CondTest.CMP_OKAY):
                 m.d.comb += self.raw_test.eq(self.compare_okay)
-            with m.Case(self.ucode.CondTest.MEM_VALID):
+            with m.Case(CondTest.MEM_VALID):
                 m.d.comb += self.raw_test.eq(self.mem_valid)
-            with m.Case(self.ucode.CondTest.TRUE):
+            with m.Case(CondTest.TRUE):
                 m.d.comb += self.raw_test.eq(1)
 
         with m.If(self.invert_test):
@@ -180,22 +182,22 @@ class Sequencer(Elaboratable):
         m.d.sync += self.next_adr.eq(self.adr + 1)
 
         with m.Switch(self.jmp_type):
-            # Also handles self.JumpType.nop
-            with m.Case(self.ucode.JmpType.CONT):
+            # Also handles JumpType.NOP
+            with m.Case(JmpType.CONT):
                 m.d.comb += self.adr.eq(self.next_adr)
-            with m.Case(self.ucode.JmpType.MAP):
+            with m.Case(JmpType.MAP):
                 with m.If(self.test):
                     m.d.comb += self.adr.eq(self.target)
                 with m.Else():
                     m.d.comb += self.adr.eq(self.opcode_adr)
-            with m.Case(self.ucode.JmpType.DIRECT):
+            with m.Case(JmpType.DIRECT):
                 with m.If(self.test):
                     m.d.comb += self.adr.eq(self.target)
                 with m.Else():
                     m.d.comb += self.adr.eq(self.next_adr)
-            with m.Case(self.ucode.JmpType.MAP_FUNCT):
+            with m.Case(JmpType.MAP_FUNCT):
                 m.d.comb += self.adr.eq(self.target + self.req_op)
-            with m.Case(self.ucode.JmpType.DIRECT_ZERO):
+            with m.Case(JmpType.DIRECT_ZERO):
                 with m.If(self.test):
                     m.d.comb += self.adr.eq(self.target)
                 with m.Else():

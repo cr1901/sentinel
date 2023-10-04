@@ -1,4 +1,4 @@
-import enum
+from .ucodefields import OpType
 
 from amaranth import Elaboratable, Signal, Module
 from amaranth.lib.wiring import Component, Signature, In, Out
@@ -15,24 +15,6 @@ class Unit(Elaboratable):
         m = Module()
         m.d.comb += self.o.eq(self.op(self.a, self.b))
         return m
-
-
-class OpType(enum.Enum):
-    ADD = 0
-    SUB = 1
-    AND = 2
-    OR = 3
-    XOR = 4
-    SLL = 5
-    SRL = 6
-    SRA = 7
-    CMP_EQ = 8
-    CMP_NE = 9
-    CMP_LT = 10
-    CMP_LTU = 11
-    CMP_GE = 12
-    CMP_GEU = 13
-    NOP = 14
 
 
 class Adder(Unit):

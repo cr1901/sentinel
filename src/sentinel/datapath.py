@@ -1,7 +1,8 @@
 from amaranth import Cat, C, Module, Signal, Elaboratable, Memory
 from amaranth.lib.wiring import Component, Signature, In, Out
 
-from sentinel.ucoderom import UCodeROM, UCodeFieldClasses
+from .ucodefields import PcAction, RegOp
+from .ucoderom import UCodeROM, UCodeFieldClasses
 
 
 # Support loading microcode enums from file.
@@ -17,7 +18,7 @@ def load_ucode_fields(ucode: UCodeFieldClasses | str):
 def pc_signature(ucode: UCodeFieldClasses):
     return Signature({
         "pc": In(32),
-        "action": Out(ucode.PcAction),
+        "action": Out(PcAction),
         "dat_w": Out(30)
     })
 
@@ -30,16 +31,16 @@ class ProgramCounter(Elaboratable):
     def __init__(self, ucode: UCodeFieldClasses = ""):
         self.ucode = load_ucode_fields(ucode)
         self.pc = Signal(32)
-        self.action = Signal(self.ucode.PcAction)
+        self.action = Signal(PcAction)
         self.dat_w = Signal(30)
 
     def elaborate(self, platform):
         m = Module()
 
         with m.Switch(self.action):
-            with m.Case(self.ucode.PcAction.INC):
+            with m.Case(PcAction.INC):
                 m.d.sync += self.pc.eq(self.pc + 4)
-            with m.Case(self.ucode.PcAction.LOAD):
+            with m.Case(PcAction.LOAD):
                 m.d.sync += self.pc.eq(Cat(C(0, 2), self.dat_w))
 
         return m
@@ -51,7 +52,7 @@ class RegFile(Elaboratable):
         self.adr = Signal(5)
         self.dat_r = Signal(32)
         self.dat_w = Signal(32)
-        self.action = Signal(self.ucode.RegOp)
+        self.action = Signal(RegOp)
         self.mem = Memory(width=32, depth=32)
 
     def elaborate(self, platform):
@@ -79,7 +80,7 @@ class RegFile(Elaboratable):
         with m.Else():
             m.d.comb += [
                 self.dat_r.eq(rdport.data),
-                wrport.en.eq(self.action == self.ucode.RegOp.WRITE_DST)
+                wrport.en.eq(self.action == RegOp.WRITE_DST)
             ]
 
         return m
@@ -87,8 +88,8 @@ class RegFile(Elaboratable):
 
 def data_path_ctrl_signature(ucode: UCodeFieldClasses):
     return Signature({
-        "gp_action": Out(ucode.RegOp),
-        "pc_action": Out(ucode.PcAction)
+        "gp_action": Out(RegOp),
+        "pc_action": Out(PcAction)
     })
 
 

@@ -1,4 +1,3 @@
-import enum as pyenum
 from io import IOBase
 from pathlib import Path
 from itertools import tee, zip_longest
@@ -11,8 +10,21 @@ from caseconverter import pascalcase
 from m5pre import M5Pre
 from m5meta import M5Meta
 
+from .ucodefields import OpType, CondTest, JmpType, PcAction, ASrc, BSrc, \
+    RegOp
+
 
 class UCodeROM(Component):
+    enum_map = {
+        "alu_op": OpType,
+        "cond_test": CondTest,
+        "jmp_type": JmpType,
+        "pc_action": PcAction,
+        "a_src": ASrc,
+        "b_src": BSrc,
+        "reg_op": RegOp
+    }
+
     @property
     def signature(self):
         return Signature({
@@ -107,9 +119,10 @@ class UCodeROM(Component):
         curr_next_pairs = zip_longest(c, n, fillvalue=(None, None))
 
         for (curr_n, curr_f), (_, next_f) in curr_next_pairs:
-            if curr_f.enum:
-                nice_keys = {k.upper(): v for k, v in curr_f.enum.items()}
-                layout[curr_n] = pyenum.Enum(curr_n, nice_keys)
+            # bools in m5meta are internally enums, but we'll do just fine with
+            # unsigned(1).
+            if curr_f.enum and curr_f.enum != {"false": 0, "true": 1}:
+                layout[curr_n] = self.check_and_convert_dynamic_enum(curr_f)
             else:
                 layout[curr_n] = unsigned(curr_f.width)
 
@@ -119,6 +132,18 @@ class UCodeROM(Component):
 
         self.field_layout = StructLayout(layout)
         self.field_classes = UCodeFieldClasses(self.field_layout)
+
+    def check_and_convert_dynamic_enum(self, field):
+        se_class = self.enum_map[field.name]
+
+        compat = all(se_class[k.upper()].value == field.enum[k]
+                     for k in field.enum)
+        if not compat:
+            raise ValueError(f"{se_class} in Amaranth source and field {field}"
+                             " in microcode source do not have compatible "
+                             "fields and values")
+
+        return se_class
 
 
 # Helper class to propogate dynamically-generated enum classes from

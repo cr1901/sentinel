@@ -30,7 +30,7 @@ fields block_ram: {
   // mem_valid: Is current dat_r valid? Did write finish?
   // alu_ready: Is alu_ready (mainly for shifts)?
   // true: Unconditionally succeed
-  cond_test: enum { false = 0; intr; exception; cmp_okay; mem_valid; alu_ready; true}, default true;
+  cond_test: enum { false = 0; intr; exception; cmp_okay; mem_valid; true}, default true;
 
   // Invert the results of the test above. Valid current cycle.
   invert_test: bool, default 0;
@@ -46,7 +46,7 @@ fields block_ram: {
   b_src: enum { gp = 0; imm; target; }, default gp;
 
   // Enum layout needs to match ALU.OpType
-  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_lut; cmp_ge; cmp_geu; nop }, default nop;
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_ltu; cmp_ge; cmp_geu; nop }, default nop;
 
   // Either read or write a register in the register file. _Which_ register
   // to read/write comes either from the decoded insn or from microcode inputs.

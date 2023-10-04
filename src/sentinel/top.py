@@ -5,6 +5,7 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
+from .ucodefields import RegOp
 
 
 class Top(Component):
@@ -62,15 +63,13 @@ class Top(Component):
             self.alu.data.b.eq(self.b_input),
         ]
 
-        with m.If(self.control.datapath.gp_action ==
-                  self.ucode.RegOp.READ_B_LATCH_A):
+        with m.If(self.control.datapath.gp_action == RegOp.READ_B_LATCH_A):
             with m.Switch(self.control.a_src):
                 with m.Case(self.ASrc.GP):
                     m.d.sync += self.a_input.eq(self.datapath.gp.dat_r)
                 with m.Case(self.ASrc.PC):
                     m.d.sync += self.a_input.eq(self.datapath.pc.dat_r)
-        with m.Elif(self.control.datapath.gp_action ==
-                    self.ucode.RegOp.LATCH_B):
+        with m.Elif(self.control.datapath.gp_action == RegOp.LATCH_B):
             with m.Switch(self.control.b_src):
                 with m.Case(self.BSrc.GP):
                     m.d.sync += self.b_input.eq(self.datapath.gp.dat_r)
@@ -125,13 +124,13 @@ class Top(Component):
             self.decode.do_decode.eq(self.insn_fetch & self.ack),
         ]
 
-        with m.If(self.control.datapath.gp_action == self.ucode.RegOp.READ_A):
+        with m.If(self.control.datapath.gp_action == RegOp.READ_A):
             m.d.comb += self.reg_adr.eq(self.decode.src_a)
         with m.Elif(self.control.datapath.gp_action ==
-                    self.ucode.RegOp.READ_B_LATCH_A):
+                    RegOp.READ_B_LATCH_A):
             m.d.comb += self.reg_adr.eq(self.decode.src_b)
         with m.Elif(self.control.datapath.gp_action ==
-                    self.ucode.RegOp.WRITE_DST):
+                    RegOp.WRITE_DST):
             m.d.comb += self.reg_adr.eq(self.decode.dst)
 
         return m
