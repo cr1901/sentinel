@@ -1,12 +1,34 @@
 from amaranth import Cat, C, Module, Signal, Elaboratable, Memory
 from amaranth.lib.wiring import Component, Signature, In, Out
 
-from sentinel.ucoderom import UCodeFieldClasses
+from sentinel.ucoderom import UCodeROM, UCodeFieldClasses
+
+
+# Support loading microcode enums from file.
+def load_ucode_fields(ucode: UCodeFieldClasses | str):
+    if not isinstance(ucode, UCodeFieldClasses):
+        # Enums from microcode ROM.
+        return UCodeROM(main_file=ucode).field_classes
+    else:
+        # Or use the enums as-is.
+        return ucode
+
+
+def pc_signature(ucode: UCodeFieldClasses):
+    return Signature({
+        "pc": In(32),
+        "action": Out(ucode.PcAction),
+        "dat_w": Out(30)
+    })
 
 
 class ProgramCounter(Elaboratable):
-    def __init__(self, ucode: UCodeFieldClasses):
-        self.ucode = ucode
+    @property
+    def signature(self):
+        return pc_signature(self.ucode)
+
+    def __init__(self, ucode: UCodeFieldClasses = ""):
+        self.ucode = load_ucode_fields(ucode)
         self.pc = Signal(32)
         self.action = Signal(self.ucode.PcAction)
         self.dat_w = Signal(30)
@@ -17,17 +39,15 @@ class ProgramCounter(Elaboratable):
         with m.Switch(self.action):
             with m.Case(self.ucode.PcAction.INC):
                 m.d.sync += self.pc.eq(self.pc + 4)
-            with m.Case(self.ucode.PcAction.LOAD_ABS):
+            with m.Case(self.ucode.PcAction.LOAD):
                 m.d.sync += self.pc.eq(Cat(C(0, 2), self.dat_w))
-            with m.Case(self.ucode.PcAction.LOAD_REL):
-                m.d.sync += self.pc.eq(self.pc + Cat(C(0, 2), self.dat_w))
 
         return m
 
 
 class RegFile(Elaboratable):
-    def __init__(self, ucode: UCodeFieldClasses):
-        self.ucode = ucode
+    def __init__(self, ucode: UCodeFieldClasses = ""):
+        self.ucode = load_ucode_fields(ucode)
         self.adr = Signal(5)
         self.dat_r = Signal(32)
         self.dat_w = Signal(32)
@@ -40,7 +60,7 @@ class RegFile(Elaboratable):
         adr_prev = Signal.like(self.adr)
 
         # Re: transparent, let's attempt to save some resources for now.
-        m.submodules.rdport = rdport = self.mem.read_port(transparent=False)
+        m.submodules.rdport = rdport = self.mem.read_port()
         m.submodules.wrport = wrport = self.mem.write_port()
 
         m.d.comb += [
@@ -88,12 +108,12 @@ class DataPath(Component):
             "ctrl": Out(data_path_ctrl_signature(self.ucode))
         }).flip()
 
-    def __init__(self, ucode: UCodeFieldClasses):
-        self.ucode = ucode
+    def __init__(self, ucode: UCodeFieldClasses = ""):
+        self.ucode = load_ucode_fields(ucode)
         super().__init__()
 
-        self.pc_mod = ProgramCounter(ucode)
-        self.regfile = RegFile(ucode)
+        self.pc_mod = ProgramCounter(self.ucode)
+        self.regfile = RegFile(self.ucode)
 
     def elaborate(self, platform):
         m = Module()

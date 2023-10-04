@@ -36,7 +36,7 @@ fields block_ram: {
   invert_test: bool, default 0;
 
   // Modify the PC for the next cycle.
-  pc_action: enum { hold = 0; inc; load_abs; load_rel; }, default hold;
+  pc_action: enum { hold = 0; inc; load; }, default hold;
 
   // Latch the A input into the ALU. A input contents vaid next cycle.
   a_src: enum { gp = 0; pc; }, default gp;

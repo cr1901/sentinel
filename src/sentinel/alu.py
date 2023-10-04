@@ -17,71 +17,6 @@ class Unit(Elaboratable):
         return m
 
 
-class Logical(Elaboratable):
-    def __init__(self, width):
-        self.a = Signal(width)
-        self.b = Signal(width)
-        self.o = Signal(width)
-        self.op = Signal(OpType)
-
-    def elaborate(self, platform):
-        m = Module()
-
-        with m.Switch(self.op):
-            with m.Case(OpType.AND):
-                m.d.comb += self.o.eq(self.a & self.b)
-            with m.Case(OpType.OR):
-                m.d.comb += self.o.eq(self.a | self.b)
-            with m.Case(OpType.XOR):
-                m.d.comb += self.o.eq(self.a ^ self.b)
-
-        return m
-
-
-class Shifter(Elaboratable):
-    def __init__(self, width):
-        self.a = Signal(width)
-        self.b = Signal(width)
-        self.o = Signal(width)
-        self.do_shift = Signal()
-        self.shift_done = Signal()
-        self.op = Signal(OpType)
-
-        self.cnt = Signal(5)
-        self.do_shift_rose = Signal()
-        self.do_shift_prev = Signal()
-
-    def elaborate(self, platform):
-        m = Module()
-
-        m.d.sync += self.do_shift_prev.eq(self.do_shift)
-        m.d.comb += self.do_shift_rose.eq(~(self.do_shift_prev) &
-                                          self.do_shift)
-
-        with m.If(self.do_shift):
-            with m.If(self.do_shift_rose):
-                m.d.sync += [
-                    self.cnt.eq(self.b),
-                    self.o.eq(self.a)
-                ]
-            with m.Else():
-                with m.If(self.cnt > 0):
-                    with m.Switch(self.op):
-                        with m.Case(OpType.SLL):
-                            m.d.sync += self.o.eq(self.o.shift_left(1))
-                        with m.Case(OpType.SRL):
-                            m.d.sync += self.o.eq(self.o.shift_right(1))
-                        with m.Case(OpType.SRA):
-                            m.d.sync += self.o.eq(self.o.as_signed() >> 1)
-
-                    m.d.sync += self.cnt.eq(self.cnt - 1)
-                with m.Else():
-                    with m.If(self.do_shift):
-                        m.d.comb += self.shift_done.eq(1)
-
-        return m
-
-
 class OpType(enum.Enum):
     ADD = 0
     SUB = 1
@@ -125,6 +60,21 @@ class XOR(Unit):
         super().__init__(width, lambda a, b: a ^ b)
 
 
+class ShiftLogicalLeft(Unit):
+    def __init__(self, width):
+        super().__init__(width, lambda a, b: a << 1)
+
+
+class ShiftLogicalRight(Unit):
+    def __init__(self, width):
+        super().__init__(width, lambda a, b: a >> 1)
+
+
+class ShiftArithmeticRight(Unit):
+    def __init__(self, width):
+        super().__init__(width, lambda a, b: a.as_signed() >> 1)
+
+
 class CompareEqual(Unit):
     def __init__(self, width):
         super().__init__(width, lambda a, b: a == b)
@@ -157,7 +107,6 @@ class CompareGreaterThanEqualUnsigned(Unit):
 
 AluCtrlSignature = Signature({
     "op": Out(OpType, reset=OpType.NOP),
-    "ready": In(1),
 })
 
 
@@ -188,14 +137,16 @@ class ALU(Component):
 
         ###
 
-        # Unregistered ready.
-        self.ready_next = Signal()
         self.o_mux = Signal(width)
 
         self.add = Adder(width)
         self.sub = Subtractor(width)
-        self.logical = Logical(width)
-        self.shift = Shifter(width)
+        self.and_ = AND(width)
+        self.or_ = OR(width)
+        self.xor = XOR(width)
+        self.sll = ShiftLogicalLeft(width)
+        self.srl = ShiftLogicalRight(width)
+        self.sar = ShiftArithmeticRight(width)
         self.cmp_equal = CompareEqual(width)
         self.cmp_not_equal = CompareNotEqual(width)
         self.cmp_lt = CompareLessThan(width)
@@ -207,8 +158,12 @@ class ALU(Component):
         m = Module()
         m.submodules.add = self.add
         m.submodules.sub = self.sub
-        m.submodules.logical = self.logical
-        m.submodules.shift = self.shift
+        m.submodules.and_ = self.and_
+        m.submodules.or_ = self.or_
+        m.submodules.xor = self.xor
+        m.submodules.sll = self.sll
+        m.submodules.srl = self.srl
+        m.submodules.sal = self.sar
         m.submodules.cmp_equal = self.cmp_equal
         m.submodules.cmp_not_equal = self.cmp_not_equal
         m.submodules.cmp_lt = self.cmp_lt
@@ -216,98 +171,46 @@ class ALU(Component):
         m.submodules.cmp_gte = self.cmp_gte
         m.submodules.cmp_gteu = self.cmp_gteu
 
-        for submod in [self.add, self.sub, self.logical, self.shift,
-                       self.cmp_equal, self.cmp_not_equal, self.cmp_lt,
-                       self.cmp_ltu, self.cmp_gte, self.cmp_gteu]:
+        for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
+                       self.sll, self.srl, self.sar, self.cmp_equal,
+                       self.cmp_not_equal, self.cmp_lt, self.cmp_ltu,
+                       self.cmp_gte, self.cmp_gteu]:
             m.d.comb += [
                 submod.a.eq(self.data.a),
                 submod.b.eq(self.data.b),
             ]
 
-        m.d.comb += self.logical.op.eq(self.ctrl.op)
-        m.d.comb += self.shift.op.eq(self.ctrl.op)
-
         with m.Switch(self.ctrl.op):
             with m.Case(OpType.ADD):
-                m.d.comb += [
-                    self.o_mux.eq(self.add.o),
-                    self.ready_next.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.add.o),
             with m.Case(OpType.SUB):
-                m.d.comb += [
-                    self.o_mux.eq(self.sub.o),
-                    self.ready_next.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.sub.o),
             with m.Case(OpType.AND):
-                m.d.comb += [
-                    self.o_mux.eq(self.logical.o),
-                    self.ready_next.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.and_.o),
             with m.Case(OpType.OR):
-                m.d.comb += [
-                    self.o_mux.eq(self.logical.o),
-                    self.ready_next.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.or_.o),
             with m.Case(OpType.XOR):
-                m.d.comb += [
-                    self.o_mux.eq(self.logical.o),
-                    self.ready_next.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.xor.o),
             with m.Case(OpType.SLL):
-                m.d.comb += [
-                    self.o_mux.eq(self.shift.o),
-                    self.ready_next.eq(self.shift.shift_done),
-                    self.shift.do_shift.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.sll.o),
             with m.Case(OpType.SRL):
-                m.d.comb += [
-                    self.o_mux.eq(self.shift.o),
-                    self.ready_next.eq(self.shift.shift_done),
-                    self.shift.do_shift.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.srl.o),
             with m.Case(OpType.SRA):
-                m.d.comb += [
-                    self.o_mux.eq(self.shift.o),
-                    self.ready_next.eq(self.shift.shift_done),
-                    self.shift.do_shift.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.sar.o),
             with m.Case(OpType.CMP_EQ):
-                m.d.comb += [
-                    self.o_mux.eq(self.cmp_equal.o),
-                    self.ready_next.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.cmp_equal.o),
             with m.Case(OpType.CMP_NE):
-                m.d.comb += [
-                    self.o_mux.eq(self.cmp_not_equal.o),
-                    self.ready_next.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.cmp_not_equal.o),
             with m.Case(OpType.CMP_LT):
-                m.d.comb += [
-                    self.o_mux.eq(self.cmp_lt.o),
-                    self.ready_next.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.cmp_lt.o),
             with m.Case(OpType.CMP_LTU):
-                m.d.comb += [
-                    self.o_mux.eq(self.cmp_ltu.o),
-                    self.ready_next.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.cmp_ltu.o),
             with m.Case(OpType.CMP_GE):
-                m.d.comb += [
-                    self.o_mux.eq(self.cmp_gte.o),
-                    self.ready_next.eq(1)
-                ]
+                m.d.comb += self.o_mux.eq(self.cmp_gte.o),
             with m.Case(OpType.CMP_GEU):
-                m.d.comb += [
-                    self.o_mux.eq(self.cmp_gteu.o),
-                    self.ready_next.eq(1)
-                ]
-            with m.Case():
-                m.d.comb += [
-                    self.ready_next.eq(0)
-                ]
+                m.d.comb += self.o_mux.eq(self.cmp_gteu.o),
 
         m.d.sync += [
             self.data.o.eq(self.o_mux),
-            self.ctrl.ready.eq(self.ready_next)
         ]
         return m

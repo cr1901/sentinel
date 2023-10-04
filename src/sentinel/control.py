@@ -123,8 +123,6 @@ class Control(Component):
                 m.d.comb += self.raw_test.eq(self.compare_okay)
             with m.Case(self.ucode.CondTest.MEM_VALID):
                 m.d.comb += self.raw_test.eq(self.mem_valid)
-            with m.Case(self.ucode.CondTest.ALU_READY):
-                m.d.comb += self.raw_test.eq(self.alu.ready)
             with m.Case(self.ucode.CondTest.TRUE):
                 m.d.comb += self.raw_test.eq(1)
 

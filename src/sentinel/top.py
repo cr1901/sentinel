@@ -104,7 +104,9 @@ class Top(Component):
         m.d.comb += [
             self.dat_w.eq(self.datapath.gp.dat_w),
             self.datapath.gp.dat_w.eq(self.alu.data.o),
-            self.datapath.gp.adr.eq(self.reg_adr)
+            self.datapath.gp.adr.eq(self.reg_adr),
+            # FIXME: Compressed insns.
+            self.datapath.pc.dat_w.eq(self.alu.data.o[2:]),
         ]
 
         # DataPath.dat_w constantly has traffic. We only want to latch

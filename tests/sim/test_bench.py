@@ -4,6 +4,9 @@ from itertools import product
 from sentinel.bench import stats, ScriptType
 from sentinel.top import Top
 from sentinel.alu import ALU
+from sentinel.control import Control
+from sentinel.decode import Decode
+from sentinel.datapath import DataPath
 from sentinel.ucoderom import UCodeROM
 from tabulate import tabulate
 
@@ -16,7 +19,8 @@ class ALU32(ALU):
 scripts_and_modules = product((ScriptType.GENERIC, ScriptType.SYNTH,
                                ScriptType.ICE40, ScriptType.GOWIN,
                                ScriptType.XC7, ScriptType.CYCLONE5),
-                              (UCodeROM, Top))
+                              (UCodeROM, Control, Top, ALU32, Decode,
+                               DataPath))
 
 
 @pytest.mark.parametrize("script_type, mod", scripts_and_modules)
