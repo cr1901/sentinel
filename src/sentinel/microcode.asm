@@ -16,12 +16,12 @@ fields block_ram: {
   //      direct.
   // direct: Conditionally use address supplied by target field. Otherwise,
   //         cont.
-  // direct_req: Unconditionally jump to address supplied by target field
-  //             plus an offset based on the current minor opcode.
-  //             See "requested_op" signal.
+  // map_funct: Unconditionally jump to address supplied by target field
+  //            plus an offset based on the current minor opcode.
+  //            See "requested_op" signal.
   // direct_zero: Conditionally use address supplied by target field. Otherwise,
   //              0.
-  jmp_type: enum { cont = 0; nop = 0; map; direct; direct_req; direct_zero; }, default cont;
+  jmp_type: enum { cont = 0; nop = 0; map; direct; map_funct; direct_zero; }, default cont;
 
   // Various tests (valid current cycle) for conditional jumps:
   // false: Unconditionally fail
@@ -77,8 +77,8 @@ check_int:    jmp_type => map, reg_op => read_b_latch_a, cond_test => exception,
 origin 8;
 imm_ops:
 imm_ops_begin:
-              // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => direct_req, target => addi_alu;
-              reg_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct_req, target => imm_ops_alu;
+              // BUG: Assembles, but label doesn't exist! reg_op => read_b_src, b_src => imm, jmp_type => map_funct, target => addi_alu;
+              reg_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, target => imm_ops_alu;
 imm_ops_alu:
 addi:
               alu_op => add, INSN_FETCH, JUMP_TO_OP_END(ops_end_fast);
@@ -94,7 +94,7 @@ slli:
 origin 24;
 reg_ops:
 reg_ops_begin:
-              reg_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct_req, target => reg_ops_alu;
+              reg_op => latch_b, b_src => gp, pc_action => inc, jmp_type => map_funct, target => reg_ops_alu;
 reg_ops_alu:
 add:
               alu_op => add, INSN_FETCH, JUMP_TO_OP_END(ops_end_fast);

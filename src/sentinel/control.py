@@ -195,7 +195,7 @@ class Sequencer(Elaboratable):
                     m.d.comb += self.adr.eq(self.target)
                 with m.Else():
                     m.d.comb += self.adr.eq(self.next_adr)
-            with m.Case(self.ucode.JmpType.DIRECT_REQ):
+            with m.Case(self.ucode.JmpType.MAP_FUNCT):
                 m.d.comb += self.adr.eq(self.target + self.req_op)
             with m.Case(self.ucode.JmpType.DIRECT_ZERO):
                 with m.If(self.test):
