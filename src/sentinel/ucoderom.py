@@ -6,12 +6,18 @@ from amaranth import unsigned, Memory, Module
 from amaranth.lib.data import StructLayout
 from amaranth.lib.wiring import Signature, In, Out, Component
 from amaranth.utils import log2_int
-from caseconverter import pascalcase
 from m5pre import M5Pre
 from m5meta import M5Meta
 
 from .ucodefields import OpType, CondTest, JmpType, PcAction, ASrc, BSrc, \
     RegOp
+
+
+def ucoderom_signature(ucoderom):
+    return Signature({
+        "addr": Out(log2_int(ucoderom.ucode_mem.depth)),
+        "fields": In(ucoderom.field_layout)
+    })
 
 
 class UCodeROM(Component):
@@ -27,10 +33,7 @@ class UCodeROM(Component):
 
     @property
     def signature(self):
-        return Signature({
-            "addr": Out(log2_int(self.ucode_mem.depth)),
-            "fields": In(self.field_layout)
-        }).flip()
+        return ucoderom_signature(self).flip()
 
     @staticmethod
     def main_microcode_file():
@@ -131,7 +134,6 @@ class UCodeROM(Component):
                     unsigned(next_f.origin - (curr_f.origin + curr_f.width))
 
         self.field_layout = StructLayout(layout)
-        self.field_classes = UCodeFieldClasses(self.field_layout)
 
     def check_and_convert_dynamic_enum(self, field):
         se_class = self.enum_map[field.name]
@@ -144,30 +146,3 @@ class UCodeROM(Component):
                              "fields and values")
 
         return se_class
-
-
-# Helper class to propogate dynamically-generated enum classes from
-# microcode file to components that depend on these classes.
-class UCodeFieldClasses:
-    def __init__(self, layout_or_fn):
-        # We already have an appropriate layout.
-        if isinstance(layout_or_fn, StructLayout):
-            self.map_field_layout(layout_or_fn)
-        # Load microcode classes from given file.
-        elif isinstance(layout_or_fn, str):
-            self.map_field_layout(UCodeROM(main_file=layout_or_fn)
-                                  .field_layout)
-        # Attempt default from this repo.
-        elif not layout_or_fn:
-            self.map_field_layout(UCodeROM().field_layout)
-        else:
-            raise ValueError("Could not extract dynamically-generated"
-                             f"microcode classes from {type(layout_or_fn)}.\n"
-                             "If using \"amaranth generate\" set the \"ucode\""
-                             "(or similar) parameter to \"\" to use default"
-                             "values")
-
-    def map_field_layout(self, layout):
-        # These are enum classes, so rename accordingly.
-        for k, v in layout:
-            self.__dict__[pascalcase(k)] = v.shape

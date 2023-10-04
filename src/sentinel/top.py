@@ -5,7 +5,7 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
-from .ucodefields import RegOp
+from .ucodefields import RegOp, ASrc, BSrc
 
 
 class Top(Component):
@@ -33,15 +33,12 @@ class Top(Component):
 
         self.alu = ALU(32)
         self.control = Control()
-        self.ucode = self.control.ucoderom.field_classes
-        self.datapath = DataPath(self.ucode)
+        self.datapath = DataPath()
         self.decode = Decode()
 
         # ALU
         self.a_input = Signal(32)
         self.b_input = Signal(32)
-        self.ASrc = self.control.ucoderom.fields.shape()["a_src"].shape
-        self.BSrc = self.control.ucoderom.fields.shape()["b_src"].shape
 
         # Decode
         self.reg_adr = Signal(5)
@@ -65,17 +62,17 @@ class Top(Component):
 
         with m.If(self.control.datapath.gp_action == RegOp.READ_B_LATCH_A):
             with m.Switch(self.control.a_src):
-                with m.Case(self.ASrc.GP):
+                with m.Case(ASrc.GP):
                     m.d.sync += self.a_input.eq(self.datapath.gp.dat_r)
-                with m.Case(self.ASrc.PC):
+                with m.Case(ASrc.PC):
                     m.d.sync += self.a_input.eq(self.datapath.pc.dat_r)
         with m.Elif(self.control.datapath.gp_action == RegOp.LATCH_B):
             with m.Switch(self.control.b_src):
-                with m.Case(self.BSrc.GP):
+                with m.Case(BSrc.GP):
                     m.d.sync += self.b_input.eq(self.datapath.gp.dat_r)
-                with m.Case(self.BSrc.IMM):
+                with m.Case(BSrc.IMM):
                     m.d.sync += self.b_input.eq(self.decode.imm)
-                with m.Case(self.BSrc.TARGET):
+                with m.Case(BSrc.TARGET):
                     m.d.sync += self.b_input.eq(self.decode.dst)
 
         # Control conns

@@ -2,37 +2,17 @@ from amaranth import Cat, C, Module, Signal, Elaboratable, Memory
 from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .ucodefields import PcAction, RegOp
-from .ucoderom import UCodeROM, UCodeFieldClasses
 
 
-# Support loading microcode enums from file.
-def load_ucode_fields(ucode: UCodeFieldClasses | str):
-    if not isinstance(ucode, UCodeFieldClasses):
-        # Enums from microcode ROM.
-        return UCodeROM(main_file=ucode).field_classes
-    else:
-        # Or use the enums as-is.
-        return ucode
+PcSignature = Signature({
+    "pc": In(32),
+    "action": Out(PcAction),
+    "dat_w": Out(30)
+})
 
 
-def pc_signature(ucode: UCodeFieldClasses):
-    return Signature({
-        "pc": In(32),
-        "action": Out(PcAction),
-        "dat_w": Out(30)
-    })
-
-
-class ProgramCounter(Elaboratable):
-    @property
-    def signature(self):
-        return pc_signature(self.ucode)
-
-    def __init__(self, ucode: UCodeFieldClasses = ""):
-        self.ucode = load_ucode_fields(ucode)
-        self.pc = Signal(32)
-        self.action = Signal(PcAction)
-        self.dat_w = Signal(30)
+class ProgramCounter(Component):
+    signature = PcSignature.flip()
 
     def elaborate(self, platform):
         m = Module()
@@ -47,8 +27,7 @@ class ProgramCounter(Elaboratable):
 
 
 class RegFile(Elaboratable):
-    def __init__(self, ucode: UCodeFieldClasses = ""):
-        self.ucode = load_ucode_fields(ucode)
+    def __init__(self):
         self.adr = Signal(5)
         self.dat_r = Signal(32)
         self.dat_w = Signal(32)
@@ -86,35 +65,34 @@ class RegFile(Elaboratable):
         return m
 
 
-def data_path_ctrl_signature(ucode: UCodeFieldClasses):
-    return Signature({
-        "gp_action": Out(RegOp),
-        "pc_action": Out(PcAction)
-    })
+DataPathControlSignature = Signature({
+    "gp_action": Out(RegOp),
+    "pc_action": Out(PcAction)
+})
+
+
+DataPathSignature = Signature({
+    "gp": Out(Signature({
+        "adr": Out(5),
+        "dat_r": In(32),
+        "dat_w": Out(32),
+    })),
+    "pc": Out(Signature({
+        "dat_r": In(32),
+        "dat_w": Out(32),
+    })),
+    "ctrl": Out(DataPathControlSignature)
+})
 
 
 class DataPath(Component):
-    @property
-    def signature(self):
-        return Signature({
-            "gp": Out(Signature({
-                "adr": Out(5),
-                "dat_r": In(32),
-                "dat_w": Out(32),
-            })),
-            "pc": Out(Signature({
-                "dat_r": In(32),
-                "dat_w": Out(32),
-            })),
-            "ctrl": Out(data_path_ctrl_signature(self.ucode))
-        }).flip()
+    signature = DataPathSignature.flip()
 
-    def __init__(self, ucode: UCodeFieldClasses = ""):
-        self.ucode = load_ucode_fields(ucode)
+    def __init__(self):
         super().__init__()
 
-        self.pc_mod = ProgramCounter(self.ucode)
-        self.regfile = RegFile(self.ucode)
+        self.pc_mod = ProgramCounter()
+        self.regfile = RegFile()
 
     def elaborate(self, platform):
         m = Module()

@@ -6,7 +6,7 @@ groups = ["default", "dev"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:1798fa1c0ce0676b1b38b8896db77f23677bec495371e2ebaf3a87b79728e056"
+content_hash = "sha256:7d6bc9fd5e69a34bf9d573674131393993ee6a56a08518b701e65618699cc704"
 
 [[package]]
 name = "amaranth"
@@ -34,15 +34,6 @@ dependencies = [
 files = [
     {file = "bronzebeard-0.2.1-py3-none-any.whl", hash = "sha256:84f83e226d1c5a345ccded9da5103d0d2f2b686d8709a5ea1e95e52bd72cb3dd"},
     {file = "bronzebeard-0.2.1.tar.gz", hash = "sha256:e956aa7b7e7ef8b4468c3c5f19c1ce5c0a67f7e98ecef5b8cd2dcef18028b269"},
-]
-
-[[package]]
-name = "case-converter"
-version = "1.1.0"
-summary = "A string case conversion package."
-files = [
-    {file = "case-converter-1.1.0.tar.gz", hash = "sha256:2ed3fc6e3ffa8d601f9a31ffcbc8fbd19eaeb48671a79a8ef16394672824510e"},
-    {file = "case_converter-1.1.0-py3-none-any.whl", hash = "sha256:d0fbc665a4fd410e454630bcf5168dce62e147a98512647ed48b0a6b556986e3"},
 ]
 
 [[package]]

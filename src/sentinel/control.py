@@ -3,33 +3,25 @@ from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .decode import OpcodeType, DecodeControlGasket
 from .alu import AluCtrlSignature
-from .ucoderom import UCodeROM, UCodeFieldClasses
-from .datapath import data_path_ctrl_signature
+from .ucoderom import UCodeROM
+from .datapath import DataPathControlSignature
 
 from .ucodefields import JmpType, CondTest
 
 
-def control_signature(ucoderom):
-    ucode_fields = UCodeFieldClasses(ucoderom.field_layout)
-
-    return Signature({
-        "alu": Out(AluCtrlSignature),
-        "decode": In(DecodeControlGasket.signature),
-        "datapath": Out(data_path_ctrl_signature(ucode_fields))
-    })
+ControlSignature = Signature({
+    "alu": Out(AluCtrlSignature),
+    "decode": In(DecodeControlGasket.signature),
+    "datapath": Out(DataPathControlSignature)
+})
 
 
 class Control(Component):
-    @property
-    def signature(self):
-        return control_signature(self.ucoderom)
+    signature = ControlSignature
 
-    # self.opcode
-
-    def __init__(self, ucode: UCodeFieldClasses = ""):
+    def __init__(self, ucode: str = ""):
         self.ucoderom = UCodeROM(main_file=ucode)
         # Enums from microcode ROM.
-        self.ucode = self.ucoderom.field_classes
         self.sequencer = Sequencer(self.ucoderom)
         self.mapper = Mapper()
 
@@ -164,7 +156,6 @@ class Sequencer(Elaboratable):
         # Get info required from ucoderom.
         self.target = Signal.like(ucoderom.fields.target)
         self.jmp_type = Signal.like(ucoderom.fields.jmp_type)
-        self.ucode = ucoderom.field_classes
 
         self.adr = Signal.like(ucoderom.fields.target)
         self.opcode_adr = Signal.like(self.adr)
