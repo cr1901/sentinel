@@ -12,6 +12,19 @@ def pytest_addoption(parser):
         action="store_true",
         help="generate Value Change Dump (vcds) from simulations",
     )
+    parser.addoption(
+        "--runbench", action="store_true", default=False, help="run benchmarks"
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--runbench"):
+        # --runslow given in cli: do not skip slow tests
+        return
+    skip_bench = pytest.mark.skip(reason="need --runbench option to run")
+    for item in items:
+        if "bench" in item.keywords:
+            item.add_marker(skip_bench)
 
 
 class SimulatorFixture:
