@@ -10,7 +10,7 @@ from m5pre import M5Pre
 from m5meta import M5Meta
 
 from .ucodefields import OpType, CondTest, JmpType, PcAction, ASrc, BSrc, \
-    RegOp
+    RegOp, SrcOp, ALUTmp
 
 
 def ucoderom_signature(ucoderom):
@@ -26,6 +26,8 @@ class UCodeROM(Component):
         "cond_test": CondTest,
         "jmp_type": JmpType,
         "pc_action": PcAction,
+        "src_op": SrcOp,
+        "alu_tmp": ALUTmp,
         "a_src": ASrc,
         "b_src": BSrc,
         "reg_op": RegOp
@@ -136,13 +138,19 @@ class UCodeROM(Component):
         self.field_layout = StructLayout(layout)
 
     def check_and_convert_dynamic_enum(self, field):
-        se_class = self.enum_map[field.name]
+        try:
+            se_class = self.enum_map[field.name]
+        except KeyError as e:
+            raise ValueError(f"{e.args[0]} was not in enum_map") from e
 
-        compat = all(se_class[k.upper()].value == field.enum[k]
-                     for k in field.enum)
-        if not compat:
+        if not (all(se_class[k.upper()].value == field.enum[k]
+                    for k in field.enum) and
+                all(field.enum[k.name.lower()] == k.value
+                    for k in se_class)):
             raise ValueError(f"{se_class} in Amaranth source and field {field}"
                              " in microcode source do not have compatible "
-                             "fields and values")
+                             "fields and values.\n"
+                             "Amaranth is UPPER_CASE, microcode source is "
+                             "lower_case.")
 
         return se_class

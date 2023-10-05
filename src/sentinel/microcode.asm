@@ -24,35 +24,31 @@ fields block_ram: {
   jmp_type: enum { cont = 0; nop = 0; map; direct; map_funct; direct_zero; }, default cont;
 
   // Various tests (valid current cycle) for conditional jumps:
-  // false: Unconditionally fail
   // int: Is interrupt line high?
   // exception: Illegal insn, EBRAK, ECALL, misaligned insn, misaligned ld/st?
   // mem_valid: Is current dat_r valid? Did write finish?
-  // alu_ready: Is alu_ready (mainly for shifts)?
   // true: Unconditionally succeed
-  cond_test: enum { false = 0; intr; exception; cmp_okay; mem_valid; true}, default true;
+  cond_test: enum { intr; exception; cmp_okay; mem_valid; true}, default true;
 
   // Invert the results of the test above. Valid current cycle.
   invert_test: bool, default 0;
 
   // Modify the PC for the next cycle.
-  pc_action: enum { hold = 0; inc; load; }, default hold;
+  pc_action: enum { hold = 0; inc; load_alu_o; }, default hold;
 
-  // Latch the A input into the ALU. A input contents vaid next cycle.
-  a_src: enum { gp = 0; pc; }, default gp;
+  src_op: enum { none = 0; latch_a; latch_b; latch_a_b; }, default none;
+  a_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; }, default gp;
+  b_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; }, default gp;
+  // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
-  // Latch the B input into the ALU. B input contents vaid next cycle.
-  // Target is for shifts.
-  b_src: enum { gp = 0; imm; target; }, default gp;
-
-  // Enum layout needs to match ALU.OpType
-  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_ltu; cmp_ge; cmp_geu; nop }, default nop;
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_ltu; cmp_ge; cmp_geu; nop; passthru; }, default nop;
+  alu_tmp: enum { none = 0; write_c; write_d; }, default none;
 
   // Either read or write a register in the register file. _Which_ register
   // to read/write comes either from the decoded insn or from microcode inputs.
   // Read contents will be on the data bus the next cycle. Written contents
-  // will be valid on the next cycle. Reads are NOT transparent.
-  reg_op: enum { none = 0; read_a; read_b_latch_a; latch_b; write_dst; }, default none;
+  // will be valid on the next cycle.
+  reg_op: enum { none = 0; read_a; read_b; write_dst; read_a_write_dst; read_b_write_dst; }, default none;
 
   // Start or continue a memory request. For convenience, an ack will
   // automatically stop a memory request for the cycle after ack, even if
@@ -67,6 +63,7 @@ fields block_ram: {
 #define SKIP_WAIT_IF_ACK jmp_type => direct_zero, cond_test => mem_valid, target => skip_wait_for_ack
 #define JUMP_TO_OP_END(trg) cond_test => true, jmp_type => direct, target => trg
 
+#if 0
 fetch:
 wait_for_ack: INSN_FETCH, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
@@ -101,3 +98,4 @@ fast_epilog:
 origin 224;
 // Send PC through ALU
 save_pc: a_src => pc, b_src => target, jmp_type => nop, target => 0;
+#endif

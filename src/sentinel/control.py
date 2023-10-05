@@ -56,6 +56,7 @@ class Control(Component):
         # Control outputs- mostly from microcode ROM.
         self.a_src = Signal.like(self.ucoderom.fields.a_src)
         self.b_src = Signal.like(self.ucoderom.fields.b_src)
+        self.src_op = Signal.like(self.ucoderom.fields.src_op)
         self.mem_req = Signal.like(self.ucoderom.fields.mem_req)
         self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
 
@@ -78,6 +79,7 @@ class Control(Component):
             self.gp.action.eq(self.ucoderom.fields.reg_op),
             self.a_src.eq(self.ucoderom.fields.a_src),
             self.b_src.eq(self.ucoderom.fields.b_src),
+            self.src_op.eq(self.ucoderom.fields.src_op),
             self.alu.op.eq(self.ucoderom.fields.alu_op),
             self.mem_req.eq(self.ucoderom.fields.mem_req),
             self.insn_fetch.eq(self.ucoderom.fields.insn_fetch),
@@ -108,8 +110,6 @@ class Control(Component):
 
         # Test mux
         with m.Switch(self.cond_test):
-            with m.Case(CondTest.FALSE):
-                m.d.comb += self.raw_test.eq(0)
             with m.Case(CondTest.INTR):
                 m.d.comb += self.raw_test.eq(self.interrupt)
             with m.Case(CondTest.EXCEPTION):

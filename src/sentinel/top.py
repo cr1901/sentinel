@@ -5,7 +5,7 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
-from .ucodefields import RegOp, ASrc, BSrc
+from .ucodefields import RegOp, ASrc, BSrc, SrcOp
 
 
 class Top(Component):
@@ -52,6 +52,8 @@ class Top(Component):
         m.submodules.decode = self.decode
 
         # ALU conns
+        a_mux_o = Signal(32)
+        b_mux_o = Signal(32)
         connect(m, self.alu.ctrl, self.control.alu)
 
         # ALU conns
@@ -60,13 +62,17 @@ class Top(Component):
             self.alu.data.b.eq(self.b_input),
         ]
 
-        with m.If(self.control.gp.action == RegOp.READ_B_LATCH_A):
+        # Connect ALU sources
+        with m.If((self.control.src_op == SrcOp.LATCH_A) |
+                  (self.control.src_op == SrcOp.LATCH_A_B)):
             with m.Switch(self.control.a_src):
                 with m.Case(ASrc.GP):
                     m.d.sync += self.a_input.eq(self.datapath.gp.dat_r)
                 with m.Case(ASrc.PC):
                     m.d.sync += self.a_input.eq(self.datapath.pc.dat_r)
-        with m.Elif(self.control.gp.action == RegOp.LATCH_B):
+
+        with m.If((self.control.src_op == SrcOp.LATCH_B) |
+                  (self.control.src_op == SrcOp.LATCH_A_B)):
             with m.Switch(self.control.b_src):
                 with m.Case(BSrc.GP):
                     m.d.sync += self.b_input.eq(self.datapath.gp.dat_r)
@@ -124,13 +130,15 @@ class Top(Component):
             self.decode.do_decode.eq(self.insn_fetch & self.ack),
         ]
 
-        with m.If(self.control.gp.action == RegOp.READ_A):
+        with m.If((self.control.gp.action == RegOp.READ_A) |
+                  (self.control.gp.action == RegOp.READ_A_WRITE_DST)):
             m.d.comb += self.reg_adr.eq(self.decode.src_a)
-        with m.Elif(self.control.gp.action ==
-                    RegOp.READ_B_LATCH_A):
+        with m.Elif((self.control.gp.action == RegOp.READ_B) |
+                    (self.control.gp.action == RegOp.READ_B_WRITE_DST)):
             m.d.comb += self.reg_adr.eq(self.decode.src_b)
-        with m.Elif(self.control.gp.action ==
-                    RegOp.WRITE_DST):
+        with m.Elif((self.control.gp.action == RegOp.WRITE_DST) |
+                    (self.control.gp.action == RegOp.READ_A_WRITE_DST) |
+                    (self.control.gp.action == RegOp.READ_B_WRITE_DST)):
             m.d.comb += self.reg_adr.eq(self.decode.dst)
 
         return m
