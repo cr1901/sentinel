@@ -60,13 +60,13 @@ class Top(Component):
             self.alu.data.b.eq(self.b_input),
         ]
 
-        with m.If(self.control.datapath.gp_action == RegOp.READ_B_LATCH_A):
+        with m.If(self.control.gp.action == RegOp.READ_B_LATCH_A):
             with m.Switch(self.control.a_src):
                 with m.Case(ASrc.GP):
                     m.d.sync += self.a_input.eq(self.datapath.gp.dat_r)
                 with m.Case(ASrc.PC):
                     m.d.sync += self.a_input.eq(self.datapath.pc.dat_r)
-        with m.Elif(self.control.datapath.gp_action == RegOp.LATCH_B):
+        with m.Elif(self.control.gp.action == RegOp.LATCH_B):
             with m.Switch(self.control.b_src):
                 with m.Case(BSrc.GP):
                     m.d.sync += self.b_input.eq(self.datapath.gp.dat_r)
@@ -96,11 +96,14 @@ class Top(Component):
         ]
 
         # DataPath conns
-        connect(m, self.datapath.ctrl, self.control.datapath)
+        connect(m, self.datapath.gp.ctrl, self.control.gp)
+        connect(m, self.datapath.pc.ctrl, self.control.pc)
+
         m.d.comb += [
             self.dat_w.eq(self.datapath.gp.dat_w),
             self.datapath.gp.dat_w.eq(self.alu.data.o),
-            self.datapath.gp.adr.eq(self.reg_adr),
+            self.datapath.gp.adr_r.eq(self.reg_adr),
+            self.datapath.gp.adr_w.eq(self.reg_adr),
             # FIXME: Compressed insns.
             self.datapath.pc.dat_w.eq(self.alu.data.o[2:]),
         ]
@@ -121,12 +124,12 @@ class Top(Component):
             self.decode.do_decode.eq(self.insn_fetch & self.ack),
         ]
 
-        with m.If(self.control.datapath.gp_action == RegOp.READ_A):
+        with m.If(self.control.gp.action == RegOp.READ_A):
             m.d.comb += self.reg_adr.eq(self.decode.src_a)
-        with m.Elif(self.control.datapath.gp_action ==
+        with m.Elif(self.control.gp.action ==
                     RegOp.READ_B_LATCH_A):
             m.d.comb += self.reg_adr.eq(self.decode.src_b)
-        with m.Elif(self.control.datapath.gp_action ==
+        with m.Elif(self.control.gp.action ==
                     RegOp.WRITE_DST):
             m.d.comb += self.reg_adr.eq(self.decode.dst)
 

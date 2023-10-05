@@ -4,7 +4,7 @@ from amaranth.lib.wiring import Component, Signature, In, Out
 from .decode import OpcodeType, DecodeControlGasket
 from .alu import AluCtrlSignature
 from .ucoderom import UCodeROM
-from .datapath import DataPathControlSignature
+from .datapath import GPControlSignature, PCControlSignature
 
 from .ucodefields import JmpType, CondTest
 
@@ -12,7 +12,8 @@ from .ucodefields import JmpType, CondTest
 ControlSignature = Signature({
     "alu": Out(AluCtrlSignature),
     "decode": In(DecodeControlGasket.signature),
-    "datapath": Out(DataPathControlSignature)
+    "gp": Out(GPControlSignature),
+    "pc": Out(PCControlSignature),
 })
 
 
@@ -73,8 +74,8 @@ class Control(Component):
             self.jmp_type.eq(self.ucoderom.fields.jmp_type),
             self.cond_test.eq(self.ucoderom.fields.cond_test),
             self.invert_test.eq(self.ucoderom.fields.invert_test),
-            self.datapath.pc_action.eq(self.ucoderom.fields.pc_action),
-            self.datapath.gp_action.eq(self.ucoderom.fields.reg_op),
+            self.pc.action.eq(self.ucoderom.fields.pc_action),
+            self.gp.action.eq(self.ucoderom.fields.reg_op),
             self.a_src.eq(self.ucoderom.fields.a_src),
             self.b_src.eq(self.ucoderom.fields.b_src),
             self.alu.op.eq(self.ucoderom.fields.alu_op),
