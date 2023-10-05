@@ -66,7 +66,7 @@ def test_top(sim_mod):
 
         for curr_regs, ws, irq in zip(regs, wait_states, irqs):
             # Wait for memory
-            while not (yield m.req):
+            while not ((yield m.req) and (yield m.insn_fetch)):
                 yield
 
             # Wait state
@@ -117,6 +117,12 @@ def test_top(sim_mod):
         slti x4, x2, (-2046 + 8)
         sltiu x4, x2, 2047
         sltu  x3, x2, x1
+        xori x5, x0, -1
+        xor  x1, x5, x1
+        ori  x6, x0, -1
+        or   x1, x1, x6
+        andi x1, x1, 1
+        and  x2, x0, x2
 """)
 
     regs = [
@@ -131,6 +137,15 @@ def test_top(sim_mod):
         RV32Regs(R4=1, R3=1, R2=(2**32 - 2047) + 8, R1=8, PC=0x20),
         RV32Regs(R4=0, R3=1, R2=(2**32 - 2047) + 8, R1=8, PC=0x24),
         RV32Regs(R2=(2**32 - 2047) + 8, R1=8, PC=0x28),
+        RV32Regs(R5=2**32 - 1, R2=(2**32 - 2047) + 8, R1=8, PC=0x2C),
+        RV32Regs(R5=2**32 - 1, R2=(2**32 - 2047) + 8, R1=0xfffffff7, PC=0x30),
+        RV32Regs(R6=2**32 - 1, R5=2**32 - 1, R2=(2**32 - 2047) + 8,
+                 R1=0xfffffff7, PC=0x34),
+        RV32Regs(R6=2**32 - 1, R5=2**32 - 1, R2=(2**32 - 2047) + 8,
+                 R1=2**32 - 1, PC=0x38),
+        RV32Regs(R6=2**32 - 1, R5=2**32 - 1, R2=(2**32 - 2047) + 8,
+                 R1=1, PC=0x3C),
+        RV32Regs(R6=2**32 - 1, R5=2**32 - 1, R1=1, PC=0x40),
     ]
 
     def mem_proc():

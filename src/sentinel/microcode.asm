@@ -90,6 +90,10 @@ slli_trampoline:
                   jmp_type => direct, target => slli_prolog;
 slti:         alu_op => cmp_lt, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sltiu:        alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+xori:         alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+srli_trampoline: NOT_IMPLEMENTED;
+ori:          alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+andi:         alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
 slli_prolog:
@@ -115,6 +119,11 @@ add:          alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sll:          NOT_IMPLEMENTED;
 slt:          alu_op => cmp_lt, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sltu:         alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+xor:          alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+// srli_trampoline:
+              NOT_IMPLEMENTED;
+or:           alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+and:          alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
 fast_epilog:
               reg_op => write_dst, INSN_FETCH, SKIP_WAIT_IF_ACK;
