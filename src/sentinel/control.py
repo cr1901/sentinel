@@ -116,6 +116,8 @@ class Control(Component):
                 m.d.comb += self.raw_test.eq(self.exception)
             with m.Case(CondTest.CMP_OKAY):
                 m.d.comb += self.raw_test.eq(self.alu.cmp)
+            with m.Case(CondTest.CMP_ZERO):
+                m.d.comb += self.raw_test.eq(self.alu.zero)
             with m.Case(CondTest.MEM_VALID):
                 m.d.comb += self.raw_test.eq(self.mem_valid)
             with m.Case(CondTest.TRUE):

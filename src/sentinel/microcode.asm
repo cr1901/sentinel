@@ -28,7 +28,7 @@ fields block_ram: {
   // exception: Illegal insn, EBRAK, ECALL, misaligned insn, misaligned ld/st?
   // mem_valid: Is current dat_r valid? Did write finish?
   // true: Unconditionally succeed
-  cond_test: enum { intr; exception; cmp_okay; mem_valid; true}, default true;
+  cond_test: enum { intr; exception; cmp_okay; cmp_zero; mem_valid; true}, default true;
 
   // Invert the results of the test above. Valid current cycle.
   invert_test: bool, default 0;
@@ -41,7 +41,7 @@ fields block_ram: {
   b_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
-  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_ltu; cmp_ge; cmp_geu; nop; passthru; }, default nop;
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_ltu; cmp_ge; cmp_geu; nop; passthru; dec; }, default nop;
   // In addition to writing ALU o, write C or D. Valid next cycle.
   alu_tmp: enum { none = 0; write_c; write_d; }, default none;
 
@@ -87,28 +87,23 @@ slli_trampoline:
 
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
 slli_prolog:
+              // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
               a_src => imm, src_op => latch_a, alu_op => sll, alu_tmp => write_c, \
                   jmp_type => direct, cond_test => cmp_okay, target => fetch;
-              b_src => target, src_op => latch_b, target => 0x01;
-              alu_tmp => write_d, alu_op => sub; // Subtract 1 from shift cnt.
-              a_src => alu_d, src_op => latch_a;
-slli_loop:
-              b_src => target, src_op => latch_b, target => 0x01;
-              alu_tmp => write_d, alu_op => sub; // Subtract 1 from shift cnt.
-              LATCH_0_TO_TMP(write_d), b_src => alu_d, src_op => latch_b;
-              a_src => alu_d, src_op => latch_a;
-              a_src => alu_c, src_op => latch_a, alu_op => cmp_ne;
-              a_src => b_src, src_op => latch_a, alu_op => sll, jmp_type => direct, \
-                  cond_test => cmp_okay, alu_tmp => write_c, target => slli_loop;
-              reg_op => read_a_write_dst, INSN_FETCH, SKIP_WAIT_IF_ACK;
-              
+sll_loop:
+              // Subtract 1 from shift cnt, preliminarily save shift results
+              // in case we bail (microcode cannot be interrupted, so user
+              // will never see this intermediate result).
+              // Also write the previous shift, either from prolog or last
+              // loop iteration.
+              a_src => alu_c, src_op => latch_a, reg_op => read_a_write_dst, \
+                  alu_tmp => write_d, alu_op => dec;
+              // Then, do the shift, and bail if the shift cnt reached zero.
+              a_src => alu_d, src_op => latch_a, alu_op => sll, alu_tmp => write_c, \
+                  jmp_type => direct_zero, invert_test => 1, cond_test => cmp_zero, \
+                  target => sll_loop;
 
-#if 0         
-slli_loop:
-              alu_op => sll, jmp_type => direct, cond_test => alu_ready, invert_test => true, target => slli;
-              alu_op => sll, INSN_FETCH, JUMP_TO_OP_END(fast_epilog); // Hold ALU's results by keeping alu_op the same.
-#endif
 reg_ops:
 add:
               alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);

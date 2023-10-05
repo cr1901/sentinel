@@ -29,14 +29,16 @@ class OpType(enum.Enum):
     CMP_GEU = 13
     NOP = 14
     PASSTHRU = 15
+    DEC = 16
 
 
 class CondTest(enum.Enum):
     INTR = 0
     EXCEPTION = 1
     CMP_OKAY = 2
-    MEM_VALID = 3
-    TRUE = 4
+    CMP_ZERO = 3
+    MEM_VALID = 4
+    TRUE = 5
 
 
 class PcAction(enum.Enum):

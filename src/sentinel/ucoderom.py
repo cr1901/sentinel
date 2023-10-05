@@ -113,7 +113,6 @@ class UCodeROM(Component):
         # contain data by converting the address to an int (a dictionary
         # is used to represent address space holes implicitly).
         for addr in sorted(space.data.keys()):
-            print(f"{space.data[addr]:010X}")
             self.ucode_contents[int(addr)] = space.data[addr]
 
     def create_field_layout(self, space):
