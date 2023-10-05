@@ -53,6 +53,8 @@ class RV32Regs:
     PC: int = 0
 
 
+# This test is a handwritten exercise of going through all RV32I insns. If
+# this test fails, than surely all other, more thorough tests will fail.
 @pytest.mark.module(Top())
 @pytest.mark.clks((1.0 / 12e6,))
 def test_top(sim_mod):
@@ -111,6 +113,10 @@ def test_top(sim_mod):
         slli x1, x1, 3
         addi x2, x0, -2047
         add  x2, x1, x2
+        slt  x3, x2, x1
+        slti x4, x2, (-2046 + 8)
+        sltiu x4, x2, 2047
+        sltu  x3, x2, x1
 """)
 
     regs = [
@@ -121,6 +127,10 @@ def test_top(sim_mod):
         RV32Regs(R1=8, PC=0x10),
         RV32Regs(R2=2**32 - 2047, R1=8, PC=0x14),
         RV32Regs(R2=(2**32 - 2047) + 8, R1=8, PC=0x18),
+        RV32Regs(R3=1, R2=(2**32 - 2047) + 8, R1=8, PC=0x1C),
+        RV32Regs(R4=1, R3=1, R2=(2**32 - 2047) + 8, R1=8, PC=0x20),
+        RV32Regs(R4=0, R3=1, R2=(2**32 - 2047) + 8, R1=8, PC=0x24),
+        RV32Regs(R2=(2**32 - 2047) + 8, R1=8, PC=0x28),
     ]
 
     def mem_proc():

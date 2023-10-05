@@ -37,7 +37,7 @@ fields block_ram: {
   pc_action: enum { hold = 0; inc; load_alu_o; }, default hold;
 
   src_op: enum { none = 0; latch_a; latch_b; latch_a_b; }, default none;
-  a_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; b_src }, default gp;
+  a_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; b_src; }, default gp;
   b_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
@@ -64,6 +64,7 @@ fields block_ram: {
 #define SKIP_WAIT_IF_ACK jmp_type => direct_zero, cond_test => mem_valid, target => done_fetch
 #define JUMP_TO_OP_END(trg) cond_test => true, jmp_type => direct, target => trg
 #define LATCH_0_TO_TMP(trg) alu_op => nop, alu_tmp => trg
+#define NOT_IMPLEMENTED target => 0
 
 fetch:
 wait_for_ack: INSN_FETCH, invert_test => 1, cond_test => mem_valid, \
@@ -75,18 +76,20 @@ check_int:    jmp_type => map, a_src => gp, src_op => latch_a, reg_op => read_b,
 
 origin 8;
 imm_prolog: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, \
-                target => imm_ops;
+                LATCH_0_TO_TMP(alu_c), target => imm_ops;
 reg_prolog: src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => map_funct, \
                 target => reg_ops;
 
 imm_ops:
-addi:
-              alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 // Trampolines for multicycle ops are almost zero-cost except for microcode space.
 slli_trampoline:
               // Re: reg_op... reg addresses aren't latched, so if we need
               // reg values again, we need to latch them again.
-              reg_op => read_a, a_src => imm, b_src => alu_c, src_op => latch_a_b, jmp_type => direct, target => slli_prolog;
+              reg_op => read_a, a_src => imm, b_src => alu_c, src_op => latch_a_b, \
+                  jmp_type => direct, target => slli_prolog;
+slti:         alu_op => cmp_lt, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+sltiu:        alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
 slli_prolog:
@@ -108,8 +111,10 @@ sll_loop:
                   target => sll_loop;
 
 reg_ops:
-add:
-              alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+add:          alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+sll:          NOT_IMPLEMENTED;
+slt:          alu_op => cmp_lt, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+sltu:         alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
 fast_epilog:
               reg_op => write_dst, INSN_FETCH, SKIP_WAIT_IF_ACK;
