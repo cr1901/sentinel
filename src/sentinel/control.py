@@ -39,7 +39,6 @@ class Control(Component):
 
         # Predicates for test mux.
         self.mem_valid = Signal()
-        self.compare_okay = Signal()
         # OR of illegal insn, ecall, ebreak, misaligned load/store,
         # misaligned insn.
         self.exception = Signal()
@@ -81,6 +80,7 @@ class Control(Component):
             self.b_src.eq(self.ucoderom.fields.b_src),
             self.src_op.eq(self.ucoderom.fields.src_op),
             self.alu.op.eq(self.ucoderom.fields.alu_op),
+            self.alu.tmp.eq(self.ucoderom.fields.alu_tmp),
             self.mem_req.eq(self.ucoderom.fields.mem_req),
             self.insn_fetch.eq(self.ucoderom.fields.insn_fetch),
         ]
@@ -115,7 +115,7 @@ class Control(Component):
             with m.Case(CondTest.EXCEPTION):
                 m.d.comb += self.raw_test.eq(self.exception)
             with m.Case(CondTest.CMP_OKAY):
-                m.d.comb += self.raw_test.eq(self.compare_okay)
+                m.d.comb += self.raw_test.eq(self.alu.cmp)
             with m.Case(CondTest.MEM_VALID):
                 m.d.comb += self.raw_test.eq(self.mem_valid)
             with m.Case(CondTest.TRUE):
