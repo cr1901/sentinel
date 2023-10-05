@@ -69,12 +69,16 @@ class Top(Component):
             with m.Switch(self.control.a_src):
                 with m.Case(ASrc.GP):
                     m.d.sync += self.a_input.eq(self.datapath.gp.dat_r)
+                with m.Case(ASrc.IMM):
+                    m.d.sync += self.a_input.eq(self.decode.imm)
                 with m.Case(ASrc.PC):
                     m.d.sync += self.a_input.eq(self.datapath.pc.dat_r)
                 with m.Case(ASrc.ALU_C):
                     m.d.sync += self.a_input.eq(self.alu.data.c)
                 with m.Case(ASrc.ALU_D):
                     m.d.sync += self.a_input.eq(self.alu.data.d)
+                with m.Case(ASrc.B_SRC):
+                    m.d.sync += self.a_input.eq(self.b_input)
 
         with m.If((self.control.src_op == SrcOp.LATCH_B) |
                   (self.control.src_op == SrcOp.LATCH_A_B)):

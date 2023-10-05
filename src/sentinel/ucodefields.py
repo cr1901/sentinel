@@ -60,6 +60,7 @@ class ASrc(enum.Enum):
     TARGET = 4
     ALU_C = 5
     ALU_D = 6
+    B_SRC = 7
 
 
 class BSrc(enum.Enum):

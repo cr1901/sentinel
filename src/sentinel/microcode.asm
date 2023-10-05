@@ -37,11 +37,12 @@ fields block_ram: {
   pc_action: enum { hold = 0; inc; load_alu_o; }, default hold;
 
   src_op: enum { none = 0; latch_a; latch_b; latch_a_b; }, default none;
-  a_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; }, default gp;
+  a_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; b_src }, default gp;
   b_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
   alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_ltu; cmp_ge; cmp_geu; nop; passthru; }, default nop;
+  // In addition to writing ALU o, write C or D. Valid next cycle.
   alu_tmp: enum { none = 0; write_c; write_d; }, default none;
 
   // Either read or write a register in the register file. _Which_ register
@@ -80,15 +81,31 @@ addi:
               alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 // Trampolines for multicycle ops are almost zero-cost except for microcode space.
 slli_trampoline:
-              a_src => imm, b_src => alu_c, src_op => latch_a_b, jmp_type => direct, target => slli_prolog;
+              // Re: reg_op... reg addresses aren't latched, so if we need
+              // reg values again, we need to latch them again.
+              reg_op => read_a, a_src => imm, b_src => alu_c, src_op => latch_a_b, jmp_type => direct, target => slli_prolog;
 
+              // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
 slli_prolog:
               a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
-              jmp_type => direct, cond_test => cmp_okay, target => fetch;
-#if 0
+              a_src => imm, src_op => latch_a, alu_op => sll, alu_tmp => write_c, \
+                  jmp_type => direct, cond_test => cmp_okay, target => fetch;
+              b_src => target, src_op => latch_b, target => 0x01;
+              alu_tmp => write_d, alu_op => sub; // Subtract 1 from shift cnt.
+              a_src => alu_d, src_op => latch_a;
 slli_loop:
-              // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
-              a_src => imm, src_op => latch_a_b
+              b_src => target, src_op => latch_b, target => 0x01;
+              alu_tmp => write_d, alu_op => sub; // Subtract 1 from shift cnt.
+              LATCH_0_TO_TMP(write_d), b_src => alu_d, src_op => latch_b;
+              a_src => alu_d, src_op => latch_a;
+              a_src => alu_c, src_op => latch_a, alu_op => cmp_ne;
+              a_src => b_src, src_op => latch_a, alu_op => sll, jmp_type => direct, \
+                  cond_test => cmp_okay, alu_tmp => write_c, target => slli_loop;
+              reg_op => read_a_write_dst, INSN_FETCH, SKIP_WAIT_IF_ACK;
+              
+
+#if 0         
+slli_loop:
               alu_op => sll, jmp_type => direct, cond_test => alu_ready, invert_test => true, target => slli;
               alu_op => sll, INSN_FETCH, JUMP_TO_OP_END(fast_epilog); // Hold ALU's results by keeping alu_op the same.
 #endif

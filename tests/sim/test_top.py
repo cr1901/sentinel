@@ -107,7 +107,8 @@ def test_top(sim_mod):
     insns = assemble("""
         addi x0, x0, 0
         addi x1, x0, 1
-        slli x1, x1, 0""")
+        slli x1, x1, 0
+        slli x1, x1, 3""")
 #     add  x2, x1, x1
 # """)
 
@@ -116,7 +117,7 @@ def test_top(sim_mod):
         RV32Regs(PC=4),
         RV32Regs(R1=1, PC=8),
         RV32Regs(R1=1, PC=0xC),
-        # RV32Regs(R1=8, PC=0xC),
+        RV32Regs(R1=8, PC=0x10),
         # RV32Regs(R1=8, R2=16, PC=0x10)
     ]
 
