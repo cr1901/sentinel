@@ -1,4 +1,4 @@
-space block_ram: width 32, size 256;
+space block_ram: width 38, size 256;
 
 space block_ram;
 origin 0;
@@ -60,19 +60,18 @@ fields block_ram: {
 };
 
 #define INSN_FETCH insn_fetch => 1, mem_req => 1
-#define SKIP_WAIT_IF_ACK jmp_type => direct_zero, cond_test => mem_valid, target => skip_wait_for_ack
+#define SKIP_WAIT_IF_ACK jmp_type => direct_zero, cond_test => mem_valid, target => check_int
 #define JUMP_TO_OP_END(trg) cond_test => true, jmp_type => direct, target => trg
 
-#if 0
 fetch:
 wait_for_ack: INSN_FETCH, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
-skip_wait_for_ack: reg_op => read_a;
+              reg_op => read_a;
               // Illegal insn or insn misaligned exception possible
-check_int:    jmp_type => map, reg_op => read_b_latch_a, cond_test => exception, target => save_pc;
+check_int:    jmp_type => map, src_op => latch_a, reg_op => read_b, cond_test => exception, target => save_pc;
 
 origin 8;
-imm_prolog: reg_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, target => imm_ops;
+imm_prolog: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, target => imm_ops;
 reg_prolog: reg_op => latch_b, b_src => gp, pc_action => inc, jmp_type => map_funct, target => reg_ops;
 
 imm_ops:
@@ -92,10 +91,9 @@ add:
               alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
 fast_epilog:
-              reg_op => write_dst, INSN_FETCH, SKIP_WAIT_IF_ACK;
+              reg_op => read_a_write_dst, INSN_FETCH, SKIP_WAIT_IF_ACK;
 
 // Interrupt handler.
 origin 224;
 // Send PC through ALU
 save_pc: a_src => pc, b_src => target, jmp_type => nop, target => 0;
-#endif

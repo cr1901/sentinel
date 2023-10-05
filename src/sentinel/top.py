@@ -41,7 +41,8 @@ class Top(Component):
         self.b_input = Signal(32)
 
         # Decode
-        self.reg_adr = Signal(5)
+        self.reg_r_adr = Signal(5)
+        self.reg_w_adr = Signal(5)
 
     def elaborate(self, platform):
         m = Module()
@@ -108,8 +109,8 @@ class Top(Component):
         m.d.comb += [
             self.dat_w.eq(self.datapath.gp.dat_w),
             self.datapath.gp.dat_w.eq(self.alu.data.o),
-            self.datapath.gp.adr_r.eq(self.reg_adr),
-            self.datapath.gp.adr_w.eq(self.reg_adr),
+            self.datapath.gp.adr_r.eq(self.reg_r_adr),
+            self.datapath.gp.adr_w.eq(self.reg_w_adr),
             # FIXME: Compressed insns.
             self.datapath.pc.dat_w.eq(self.alu.data.o[2:]),
         ]
@@ -132,14 +133,15 @@ class Top(Component):
 
         with m.If((self.control.gp.action == RegOp.READ_A) |
                   (self.control.gp.action == RegOp.READ_A_WRITE_DST)):
-            m.d.comb += self.reg_adr.eq(self.decode.src_a)
+            m.d.comb += self.reg_r_adr.eq(self.decode.src_a)
         with m.Elif((self.control.gp.action == RegOp.READ_B) |
                     (self.control.gp.action == RegOp.READ_B_WRITE_DST)):
-            m.d.comb += self.reg_adr.eq(self.decode.src_b)
-        with m.Elif((self.control.gp.action == RegOp.WRITE_DST) |
-                    (self.control.gp.action == RegOp.READ_A_WRITE_DST) |
-                    (self.control.gp.action == RegOp.READ_B_WRITE_DST)):
-            m.d.comb += self.reg_adr.eq(self.decode.dst)
+            m.d.comb += self.reg_r_adr.eq(self.decode.src_b)
+
+        with m.If((self.control.gp.action == RegOp.WRITE_DST) |
+                  (self.control.gp.action == RegOp.READ_A_WRITE_DST) |
+                  (self.control.gp.action == RegOp.READ_B_WRITE_DST)):
+            m.d.comb += self.reg_w_adr.eq(self.decode.dst)
 
         return m
 

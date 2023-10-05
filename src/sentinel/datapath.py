@@ -73,15 +73,16 @@ class RegFile(Component):
         m.d.sync += adr_r_prev.eq(self.adr_r)
 
         # Zero register logic- ignore writes/return 0 for reads.
-        with m.If((adr_r_prev == 0) & (self.adr_r == 0)):
+        with m.If(adr_r_prev == 0):
             m.d.comb += self.dat_r.eq(0)
         with m.Else():
-            m.d.comb += [
-                self.dat_r.eq(rdport.data),
-                # If you write to address 0, well, congrats, you're not reading
-                # that data back!
-                wrport.en.eq(self.ctrl.action == RegOp.WRITE_DST)
-            ]
+            m.d.comb += self.dat_r.eq(rdport.data)
+
+        # If you write to address 0, well, congrats, you're not reading
+        # that data back!
+        m.d.comb += wrport.en.eq((self.ctrl.action == RegOp.WRITE_DST) |
+                                 (self.ctrl.action == RegOp.READ_A_WRITE_DST) |
+                                 (self.ctrl.action == RegOp.READ_B_WRITE_DST))
 
         return m
 
