@@ -23,6 +23,7 @@ ${quiet} submod -name UCodeROM top/control.ucoderom.*
 ${quiet} submod -name Control top/control.*
 ${quiet} submod -name DataPath top/datapath.*
 ${quiet} submod -name Decode top/decode.*
+${quiet} ${write}
 stat -json
 """
 
@@ -94,14 +95,16 @@ ${quiet} synth_intel_alm
 
 
 # TODO: verbose and show.dot
-def stats(m: Elaboratable, script: ScriptType | Template, debug=False):
+def stats(m: Elaboratable, script: ScriptType | Template, debug=False,
+          verilog=False):
     rtlil_text = rtlil.convert(m)
 
     if isinstance(script, ScriptType):
         script = script.value
 
     quiet = "" if debug else "tee -q"
-    stdin = script.substitute(rtlil_text=rtlil_text, quiet=quiet)
+    write = f"write_verilog {verilog}" if verilog else ""
+    stdin = script.substitute(rtlil_text=rtlil_text, quiet=quiet, write=write)
 
     popen = subprocess.Popen(["yosys", "-Q", "-T", "-"],
                              stdin=subprocess.PIPE,
@@ -170,11 +173,13 @@ def main():
     parser.add_argument("-s", choices=ScriptType,
                         default=ScriptType.ICE40,
                         help="toolchain script to run")
-    parser.add_argument("-j", choices=ScriptType,
+    parser.add_argument("-j", action="store_true",
                         help="emit JSON instead of a table")
+    parser.add_argument("-v", metavar="FILE", type=str,
+                        help="emit split verilog file")
     args = parser.parse_args()
 
-    stdout = stats(Top(), args.s, debug=args.d)
+    stdout = stats(Top(), args.s, debug=args.d, verilog=args.v)
 
     if args.d or args.j:
         print(stdout)
