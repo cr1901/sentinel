@@ -1,11 +1,11 @@
-from amaranth import Signal, Elaboratable, Module
+from amaranth import Signal, Elaboratable, Module, Cat
 from amaranth.lib.wiring import Component, Signature, Out, In, connect
 
 from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
-from .ucodefields import RegOp, ASrc, BSrc, SrcOp
+from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, RegWSel
 
 
 class Top(Component):
@@ -141,17 +141,27 @@ class Top(Component):
             self.decode.do_decode.eq(self.insn_fetch & self.ack),
         ]
 
-        with m.If((self.control.gp.action == RegOp.READ_A) |
-                  (self.control.gp.action == RegOp.READ_A_WRITE_DST)):
-            m.d.comb += self.reg_r_adr.eq(self.decode.src_a)
-        with m.Elif((self.control.gp.action == RegOp.READ_B) |
-                    (self.control.gp.action == RegOp.READ_B_WRITE_DST)):
-            m.d.comb += self.reg_r_adr.eq(self.decode.src_b)
+        with m.Switch(self.control.reg_r_sel):
+            with m.Case(RegRSel.INSN_RS1):
+                m.d.comb += self.reg_r_adr.eq(self.decode.src_a)
+            with m.Case(RegRSel.INSN_RS2):
+                m.d.comb += self.reg_r_adr.eq(self.decode.src_b)
+            with m.Case(RegRSel.UCODE0):
+                m.d.comb += self.reg_r_adr.eq(
+                    Cat(self.control.target[0:4], 0))
+            with m.Case(RegRSel.UCODE1):
+                m.d.comb += self.reg_r_adr.eq(
+                    Cat(self.control.target[0:4], 1))
 
-        with m.If((self.control.gp.action == RegOp.WRITE_DST) |
-                  (self.control.gp.action == RegOp.READ_A_WRITE_DST) |
-                  (self.control.gp.action == RegOp.READ_B_WRITE_DST)):
-            m.d.comb += self.reg_w_adr.eq(self.decode.dst)
+        with m.Switch(self.control.reg_w_sel):
+            with m.Case(RegWSel.INSN_RD):
+                m.d.comb += self.reg_w_adr.eq(self.decode.dst)
+            with m.Case(RegWSel.UCODE0):
+                m.d.comb += self.reg_w_adr.eq(
+                    Cat(self.control.target[0:4], 0))
+            with m.Case(RegWSel.UCODE1):
+                m.d.comb += self.reg_w_adr.eq(
+                    Cat(self.control.target[0:4], 1))
 
         return m
 

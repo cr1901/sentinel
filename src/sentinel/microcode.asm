@@ -51,16 +51,17 @@ fields block_ram: {
   // Either read or write a register in the register file. _Which_ register
   // to read/write comes either from the decoded insn or from microcode inputs.
   // Read contents will be on the data bus the next cycle. Written contents
-  // will be valid on the next cycle.
-  reg_op: enum { none = 0; read_a; read_b; write_dst; read_a_write_dst; read_b_write_dst; }, default none;
+  // will be valid on the next cycle. Reads are transparent.
+  reg_read: bool, default 0;
+  reg_write: bool, default 0;
   // GP regs and scratch registers are multiplexed. Use this bit to choose
   // which set to read/write.
   reg_set: enum { gp = 0; scratch = 1; }, default gp;
   // Insn chooses the register to read or write, or ucode does; this field
   // also provides the top bit. Target 0-3 provides the others.
-  reg_r_sel: enum { insn = 0; ucode0 = 2; ucode1 = 3}, default insn;
+  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; ucode0 = 2; ucode1 = 3}, default insn_rs1;
   // Likewise, target 4-7 provides the other bits.
-  reg_w_sel: enum { insn = 0; ucode0 = 2; ucode1 = 3}, default insn;
+  reg_w_sel: enum { insn_rd = 0; ucode0 = 2; ucode1 = 3}, default insn_rd;
 
   // Start or continue a memory request. For convenience, an ack will
   // automatically stop a memory request for the cycle after ack, even if
@@ -76,13 +77,17 @@ fields block_ram: {
 #define JUMP_TO_OP_END(trg) cond_test => true, jmp_type => direct, target => trg
 #define LATCH_0_TO_TMP(trg) alu_op => nop, alu_tmp => trg
 #define NOT_IMPLEMENTED target => 0
+#define READ_RS1 reg_set => 0, reg_read => 1, reg_r_sel => insn_rs1
+#define READ_RS2 reg_set => 0, reg_read => 1, reg_r_sel => insn_rs2
+#define WRITE_RD reg_set => 0, reg_write => 1, reg_w_sel => insn_rd
+#define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
 
 fetch:
 wait_for_ack: INSN_FETCH, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
-done_fetch:   reg_op => read_a;
+done_fetch:   READ_RS1;
               // Illegal insn or insn misaligned exception possible
-check_int:    jmp_type => map, a_src => gp, src_op => latch_a, reg_op => read_b, \
+check_int:    jmp_type => map, a_src => gp, src_op => latch_a, READ_RS2, \
                   cond_test => exception, target => save_pc;
 
 origin 8;
@@ -97,7 +102,7 @@ addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 slli_trampoline:
               // Re: reg_op... reg addresses aren't latched, so if we need
               // reg values again, we need to latch them again.
-              reg_op => read_a, a_src => imm, b_src => alu_c, src_op => latch_a_b, \
+              READ_RS1, a_src => imm, b_src => alu_c, src_op => latch_a_b, \
                   jmp_type => direct, target => slli_prolog;
 slti:         alu_op => cmp_ltu, alu_mod => inv_msb_a_b, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sltiu:        alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
@@ -118,7 +123,7 @@ sll_loop:
               // will never see this intermediate result).
               // Also write the previous shift, either from prolog or last
               // loop iteration.
-              a_src => alu_c, src_op => latch_a, reg_op => read_a_write_dst, \
+              a_src => alu_c, src_op => latch_a, READ_RS1_WRITE_RD, \
                   alu_tmp => write_d, alu_op => dec;
               // Then, do the shift, and bail if the shift cnt reached zero.
               a_src => alu_d, src_op => latch_a, alu_op => sll, alu_tmp => write_c, \
@@ -137,7 +142,7 @@ or:           alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 and:          alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
 fast_epilog:
-              reg_op => write_dst, INSN_FETCH, SKIP_WAIT_IF_ACK;
+              WRITE_RD, INSN_FETCH, SKIP_WAIT_IF_ACK;
 
 // Interrupt handler.
 origin 224;

@@ -58,6 +58,8 @@ class Control(Component):
         self.src_op = Signal.like(self.ucoderom.fields.src_op)
         self.mem_req = Signal.like(self.ucoderom.fields.mem_req)
         self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
+        self.reg_r_sel = Signal.like(self.ucoderom.fields.reg_r_sel)
+        self.reg_w_sel = Signal.like(self.ucoderom.fields.reg_w_sel)
 
         super().__init__()
 
@@ -75,8 +77,11 @@ class Control(Component):
             self.cond_test.eq(self.ucoderom.fields.cond_test),
             self.invert_test.eq(self.ucoderom.fields.invert_test),
             self.pc.action.eq(self.ucoderom.fields.pc_action),
-            self.gp.action.eq(self.ucoderom.fields.reg_op),
+            self.gp.reg_read.eq(self.ucoderom.fields.reg_read),
+            self.gp.reg_write.eq(self.ucoderom.fields.reg_write),
             self.gp.reg_set.eq(self.ucoderom.fields.reg_set),
+            self.reg_r_sel.eq(self.ucoderom.fields.reg_r_sel),
+            self.reg_w_sel.eq(self.ucoderom.fields.reg_w_sel),
             self.a_src.eq(self.ucoderom.fields.a_src),
             self.b_src.eq(self.ucoderom.fields.b_src),
             self.src_op.eq(self.ucoderom.fields.src_op),

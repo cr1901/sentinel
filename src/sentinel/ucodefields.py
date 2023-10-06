@@ -85,27 +85,19 @@ class ALUMod(enum.Enum):
     TWOS_COMP_B = 3
 
 
-class RegOp(enum.Enum):
-    NONE = 0
-    READ_A = 1
-    READ_B = 2
-    WRITE_DST = 3
-    READ_A_WRITE_DST = 4
-    READ_B_WRITE_DST = 5
-
-
 class RegSet(enum.Enum):
     GP = 0
     SCRATCH = 1
 
 
 class RegRSel(enum.Enum):
-    INSN = 0
+    INSN_RS1 = 0
+    INSN_RS2 = 1
     UCODE0 = 2
     UCODE1 = 3
 
 
 class RegWSel(enum.Enum):
-    INSN = 0
+    INSN_RD = 0
     UCODE0 = 2
     UCODE1 = 3

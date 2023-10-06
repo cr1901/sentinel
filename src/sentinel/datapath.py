@@ -1,7 +1,7 @@
 from amaranth import Cat, C, Module, Signal, Memory
 from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 
-from .ucodefields import PcAction, RegOp, RegSet
+from .ucodefields import PcAction, RegSet
 
 
 PCControlSignature = Signature({
@@ -9,7 +9,8 @@ PCControlSignature = Signature({
 })
 
 GPControlSignature = Signature({
-    "action": Out(RegOp),
+    "reg_read": Out(1),
+    "reg_write": Out(1),
     "reg_set": Out(RegSet)
 })
 
@@ -82,9 +83,7 @@ class RegFile(Component):
 
         # If you write to address 0, well, congrats, you're not reading
         # that data back!
-        m.d.comb += wrport.en.eq((self.ctrl.action == RegOp.WRITE_DST) |
-                                 (self.ctrl.action == RegOp.READ_A_WRITE_DST) |
-                                 (self.ctrl.action == RegOp.READ_B_WRITE_DST))
+        m.d.comb += wrport.en.eq(self.ctrl.reg_write)
 
         return m
 
