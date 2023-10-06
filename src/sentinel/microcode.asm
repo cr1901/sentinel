@@ -1,4 +1,4 @@
-space block_ram: width 40, size 256;
+space block_ram: width 44, size 256;
 
 space block_ram;
 origin 0;
@@ -36,6 +36,7 @@ fields block_ram: {
   // Modify the PC for the next cycle.
   pc_action: enum { hold = 0; inc; load_alu_o; }, default hold;
 
+  // ALU src latch/selection.
   src_op: enum { none = 0; latch_a; latch_b; latch_a_b; }, default none;
   a_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; b_src; }, default gp;
   b_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; }, default gp;
@@ -52,6 +53,14 @@ fields block_ram: {
   // Read contents will be on the data bus the next cycle. Written contents
   // will be valid on the next cycle.
   reg_op: enum { none = 0; read_a; read_b; write_dst; read_a_write_dst; read_b_write_dst; }, default none;
+  // GP regs and scratch registers are multiplexed. Use this bit to choose
+  // which set to read/write.
+  reg_set: enum { gp = 0; scratch = 1; }, default gp;
+  // Insn chooses the register to read or write, or ucode does; this field
+  // also provides the top bit. Target 0-3 provides the others.
+  reg_r_sel: enum { insn = 0; ucode0 = 2; ucode1 = 3}, default insn;
+  // Likewise, target 4-7 provides the other bits.
+  reg_w_sel: enum { insn = 0; ucode0 = 2; ucode1 = 3}, default insn;
 
   // Start or continue a memory request. For convenience, an ack will
   // automatically stop a memory request for the cycle after ack, even if

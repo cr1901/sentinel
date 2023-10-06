@@ -1,7 +1,7 @@
 from amaranth import Cat, C, Module, Signal, Memory
 from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 
-from .ucodefields import PcAction, RegOp
+from .ucodefields import PcAction, RegOp, RegSet
 
 
 PCControlSignature = Signature({
@@ -9,7 +9,8 @@ PCControlSignature = Signature({
 })
 
 GPControlSignature = Signature({
-    "action": Out(RegOp)
+    "action": Out(RegOp),
+    "reg_set": Out(RegSet)
 })
 
 GPSignature = Signature({
@@ -52,7 +53,8 @@ class RegFile(Component):
 
     def __init__(self):
         super().__init__()
-        self.mem = Memory(width=32, depth=32)
+        # 31 GP regs, 32 scratch regs
+        self.mem = Memory(width=32, depth=32*2)
 
     def elaborate(self, platform):
         m = Module()
@@ -63,8 +65,8 @@ class RegFile(Component):
         m.submodules.wrport = wrport = self.mem.write_port()
 
         m.d.comb += [
-            rdport.addr.eq(self.adr_r),
-            wrport.addr.eq(self.adr_w),
+            rdport.addr.eq(Cat(self.adr_r, self.ctrl.reg_set)),
+            wrport.addr.eq(Cat(self.adr_w, self.ctrl.reg_set)),
             wrport.data.eq(self.dat_w),
         ]
 

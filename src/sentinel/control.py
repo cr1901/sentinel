@@ -76,6 +76,7 @@ class Control(Component):
             self.invert_test.eq(self.ucoderom.fields.invert_test),
             self.pc.action.eq(self.ucoderom.fields.pc_action),
             self.gp.action.eq(self.ucoderom.fields.reg_op),
+            self.gp.reg_set.eq(self.ucoderom.fields.reg_set),
             self.a_src.eq(self.ucoderom.fields.a_src),
             self.b_src.eq(self.ucoderom.fields.b_src),
             self.src_op.eq(self.ucoderom.fields.src_op),
