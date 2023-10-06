@@ -1,4 +1,4 @@
-from .ucodefields import OpType, ALUTmp
+from .ucodefields import OpType, ALUTmp, ALUMod
 
 from amaranth import Elaboratable, Signal, Module
 from amaranth.lib.wiring import Component, Signature, In, Out
@@ -62,24 +62,9 @@ class CompareEqual(Unit):
         super().__init__(width, lambda a, b: a == b)
 
 
-class CompareNotEqual(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a != b)
-
-
-class CompareLessThan(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a.as_signed() < b.as_signed())
-
-
 class CompareLessThanUnsigned(Unit):
     def __init__(self, width):
         super().__init__(width, lambda a, b: a < b)
-
-
-class CompareGreaterThanEqual(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a.as_signed() >= b.as_signed())
 
 
 class CompareGreaterThanEqualUnsigned(Unit):
@@ -95,6 +80,7 @@ class Decrementer(Unit):
 AluCtrlSignature = Signature({
     "op": Out(OpType, reset=OpType.NOP),
     "tmp": Out(ALUTmp),
+    "mod": Out(ALUMod),
     "cmp": In(1),
     "zero": In(1)
 })
@@ -140,10 +126,7 @@ class ALU(Component):
         self.srl = ShiftLogicalRight(width)
         self.sar = ShiftArithmeticRight(width)
         self.cmp_equal = CompareEqual(width)
-        self.cmp_not_equal = CompareNotEqual(width)
-        self.cmp_lt = CompareLessThan(width)
         self.cmp_ltu = CompareLessThanUnsigned(width)
-        self.cmp_gte = CompareGreaterThanEqual(width)
         self.cmp_gteu = CompareGreaterThanEqualUnsigned(width)
         self.dec = Decrementer(width)
 
@@ -158,20 +141,38 @@ class ALU(Component):
         m.submodules.srl = self.srl
         m.submodules.sal = self.sar
         m.submodules.cmp_equal = self.cmp_equal
-        m.submodules.cmp_not_equal = self.cmp_not_equal
-        m.submodules.cmp_lt = self.cmp_lt
         m.submodules.cmp_ltu = self.cmp_ltu
-        m.submodules.cmp_gte = self.cmp_gte
         m.submodules.cmp_gteu = self.cmp_gteu
         m.submodules.dec = self.dec
 
+        mod_a = Signal.like(self.data.a)
+        mod_b = Signal.like(self.data.b)
+
+        with m.Switch(self.ctrl.mod):
+            with m.Case(ALUMod.NONE):
+                m.d.comb += [
+                    mod_a.eq(self.data.a),
+                    mod_b.eq(self.data.b)
+                ]
+            with m.Case(ALUMod.INV_MSB_A_B):
+                m.d.comb += [
+                    mod_a.eq(self.data.a),
+                    mod_b.eq(self.data.b),
+                    mod_a[-1].eq(~self.data.a[-1]),
+                    mod_b[-1].eq(~self.data.b[-1]),
+                ]
+            with m.Case(ALUMod.TWOS_COMP_B):
+                m.d.comb += [
+                    mod_a.eq(self.data.a),
+                    mod_b.eq(-self.data.b)
+                ]
+
         for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
                        self.sll, self.srl, self.sar, self.cmp_equal,
-                       self.cmp_not_equal, self.cmp_lt, self.cmp_ltu,
-                       self.cmp_gte, self.cmp_gteu, self.dec]:
+                       self.cmp_ltu, self.cmp_gteu, self.dec]:
             m.d.comb += [
-                submod.a.eq(self.data.a),
-                submod.b.eq(self.data.b),
+                submod.a.eq(mod_a),
+                submod.b.eq(mod_b),
             ]
 
         with m.Switch(self.ctrl.op):
@@ -193,22 +194,19 @@ class ALU(Component):
                 m.d.comb += self.o_mux.eq(self.sar.o)
             with m.Case(OpType.CMP_EQ):
                 m.d.comb += self.o_mux.eq(self.cmp_equal.o)
-            with m.Case(OpType.CMP_NE):
-                m.d.comb += self.o_mux.eq(self.cmp_not_equal.o)
-            with m.Case(OpType.CMP_LT):
-                m.d.comb += self.o_mux.eq(self.cmp_lt.o)
             with m.Case(OpType.CMP_LTU):
                 m.d.comb += self.o_mux.eq(self.cmp_ltu.o)
-            with m.Case(OpType.CMP_GE):
-                m.d.comb += self.o_mux.eq(self.cmp_gte.o)
             with m.Case(OpType.CMP_GEU):
                 m.d.comb += self.o_mux.eq(self.cmp_gteu.o)
             with m.Case(OpType.DEC):
                 m.d.comb += self.o_mux.eq(self.dec.o)
 
+        m.d.sync += self.data.o.eq(self.o_mux)
+        with m.If(self.ctrl.mod == ALUMod.INV_LSB_O):
+            m.d.sync += self.data.o[0].eq(~self.o_mux[0])
+
         m.d.comb += self.ctrl.cmp.eq(self.data.o[0])
         m.d.comb += self.ctrl.zero.eq(self.data.o == 0)
-        m.d.sync += self.data.o.eq(self.o_mux)
 
         with m.Switch(self.ctrl.tmp):
             with m.Case(ALUTmp.WRITE_C):

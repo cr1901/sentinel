@@ -22,14 +22,11 @@ class OpType(enum.Enum):
     SRL = 6
     SRA = 7
     CMP_EQ = 8
-    CMP_NE = 9
-    CMP_LT = 10
-    CMP_LTU = 11
-    CMP_GE = 12
-    CMP_GEU = 13
-    NOP = 14
-    PASSTHRU = 15
-    DEC = 16
+    CMP_LTU = 9
+    CMP_GEU = 10
+    NOP = 11
+    PASSTHRU = 12
+    DEC = 13
 
 
 class CondTest(enum.Enum):
@@ -79,6 +76,13 @@ class ALUTmp(enum.Enum):
     NONE = 0
     WRITE_C = 1
     WRITE_D = 2
+
+
+class ALUMod(enum.Enum):
+    NONE = 0
+    INV_MSB_A_B = 1
+    INV_LSB_O = 2
+    TWOS_COMP_B = 3
 
 
 class RegOp(enum.Enum):

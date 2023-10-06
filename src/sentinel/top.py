@@ -77,8 +77,6 @@ class Top(Component):
                     m.d.sync += self.a_input.eq(self.alu.data.c)
                 with m.Case(ASrc.ALU_D):
                     m.d.sync += self.a_input.eq(self.alu.data.d)
-                with m.Case(ASrc.B_SRC):
-                    m.d.sync += self.a_input.eq(self.b_input)
 
         with m.If((self.control.src_op == SrcOp.LATCH_B) |
                   (self.control.src_op == SrcOp.LATCH_A_B)):

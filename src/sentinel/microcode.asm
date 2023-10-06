@@ -1,4 +1,4 @@
-space block_ram: width 38, size 256;
+space block_ram: width 40, size 256;
 
 space block_ram;
 origin 0;
@@ -41,9 +41,11 @@ fields block_ram: {
   b_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
-  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ne; cmp_lt; cmp_ltu; cmp_ge; cmp_geu; nop; passthru; dec; }, default nop;
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; cmp_geu; nop; passthru; dec; }, default nop;
   // In addition to writing ALU o, write C or D. Valid next cycle.
   alu_tmp: enum { none = 0; write_c; write_d; }, default none;
+  // Modify inputs and outputs to ALU.
+  alu_mod: enum { none = 0; inv_msb_a_b; inv_lsb_o; twos_comp_b }, default none;
 
   // Either read or write a register in the register file. _Which_ register
   // to read/write comes either from the decoded insn or from microcode inputs.
@@ -88,7 +90,7 @@ slli_trampoline:
               // reg values again, we need to latch them again.
               reg_op => read_a, a_src => imm, b_src => alu_c, src_op => latch_a_b, \
                   jmp_type => direct, target => slli_prolog;
-slti:         alu_op => cmp_lt, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+slti:         alu_op => cmp_ltu, alu_mod => inv_msb_a_b, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sltiu:        alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 xori:         alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 srli_trampoline: NOT_IMPLEMENTED;
@@ -117,7 +119,7 @@ sll_loop:
 reg_ops:
 add:          alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sll:          NOT_IMPLEMENTED;
-slt:          alu_op => cmp_lt, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+slt:          alu_op => cmp_ltu, alu_mod => inv_msb_a_b, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sltu:         alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 xor:          alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 // srli_trampoline:
