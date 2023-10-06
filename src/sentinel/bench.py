@@ -17,6 +17,13 @@ class RunnerError(Exception):
     pass
 
 
+DESIGN = """
+${quiet} read_ilang << rtlil
+${rtlil_text}
+rtlil
+"""
+
+
 STAT_CALC = """
 ${quiet} submod -name ALU top/alu.*
 ${quiet} submod -name UCodeROM top/control.ucoderom.*
@@ -29,12 +36,17 @@ stat -json
 
 
 class ScriptType(Enum):
+    @classmethod
+    def from_argstr(cls, str_):
+        for m in cls.__members__:
+            if str(cls[m]) == str_:
+                return cls[m]
+        else:
+            raise ValueError(f"{str_} is not a valid value of {cls}")
+
     # From nextpnr-generic. This is basically an upper bound on resource-usage.
     # However, it's limited to FFs and LUTs only (no memories).
-    GENERIC = Template("""
-${quiet} read_ilang << rtlil
-${rtlil_text}
-rtlil
+    GENERIC = Template(DESIGN + """
 ${quiet} hierarchy -check
 ${quiet} proc
 ${quiet} flatten
@@ -51,47 +63,42 @@ ${quiet} clean -purge
 """ + STAT_CALC)
 
     # Yosys' internal cell libraries.
-    SYNTH = Template("""
-${quiet} read_ilang << rtlil
-${rtlil_text}
-rtlil
+    SYNTH = Template(DESIGN + """
 ${quiet} synth -lut 4
 """ + STAT_CALC)
 
-    ICE40 = Template("""
-${quiet} read_ilang << rtlil
-${rtlil_text}
-rtlil
+    ICE40 = Template(DESIGN + """
 ${quiet} synth_ice40
 """ + STAT_CALC)
 
-    ECP5 = Template("""
-${quiet} read_ilang << rtlil
-${rtlil_text}
-rtlil
+    ECP5 = Template(DESIGN + """
 ${quiet} synth_lattice -family ecp5
 """ + STAT_CALC)
 
-    GOWIN = Template("""
-${quiet} read_ilang << rtlil
-${rtlil_text}
-rtlil
+    GOWIN = Template(DESIGN + """
 ${quiet} synth_gowin
 """ + STAT_CALC)
 
-    XC7 = Template("""
-${quiet} read_ilang << rtlil
-${rtlil_text}
-rtlil
+    XC7 = Template(DESIGN + """
 ${quiet} synth_xilinx
 """ + STAT_CALC)
 
-    CYCLONE5 = Template("""
-${quiet} read_ilang << rtlil
-${rtlil_text}
-rtlil
+    CYCLONE5 = Template(DESIGN + """
 ${quiet} synth_intel_alm
 """ + STAT_CALC)
+
+
+class CustomCommands:
+    def __init__(self, cmds):
+        cmds_list = []
+        for c in cmds:
+            cmds_list.extend(c[0].split(";"))
+
+        self.cmds = cmds_list
+
+    def template(self):
+        quiet_cmds = ";".join(f"${{quiet}} {c}" for c in self.cmds)
+        return Template(DESIGN + quiet_cmds + STAT_CALC)
 
 
 # TODO: verbose and show.dot
@@ -105,6 +112,9 @@ def stats(m: Elaboratable, script: ScriptType | Template, debug=False,
     quiet = "" if debug else "tee -q"
     write = f"write_verilog {verilog}" if verilog else ""
     stdin = script.substitute(rtlil_text=rtlil_text, quiet=quiet, write=write)
+
+    if debug:
+        print(stdin)
 
     popen = subprocess.Popen(["yosys", "-Q", "-T", "-"],
                              stdin=subprocess.PIPE,
@@ -168,18 +178,28 @@ def mk_table(st):
 
 def main():
     parser = argparse.ArgumentParser(description="Sentinel size benchmarker")
+    group = parser.add_argument_group()
+    s_group = group.add_mutually_exclusive_group()
+    s_group.add_argument("-s", choices=list(str(s) for s in ScriptType),
+                         help="toolchain script to run",
+                         default="ScriptType.ICE40")
+    s_group.add_argument("-p", action="append", nargs=1,
+                         help="semicolon-separated commands to run (allowed "
+                         "multiple times)")
     parser.add_argument("-d", action="store_true",
                         help="debug mode (print yosys stdout)")
-    parser.add_argument("-s", choices=ScriptType,
-                        default=ScriptType.ICE40,
-                        help="toolchain script to run")
     parser.add_argument("-j", action="store_true",
                         help="emit JSON instead of a table")
     parser.add_argument("-v", metavar="FILE", type=str,
                         help="emit split verilog file")
     args = parser.parse_args()
 
-    stdout = stats(Top(), args.s, debug=args.d, verilog=args.v)
+    if args.p:
+        script = CustomCommands(args.p).template()
+    else:
+        script = ScriptType.from_argstr(args.s)
+
+    stdout = stats(Top(), script, debug=args.d, verilog=args.v)
 
     if args.d or args.j:
         print(stdout)
