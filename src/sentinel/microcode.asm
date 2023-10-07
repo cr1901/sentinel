@@ -82,6 +82,7 @@ fields block_ram: {
 #define READ_RS2 reg_set => 0, reg_read => 1, reg_r_sel => insn_rs2
 #define WRITE_RD reg_set => 0, reg_write => 1, reg_w_sel => insn_rd
 #define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
+#define CMP_LT alu_op => cmp_ltu, alu_mod => inv_msb_a_b
 
 fetch:
 wait_for_ack: INSN_FETCH, invert_test => 1, cond_test => mem_valid, \
@@ -105,7 +106,7 @@ slli_trampoline:
               // reg values again, we need to latch them again.
               READ_RS1, a_src => zero, src_op => latch_a, \
                   jmp_type => direct, target => slli_prolog;
-slti:         alu_op => cmp_ltu, alu_mod => inv_msb_a_b, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+slti:         CMP_LT, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sltiu:        alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 xori:         alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 srli_trampoline: NOT_IMPLEMENTED;
@@ -133,7 +134,7 @@ sll_loop:
 reg_ops:
 add:          alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sll:          NOT_IMPLEMENTED;
-slt:          alu_op => cmp_ltu, alu_mod => inv_msb_a_b, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+slt:          CMP_LT, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sltu:         alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 xor:          alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 // srli_trampoline:

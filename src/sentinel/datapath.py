@@ -66,6 +66,7 @@ class RegFile(Component):
         m.submodules.wrport = wrport = self.mem.write_port()
 
         m.d.comb += [
+            rdport.en.eq(self.ctrl.reg_read),
             rdport.addr.eq(Cat(self.adr_r, self.ctrl.reg_set)),
             wrport.addr.eq(Cat(self.adr_w, self.ctrl.reg_set)),
             wrport.data.eq(self.dat_w),
