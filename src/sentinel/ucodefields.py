@@ -86,6 +86,7 @@ class RegRSel(enum.Enum):
     INSN_RS2 = 1
     UCODE0 = 2
     UCODE1 = 3
+    INSN_RS1_UNREGISTERED = 4
 
 
 class RegWSel(enum.Enum):

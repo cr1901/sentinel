@@ -107,19 +107,19 @@ def test_top(sim_mod):
             yield from check_regs(curr)
 
     insns = assemble("""
-        addi x0, x0, 0
+        addi x0, x0, 0  # 0
         addi x1, x0, 1
         slli x1, x1, 0
         slli x1, x1, 3
-        addi x2, x0, -2047
+        addi x2, x0, -2047  # 0x10
         add  x2, x1, x2
         slt  x3, x2, x1
         slti x4, x2, (-2046 + 8)
-        sltiu x4, x2, 2047
+        sltiu x4, x2, 2047  # 0x20
         sltu  x3, x2, x1
         xori x5, x0, -1
         xor  x1, x5, x1
-        ori  x6, x0, -1
+        ori  x6, x0, -1  # 0x30
         or   x1, x1, x6
         andi x1, x1, 1
         and  x2, x0, x2

@@ -58,7 +58,7 @@ fields block_ram: {
   reg_set: enum { gp = 0; scratch = 1; }, default gp;
   // Insn chooses the register to read or write, or ucode does; this field
   // also provides the top bit. Target 0-3 provides the others.
-  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; ucode0 = 2; ucode1 = 3}, default insn_rs1;
+  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; ucode0 = 2; ucode1 = 3; insn_rs1_unregistered }, default insn_rs1;
   // Likewise, target 4-7 provides the other bits.
   reg_w_sel: enum { insn_rd = 0; ucode0 = 2; ucode1 = 3}, default insn_rd;
 
@@ -72,12 +72,13 @@ fields block_ram: {
 };
 
 #define INSN_FETCH insn_fetch => 1, mem_req => 1
-#define SKIP_WAIT_IF_ACK jmp_type => direct_zero, cond_test => mem_valid, target => done_fetch
+#define SKIP_WAIT_IF_ACK jmp_type => direct_zero, cond_test => mem_valid, target => check_int
 #define JUMP_TO_OP_END(trg) cond_test => true, jmp_type => direct, target => trg
 #define LATCH_0_TO_TMP(trg) alu_op => nop, alu_tmp => trg
 #define NOT_IMPLEMENTED target => 0
 #define NOP target => 0
 #define READ_RS1 reg_set => 0, reg_read => 1, reg_r_sel => insn_rs1
+#define READ_RS1_EAGER reg_set => 0, reg_read => 1, reg_r_sel => insn_rs1_unregistered
 #define READ_RS2 reg_set => 0, reg_read => 1, reg_r_sel => insn_rs2
 #define WRITE_RD reg_set => 0, reg_write => 1, reg_w_sel => insn_rd
 #define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
@@ -85,9 +86,8 @@ fields block_ram: {
 #define SUB alu_op => add, alu_mod => twos_comp_b
 
 fetch:
-wait_for_ack: INSN_FETCH, invert_test => 1, cond_test => mem_valid, \
+wait_for_ack: INSN_FETCH, READ_RS1_EAGER, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
-done_fetch:   READ_RS1;
               // Illegal insn or insn misaligned exception possible
 check_int:    jmp_type => map, a_src => gp, src_op => latch_a, READ_RS2, \
                   cond_test => exception, target => save_pc;
@@ -128,8 +128,8 @@ sll_loop:
               alu_op => sub, a_src => alu_o, src_op => latch_a, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
               alu_op => sll, a_src => alu_o, b_src => one, src_op => latch_a_b, \
-                jmp_type => direct_zero, invert_test => 1, cond_test => cmp_zero, \
-                target => sll_loop;
+                  jmp_type => direct_zero, invert_test => 1, cond_test => cmp_zero, \
+                  target => sll_loop;
 
 reg_ops:
 add:          alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
@@ -143,7 +143,8 @@ or:           alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 and:          alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
 fast_epilog:
-              WRITE_RD, INSN_FETCH, SKIP_WAIT_IF_ACK;
+              WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregistered, \
+                  SKIP_WAIT_IF_ACK;
 
 // Interrupt handler.
 origin 224;

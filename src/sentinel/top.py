@@ -110,9 +110,15 @@ class Top(Component):
             self.insn_fetch.eq(self.control.insn_fetch)
         ]
 
-        # DataPath conns
-        connect(m, self.datapath.gp.ctrl, self.control.gp)
-        connect(m, self.datapath.pc.ctrl, self.control.pc)
+        m.d.comb += [
+            self.datapath.gp.ctrl.reg_read.eq(self.control.gp.reg_read),
+            self.datapath.gp.ctrl.reg_write.eq(self.control.gp.reg_write),
+            self.datapath.gp.ctrl.reg_set.eq(self.control.gp.reg_set),
+            self.datapath.pc.ctrl.action.eq(self.control.pc.action)
+        ]
+
+        # connect(m, self.datapath.gp.ctrl, self.control.gp)
+        # connect(m, self.datapath.pc.ctrl, self.control.pc)
 
         m.d.comb += [
             self.dat_w.eq(self.datapath.gp.dat_w),
@@ -150,6 +156,8 @@ class Top(Component):
             with m.Case(RegRSel.UCODE1):
                 m.d.comb += self.reg_r_adr.eq(
                     Cat(self.control.target[0:4], 1))
+            with m.Case(RegRSel.INSN_RS1_UNREGISTERED):
+                m.d.comb += self.reg_r_adr.eq(self.decode.rs1)
 
         with m.Switch(self.control.reg_w_sel):
             with m.Case(RegWSel.INSN_RD):
