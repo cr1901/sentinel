@@ -39,10 +39,10 @@ fields block_ram: {
   // ALU src latch/selection.
   src_op: enum { none = 0; latch_a; latch_b; latch_a_b; }, default none;
   a_src: enum { gp = 0; pc; csr; imm; target; alu_o; zero; }, default gp;
-  b_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; }, default gp;
+  b_src: enum { gp = 0; pc; csr; imm; target; one; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
-  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; cmp_geu; nop; passthru; dec; }, default nop;
+  alu_op: enum { add = 0; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; cmp_geu; nop; passthru; }, default nop;
   // In addition to writing ALU o, write C or D. Valid next cycle.
   alu_tmp: enum { none = 0; write_c; write_d; }, default none;
   // Modify inputs and outputs to ALU.
@@ -83,6 +83,7 @@ fields block_ram: {
 #define WRITE_RD reg_set => 0, reg_write => 1, reg_w_sel => insn_rd
 #define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
 #define CMP_LT alu_op => cmp_ltu, alu_mod => inv_msb_a_b
+#define SUB alu_op => add, alu_mod => twos_comp_b
 
 fetch:
 wait_for_ack: INSN_FETCH, invert_test => 1, cond_test => mem_valid, \
@@ -117,7 +118,7 @@ andi:         alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 slli_prolog:
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
-              a_src => imm, src_op => latch_a, alu_op => sll,
+              a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sll,
                   jmp_type => direct, cond_test => cmp_okay, target => fetch;
 sll_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
@@ -125,9 +126,9 @@ sll_loop:
               // will never see this intermediate result).
               // Also write the previous shift, either from prolog or last
               // loop iteration.
-              alu_op => dec, a_src => alu_o, src_op => latch_a, WRITE_RD;
+              SUB, a_src => alu_o, src_op => latch_a, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
-              alu_op => sll, a_src => alu_o, src_op => latch_a, \
+              alu_op => sll, a_src => alu_o, b_src => one, src_op => latch_a_b, \
                 jmp_type => direct_zero, invert_test => 1, cond_test => cmp_zero, \
                 target => sll_loop;
 

@@ -87,10 +87,8 @@ class Top(Component):
                     m.d.sync += self.b_input.eq(self.decode.imm)
                 with m.Case(BSrc.TARGET):
                     m.d.sync += self.b_input.eq(self.decode.dst)
-                with m.Case(BSrc.ALU_C):
-                    m.d.sync += self.b_input.eq(self.alu.data.c)
-                with m.Case(BSrc.ALU_D):
-                    m.d.sync += self.b_input.eq(self.alu.data.d)
+                with m.Case(BSrc.ONE):
+                    m.d.sync += self.b_input.eq(1)
 
         # Control conns
         m.d.comb += [

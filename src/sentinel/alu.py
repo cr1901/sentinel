@@ -22,11 +22,6 @@ class Adder(Unit):
         super().__init__(width, lambda a, b: a + b)
 
 
-class Subtractor(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a - b)
-
-
 class AND(Unit):
     def __init__(self, width):
         super().__init__(width, lambda a, b: a & b)
@@ -72,11 +67,6 @@ class CompareGreaterThanEqualUnsigned(Unit):
         super().__init__(width, lambda a, b: a >= b)
 
 
-class Decrementer(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a - 1)
-
-
 AluCtrlSignature = Signature({
     "op": Out(OpType, reset=OpType.NOP),
     "tmp": Out(ALUTmp),
@@ -118,7 +108,6 @@ class ALU(Component):
         self.o_mux = Signal(width)
 
         self.add = Adder(width)
-        self.sub = Subtractor(width)
         self.and_ = AND(width)
         self.or_ = OR(width)
         self.xor = XOR(width)
@@ -128,12 +117,10 @@ class ALU(Component):
         self.cmp_equal = CompareEqual(width)
         self.cmp_ltu = CompareLessThanUnsigned(width)
         self.cmp_gteu = CompareGreaterThanEqualUnsigned(width)
-        self.dec = Decrementer(width)
 
     def elaborate(self, platform):
         m = Module()
         m.submodules.add = self.add
-        m.submodules.sub = self.sub
         m.submodules.and_ = self.and_
         m.submodules.or_ = self.or_
         m.submodules.xor = self.xor
@@ -143,7 +130,6 @@ class ALU(Component):
         m.submodules.cmp_equal = self.cmp_equal
         m.submodules.cmp_ltu = self.cmp_ltu
         m.submodules.cmp_gteu = self.cmp_gteu
-        m.submodules.dec = self.dec
 
         mod_a = Signal.like(self.data.a)
         mod_b = Signal.like(self.data.b)
@@ -167,9 +153,9 @@ class ALU(Component):
                     mod_b.eq(-self.data.b)
                 ]
 
-        for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
+        for submod in [self.add, self.and_, self.or_, self.xor,
                        self.sll, self.srl, self.sar, self.cmp_equal,
-                       self.cmp_ltu, self.cmp_gteu, self.dec]:
+                       self.cmp_ltu, self.cmp_gteu]:
             m.d.comb += [
                 submod.a.eq(mod_a),
                 submod.b.eq(mod_b),
@@ -178,8 +164,6 @@ class ALU(Component):
         with m.Switch(self.ctrl.op):
             with m.Case(OpType.ADD):
                 m.d.comb += self.o_mux.eq(self.add.o)
-            with m.Case(OpType.SUB):
-                m.d.comb += self.o_mux.eq(self.sub.o)
             with m.Case(OpType.AND):
                 m.d.comb += self.o_mux.eq(self.and_.o)
             with m.Case(OpType.OR):
@@ -198,8 +182,6 @@ class ALU(Component):
                 m.d.comb += self.o_mux.eq(self.cmp_ltu.o)
             with m.Case(OpType.CMP_GEU):
                 m.d.comb += self.o_mux.eq(self.cmp_gteu.o)
-            with m.Case(OpType.DEC):
-                m.d.comb += self.o_mux.eq(self.dec.o)
 
         m.d.sync += self.data.o.eq(self.o_mux)
         with m.If(self.ctrl.mod == ALUMod.INV_LSB_O):
