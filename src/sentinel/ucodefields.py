@@ -68,12 +68,6 @@ class BSrc(enum.Enum):
     ONE = 5
 
 
-class ALUTmp(enum.Enum):
-    NONE = 0
-    WRITE_C = 1
-    WRITE_D = 2
-
-
 class ALUMod(enum.Enum):
     NONE = 0
     INV_MSB_A_B = 1

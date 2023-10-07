@@ -86,7 +86,6 @@ class Control(Component):
             self.b_src.eq(self.ucoderom.fields.b_src),
             self.src_op.eq(self.ucoderom.fields.src_op),
             self.alu.op.eq(self.ucoderom.fields.alu_op),
-            self.alu.tmp.eq(self.ucoderom.fields.alu_tmp),
             self.alu.mod.eq(self.ucoderom.fields.alu_mod),
             self.mem_req.eq(self.ucoderom.fields.mem_req),
             self.insn_fetch.eq(self.ucoderom.fields.insn_fetch),

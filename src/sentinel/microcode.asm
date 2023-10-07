@@ -44,7 +44,6 @@ fields block_ram: {
 
   alu_op: enum { add = 0; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; cmp_geu; nop; passthru; }, default nop;
   // In addition to writing ALU o, write C or D. Valid next cycle.
-  alu_tmp: enum { none = 0; write_c; write_d; }, default none;
   // Modify inputs and outputs to ALU.
   alu_mod: enum { none = 0; inv_msb_a_b; inv_lsb_o; twos_comp_b }, default none;
 

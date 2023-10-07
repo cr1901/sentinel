@@ -1,4 +1,4 @@
-from .ucodefields import OpType, ALUTmp, ALUMod
+from .ucodefields import OpType, ALUMod
 
 from amaranth import Elaboratable, Signal, Module
 from amaranth.lib.wiring import Component, Signature, In, Out
@@ -69,7 +69,6 @@ class CompareGreaterThanEqualUnsigned(Unit):
 
 AluCtrlSignature = Signature({
     "op": Out(OpType, reset=OpType.NOP),
-    "tmp": Out(ALUTmp),
     "mod": Out(ALUMod),
     "cmp": In(1),
     "zero": In(1)
@@ -81,8 +80,6 @@ def alu_data_signature(width):
         "a": Out(width),
         "b": Out(width),
         "o": In(width),
-        "c": In(width),
-        "d": In(width),
     })
 
 
@@ -189,11 +186,5 @@ class ALU(Component):
 
         m.d.comb += self.ctrl.cmp.eq(self.data.o[0])
         m.d.comb += self.ctrl.zero.eq(self.data.o == 0)
-
-        with m.Switch(self.ctrl.tmp):
-            with m.Case(ALUTmp.WRITE_C):
-                m.d.sync += self.data.c.eq(self.o_mux)
-            with m.Case(ALUTmp.WRITE_D):
-                m.d.sync += self.data.d.eq(self.o_mux)
 
         return m
