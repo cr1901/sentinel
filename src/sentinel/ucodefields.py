@@ -57,9 +57,8 @@ class ASrc(enum.Enum):
     CSR = 2
     IMM = 3
     TARGET = 4
-    ALU_C = 5
-    ALU_D = 6
-    B_SRC = 7
+    ALU_O = 5
+    ZERO = 6
 
 
 class BSrc(enum.Enum):

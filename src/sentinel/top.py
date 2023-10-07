@@ -73,10 +73,10 @@ class Top(Component):
                     m.d.sync += self.a_input.eq(self.decode.imm)
                 with m.Case(ASrc.PC):
                     m.d.sync += self.a_input.eq(self.datapath.pc.dat_r)
-                with m.Case(ASrc.ALU_C):
-                    m.d.sync += self.a_input.eq(self.alu.data.c)
-                with m.Case(ASrc.ALU_D):
-                    m.d.sync += self.a_input.eq(self.alu.data.d)
+                with m.Case(ASrc.ZERO):
+                    m.d.sync += self.a_input.eq(0)
+                with m.Case(ASrc.ALU_O):
+                    m.d.sync += self.a_input.eq(self.alu.data.o)
 
         with m.If((self.control.src_op == SrcOp.LATCH_B) |
                   (self.control.src_op == SrcOp.LATCH_A_B)):
@@ -158,10 +158,10 @@ class Top(Component):
                 m.d.comb += self.reg_w_adr.eq(self.decode.dst)
             with m.Case(RegWSel.UCODE0):
                 m.d.comb += self.reg_w_adr.eq(
-                    Cat(self.control.target[0:4], 0))
+                    Cat(self.control.target[4:8], 0))
             with m.Case(RegWSel.UCODE1):
                 m.d.comb += self.reg_w_adr.eq(
-                    Cat(self.control.target[0:4], 1))
+                    Cat(self.control.target[4:8], 1))
 
         return m
 

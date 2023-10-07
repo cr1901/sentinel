@@ -38,7 +38,7 @@ fields block_ram: {
 
   // ALU src latch/selection.
   src_op: enum { none = 0; latch_a; latch_b; latch_a_b; }, default none;
-  a_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; b_src; }, default gp;
+  a_src: enum { gp = 0; pc; csr; imm; target; alu_o; zero; }, default gp;
   b_src: enum { gp = 0; pc; csr; imm; target; alu_c; alu_d; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
@@ -77,6 +77,7 @@ fields block_ram: {
 #define JUMP_TO_OP_END(trg) cond_test => true, jmp_type => direct, target => trg
 #define LATCH_0_TO_TMP(trg) alu_op => nop, alu_tmp => trg
 #define NOT_IMPLEMENTED target => 0
+#define NOP target => 0
 #define READ_RS1 reg_set => 0, reg_read => 1, reg_r_sel => insn_rs1
 #define READ_RS2 reg_set => 0, reg_read => 1, reg_r_sel => insn_rs2
 #define WRITE_RD reg_set => 0, reg_write => 1, reg_w_sel => insn_rd
@@ -92,7 +93,7 @@ check_int:    jmp_type => map, a_src => gp, src_op => latch_a, READ_RS2, \
 
 origin 8;
 imm_prolog: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, \
-                LATCH_0_TO_TMP(alu_c), target => imm_ops;
+                target => imm_ops;
 reg_prolog: src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => map_funct, \
                 target => reg_ops;
 
@@ -102,7 +103,7 @@ addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 slli_trampoline:
               // Re: reg_op... reg addresses aren't latched, so if we need
               // reg values again, we need to latch them again.
-              READ_RS1, a_src => imm, b_src => alu_c, src_op => latch_a_b, \
+              READ_RS1, a_src => zero, src_op => latch_a, \
                   jmp_type => direct, target => slli_prolog;
 slti:         alu_op => cmp_ltu, alu_mod => inv_msb_a_b, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sltiu:        alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
@@ -115,7 +116,7 @@ andi:         alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 slli_prolog:
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
-              a_src => imm, src_op => latch_a, alu_op => sll, alu_tmp => write_c, \
+              a_src => imm, src_op => latch_a, alu_op => sll,
                   jmp_type => direct, cond_test => cmp_okay, target => fetch;
 sll_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
@@ -123,12 +124,11 @@ sll_loop:
               // will never see this intermediate result).
               // Also write the previous shift, either from prolog or last
               // loop iteration.
-              a_src => alu_c, src_op => latch_a, READ_RS1_WRITE_RD, \
-                  alu_tmp => write_d, alu_op => dec;
+              alu_op => dec, a_src => alu_o, src_op => latch_a, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
-              a_src => alu_d, src_op => latch_a, alu_op => sll, alu_tmp => write_c, \
-                  jmp_type => direct_zero, invert_test => 1, cond_test => cmp_zero, \
-                  target => sll_loop;
+              alu_op => sll, a_src => alu_o, src_op => latch_a, \
+                jmp_type => direct_zero, invert_test => 1, cond_test => cmp_zero, \
+                target => sll_loop;
 
 reg_ops:
 add:          alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
