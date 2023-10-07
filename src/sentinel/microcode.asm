@@ -42,7 +42,7 @@ fields block_ram: {
   b_src: enum { gp = 0; pc; csr; imm; target; one; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
-  alu_op: enum { add = 0; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; cmp_geu; nop; passthru; }, default nop;
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; cmp_geu; nop; passthru; }, default nop;
   // In addition to writing ALU o, write C or D. Valid next cycle.
   // Modify inputs and outputs to ALU.
   alu_mod: enum { none = 0; inv_msb_a_b; inv_lsb_o; twos_comp_b }, default none;
@@ -125,7 +125,7 @@ sll_loop:
               // will never see this intermediate result).
               // Also write the previous shift, either from prolog or last
               // loop iteration.
-              SUB, a_src => alu_o, src_op => latch_a, WRITE_RD;
+              alu_op => sub, a_src => alu_o, src_op => latch_a, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
               alu_op => sll, a_src => alu_o, b_src => one, src_op => latch_a_b, \
                 jmp_type => direct_zero, invert_test => 1, cond_test => cmp_zero, \

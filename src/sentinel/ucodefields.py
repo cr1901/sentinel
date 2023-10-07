@@ -14,17 +14,18 @@ class JmpType(enum.Enum):
 
 class OpType(enum.Enum):
     ADD = 0
-    AND = 1
-    OR = 2
-    XOR = 3
-    SLL = 4
-    SRL = 5
-    SRA = 6
-    CMP_EQ = 7
-    CMP_LTU = 8
-    CMP_GEU = 9
-    NOP = 10
-    PASSTHRU = 11
+    SUB = 1
+    AND = 2
+    OR = 3
+    XOR = 4
+    SLL = 5
+    SRL = 6
+    SRA = 7
+    CMP_EQ = 8
+    CMP_LTU = 9
+    CMP_GEU = 10
+    NOP = 11
+    PASSTHRU = 12
 
 
 class CondTest(enum.Enum):

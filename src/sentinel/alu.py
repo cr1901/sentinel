@@ -22,6 +22,11 @@ class Adder(Unit):
         super().__init__(width, lambda a, b: a + b)
 
 
+class Subtractor(Unit):
+    def __init__(self, width):
+        super().__init__(width, lambda a, b: a - b)
+
+
 class AND(Unit):
     def __init__(self, width):
         super().__init__(width, lambda a, b: a & b)
@@ -105,6 +110,7 @@ class ALU(Component):
         self.o_mux = Signal(width)
 
         self.add = Adder(width)
+        self.sub = Subtractor(width)
         self.and_ = AND(width)
         self.or_ = OR(width)
         self.xor = XOR(width)
@@ -118,6 +124,7 @@ class ALU(Component):
     def elaborate(self, platform):
         m = Module()
         m.submodules.add = self.add
+        m.submodules.sub = self.sub
         m.submodules.and_ = self.and_
         m.submodules.or_ = self.or_
         m.submodules.xor = self.xor
@@ -150,7 +157,7 @@ class ALU(Component):
                     mod_b.eq(-self.data.b)
                 ]
 
-        for submod in [self.add, self.and_, self.or_, self.xor,
+        for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
                        self.sll, self.srl, self.sar, self.cmp_equal,
                        self.cmp_ltu, self.cmp_gteu]:
             m.d.comb += [
@@ -161,6 +168,8 @@ class ALU(Component):
         with m.Switch(self.ctrl.op):
             with m.Case(OpType.ADD):
                 m.d.comb += self.o_mux.eq(self.add.o)
+            with m.Case(OpType.SUB):
+                m.d.comb += self.o_mux.eq(self.sub.o)
             with m.Case(OpType.AND):
                 m.d.comb += self.o_mux.eq(self.and_.o)
             with m.Case(OpType.OR):
