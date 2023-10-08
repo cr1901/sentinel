@@ -124,6 +124,7 @@ def test_top(sim_mod):
         andi x1, x1, 1
         and  x2, x0, x2
         sub  x6, x1, x6
+        lui  x6, 0x80000
 """)
 
     regs = [
@@ -148,6 +149,7 @@ def test_top(sim_mod):
                  R1=1, PC=0x3C),
         RV32Regs(R6=2**32 - 1, R5=2**32 - 1, R1=1, PC=0x40),
         RV32Regs(R6=2, R5=2**32 - 1, R1=1, PC=0x44),
+        RV32Regs(R6=0x80000000, R5=2**32 - 1, R1=1, PC=0x48),
     ]
 
     def mem_proc():

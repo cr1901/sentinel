@@ -153,6 +153,8 @@ class Mapper(Elaboratable):
                 m.d.comb += self.map_adr.eq(8)
             with m.Case(OpcodeType.OP):
                 m.d.comb += self.map_adr.eq(9)
+            with m.Case(OpcodeType.LUI):
+                m.d.comb += self.map_adr.eq(10)
             with m.Case(OpcodeType.SYSTEM):
                 m.d.comb += self.map_adr.eq(128)
 

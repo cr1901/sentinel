@@ -46,7 +46,7 @@ class ImmediateGenerator(Component):
                                         Value.replicate(self.sign, 20)))
             with m.Case(InsnImmFormat.U):
                 m.d.comb += self.imm.eq(Cat(C(0, 12), self.insn[12:20],
-                                        self.insn[20:30], self.sign))
+                                        self.insn[20:31], self.sign))
             with m.Case(InsnImmFormat.J):
                 m.d.comb += self.imm.eq(Cat(C(0), self.insn[21:25],
                                         self.insn[25:31], self.insn[20],

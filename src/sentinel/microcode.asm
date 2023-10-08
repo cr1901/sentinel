@@ -97,12 +97,14 @@ imm_prolog: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_f
                 target => imm_ops;
 reg_prolog: src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => map_funct, \
                 target => reg_ops;
+lui_prolog: a_src => zero, b_src => imm, src_op => latch_a_b, pc_action => inc,
+                jmp_type => direct, target => addi;
 
 imm_ops:
 addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 // Trampolines for multicycle ops are almost zero-cost except for microcode space.
 slli_trampoline:
-              // Re: reg_op... reg addresses aren't latched, so if we need
+              // Re: READ_RS1... reg addresses aren't latched, so if we need
               // reg values again, we need to latch them again.
               READ_RS1, a_src => zero, src_op => latch_a, \
                   jmp_type => direct, target => slli_prolog;
