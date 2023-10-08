@@ -60,6 +60,28 @@ class RV32Regs:
 def test_top(sim_mod):
     sim, m = sim_mod
 
+    def ucode_panic():
+        yield Passive()
+
+        addr = 0
+        prev_addr = 0
+        count = 0
+        while True:
+            yield
+
+            if (yield m.control.ucoderom.addr == 248):
+                raise AssertionError("microcode panic (not implemented)")
+
+            prev_addr = addr
+            addr = (yield m.control.ucoderom.addr)
+            if prev_addr == addr:
+                count += 1
+                if count > 100:
+                    raise AssertionError("microcode probably stuck in "
+                                         "infinite loop")
+            else:
+                count = 0
+
     # Reserved for fine-grained testing. Ignores address lines.
     def mem_proc_aux(insn_mem, *, wait_states=repeat(0), irqs=repeat(False)):
         yield Passive()
@@ -175,4 +197,4 @@ def test_top(sim_mod):
     def cpu_proc():
         yield from cpu_proc_aux(regs)
 
-    sim.run(sync_processes=[mem_proc, cpu_proc])
+    sim.run(sync_processes=[mem_proc, cpu_proc, ucode_panic])

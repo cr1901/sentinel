@@ -216,4 +216,7 @@ fast_epilog:
 origin 224;
 // Send PC through ALU
 save_pc: a_src => pc, b_src => target, jmp_type => nop, target => 0;
+
+// Misc?
+origin 248;
 panic: jmp_type => direct, target => panic
