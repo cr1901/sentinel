@@ -111,7 +111,8 @@ slli_trampoline:
 slti:         CMP_LT, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sltiu:        alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 xori:         alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-srli_trampoline: NOT_IMPLEMENTED;
+srli_trampoline: READ_RS1, a_src => zero, src_op => latch_a, \
+                    jmp_type => direct, target => srli_prolog;
 ori:          alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 andi:         alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 subi:         NOT_IMPLEMENTED;  // 0b1000
@@ -119,7 +120,8 @@ subi:         NOT_IMPLEMENTED;  // 0b1000
               NOT_IMPLEMENTED;  // 0b1010
               NOT_IMPLEMENTED;  // 0b1011
               NOT_IMPLEMENTED;  // 0b1100
-srai_trampoline: NOT_IMPLEMENTED;
+srai_trampoline: READ_RS1, a_src => zero, src_op => latch_a, \
+                    jmp_type => direct, target => srai_prolog;
 
 
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
@@ -139,6 +141,41 @@ sll_loop:
               alu_op => sll, a_src => alu_o, b_src => one, src_op => latch_a_b, \
                   jmp_type => direct_zero, invert_test => 1, cond_test => cmp_zero, \
                   target => sll_loop;
+
+srli_prolog:
+              // Bail if shift count was initially zero.
+              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
+              a_src => imm, b_src => one, src_op => latch_a_b, alu_op => srl,
+                  jmp_type => direct, cond_test => cmp_okay, target => fetch;
+srl_loop:
+              // Subtract 1 from shift cnt, preliminarily save shift results
+              // in case we bail (microcode cannot be interrupted, so user
+              // will never see this intermediate result).
+              // Also write the previous shift, either from prolog or last
+              // loop iteration.
+              alu_op => sub, a_src => alu_o, src_op => latch_a, WRITE_RD;
+              // Then, do the shift, and bail if the shift cnt reached zero.
+              alu_op => srl, a_src => alu_o, b_src => one, src_op => latch_a_b, \
+                  jmp_type => direct_zero, invert_test => 1, cond_test => cmp_zero, \
+                  target => srl_loop;
+
+
+srai_prolog:
+              // Bail if shift count was initially zero.
+              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
+              a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sra,
+                  jmp_type => direct, cond_test => cmp_okay, target => fetch;
+sra_loop:
+              // Subtract 1 from shift cnt, preliminarily save shift results
+              // in case we bail (microcode cannot be interrupted, so user
+              // will never see this intermediate result).
+              // Also write the previous shift, either from prolog or last
+              // loop iteration.
+              alu_op => sub, a_src => alu_o, src_op => latch_a, WRITE_RD;
+              // Then, do the shift, and bail if the shift cnt reached zero.
+              alu_op => sra, a_src => alu_o, b_src => one, src_op => latch_a_b, \
+                  jmp_type => direct_zero, invert_test => 1, cond_test => cmp_zero, \
+                  target => sla_loop;
 
 reg_ops:
 add:          alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
