@@ -1,5 +1,6 @@
-from amaranth import Signal, Elaboratable, Module, Cat
-from amaranth.lib.wiring import Component, Signature, Out, In, connect
+from amaranth import Signal, Elaboratable, Module, Cat, C
+from amaranth.lib.wiring import Component, Signature, Out, connect
+from amaranth_soc import wishbone
 
 from .alu import ALU
 from .control import Control
@@ -10,16 +11,8 @@ from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, RegWSel
 
 class Top(Component):
     signature = Signature({
-        "dat_w": Out(32),
-        "dat_r": In(32),
-        # Registered.
-        "adr": Out(32),
-        "we": Out(1),
-        # Ask bus to send or recv data.
-        "req": Out(1),
-        # Hold bus until this signal asserts.
-        "ack": In(1),
-        "insn_fetch": Out(1)
+        "bus": Out(wishbone.Signature(addr_width=30, data_width=32,
+                                      granularity=8)),
     })
 
     def __init__(self):
@@ -72,7 +65,8 @@ class Top(Component):
                 with m.Case(ASrc.IMM):
                     m.d.sync += self.a_input.eq(self.decode.imm)
                 with m.Case(ASrc.PC):
-                    m.d.sync += self.a_input.eq(self.datapath.pc.dat_r)
+                    m.d.sync += self.a_input.eq(Cat(C(0, 2),
+                                                    self.datapath.pc.dat_r))
                 with m.Case(ASrc.ZERO):
                     m.d.sync += self.a_input.eq(0)
                 with m.Case(ASrc.ALU_O):
@@ -97,7 +91,7 @@ class Top(Component):
             self.control.e_type.eq(self.decode.e_type),
             self.req_next.eq(self.control.mem_req),
             self.insn_fetch_next.eq(self.control.insn_fetch),
-            self.control.mem_valid.eq(self.ack),
+            self.control.mem_valid.eq(self.bus.ack),
 
             # TODO: Spin out into a register of exception sources.
             self.control.exception.eq(self.decode.illegal)
@@ -106,8 +100,9 @@ class Top(Component):
         # An ACK stops the request b/c the microcode's to avoid a 1-cycle delay
         # due to registered REQ/FETCH signal.
         m.d.comb += [
-            self.req.eq(self.control.mem_req),
-            self.insn_fetch.eq(self.control.insn_fetch)
+            self.bus.cyc.eq(self.control.mem_req),
+            self.bus.stb.eq(self.control.mem_req),
+            # self.insn_fetch.eq(self.control.insn_fetch)
         ]
 
         m.d.comb += [
@@ -121,7 +116,7 @@ class Top(Component):
         # connect(m, self.datapath.pc.ctrl, self.control.pc)
 
         m.d.comb += [
-            self.dat_w.eq(self.datapath.gp.dat_w),
+            self.bus.dat_w.eq(self.datapath.gp.dat_w),
             self.datapath.gp.dat_w.eq(self.alu.data.o),
             self.datapath.gp.adr_r.eq(self.reg_r_adr),
             self.datapath.gp.adr_w.eq(self.reg_w_adr),
@@ -132,17 +127,17 @@ class Top(Component):
         # DataPath.dat_w constantly has traffic. We only want to latch
         # the address once per mem access, and we want it the address to be
         # valid synchronous with ready assertion.
-        with m.If(self.req):
+        with m.If(self.bus.cyc & self.bus.stb):
             with m.If(self.insn_fetch_next):
-                m.d.comb += [self.adr.eq(self.datapath.pc.dat_r)]
+                m.d.comb += [self.bus.adr.eq(self.datapath.pc.dat_r)]
             with m.Else():
-                m.d.comb += [self.adr.eq(self.datapath.gp.dat_w)]
+                m.d.comb += [self.bus.adr.eq(self.datapath.gp.dat_w)]
 
         # Decode conns
         m.d.comb += [
-            self.decode.insn.eq(self.dat_r),
+            self.decode.insn.eq(self.bus.dat_r),
             # Decode begins automatically.
-            self.decode.do_decode.eq(self.insn_fetch & self.ack),
+            self.decode.do_decode.eq(self.control.insn_fetch & self.bus.ack),
         ]
 
         with m.Switch(self.control.reg_r_sel):

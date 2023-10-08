@@ -23,8 +23,8 @@ GPSignature = Signature({
 })
 
 PcSignature = Signature({
-    "dat_r": In(32),
-    "dat_w": Out(32),
+    "dat_r": In(30),
+    "dat_w": Out(30),
     "ctrl": Out(PCControlSignature)
 })
 
@@ -42,7 +42,7 @@ class ProgramCounter(Component):
 
         with m.Switch(self.ctrl.action):
             with m.Case(PcAction.INC):
-                m.d.sync += self.dat_r.eq(self.dat_r + 4)
+                m.d.sync += self.dat_r.eq(self.dat_r + 1)
             with m.Case(PcAction.LOAD_ALU_O):
                 m.d.sync += self.dat_r.eq(Cat(C(0, 2), self.dat_w))
 

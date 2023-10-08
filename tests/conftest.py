@@ -31,11 +31,8 @@ class SimulatorFixture:
     def __init__(self, req, cfg):
         self.mod = req.node.get_closest_marker("module").args[0]
         self.name = req.node.name
-        self.sim = Simulator(self.mod)
         self.vcds = cfg.getoption("vcds")
-
-        for clk in req.node.get_closest_marker("clks").args[0]:
-            self.sim.add_clock(clk)
+        self.clks = req.node.get_closest_marker("clks").args[0]
 
     @property
     def ports(self):
@@ -57,18 +54,27 @@ class SimulatorFixture:
             return ()
 
     def run(self, sync_processes, processes=[]):
+        # Don't elaborate until we're ready to sim. This causes weird
+        # behaviors if you modify the object after elaboration. For instance,
+        # changing a Memory's init file after elaboration causes memory
+        # contents to not what's on the bus according to the Python Simulator.
+        sim = Simulator(self.mod)
+
+        for c in self.clks:
+            sim.add_clock(c)
+
         for s in sync_processes:
-            self.sim.add_sync_process(s)
+            sim.add_sync_process(s)
 
         for p in processes:
-            self.sim.add_process(p)
+            sim.add_process(p)
 
         if self.vcds:
-            with self.sim.write_vcd(self.name + ".vcd", self.name + ".gtkw",
-                                    traces=self.ports):
-                self.sim.run()
+            with sim.write_vcd(self.name + ".vcd", self.name + ".gtkw",
+                               traces=self.ports):
+                sim.run()
         else:
-            self.sim.run()
+            sim.run()
 
 
 @pytest.fixture

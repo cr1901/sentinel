@@ -6,7 +6,7 @@ groups = ["default", "dev"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:4939cf49e9f377ea0132b0b38f17b7e39a7da6cf6e513004e81502fc96cd7965"
+content_hash = "sha256:eff8945cb8d7017ca525fb91bec883a9c95506e952763e7c990dd4444cdc2abd"
 
 [[package]]
 name = "amaranth"
@@ -18,6 +18,17 @@ summary = "Amaranth hardware definition language"
 dependencies = [
     "Jinja2~=3.0",
     "pyvcd<0.5,>=0.2.2",
+]
+
+[[package]]
+name = "amaranth-soc"
+version = "0.1.dev74+g9ffaf94"
+requires_python = "~=3.8"
+git = "https://github.com/amaranth-lang/amaranth-soc"
+revision = "9ffaf949d853467d32e3e19fc0d472de65e45427"
+summary = "System on Chip toolkit for Amaranth HDL"
+dependencies = [
+    "amaranth @ git+https://github.com/amaranth-lang/amaranth",
 ]
 
 [[package]]
