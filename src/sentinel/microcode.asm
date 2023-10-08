@@ -75,7 +75,7 @@ fields block_ram: {
 #define SKIP_WAIT_IF_ACK jmp_type => direct_zero, cond_test => mem_valid, target => check_int
 #define JUMP_TO_OP_END(trg) cond_test => true, jmp_type => direct, target => trg
 #define LATCH_0_TO_TMP(trg) alu_op => nop, alu_tmp => trg
-#define NOT_IMPLEMENTED target => 0
+#define NOT_IMPLEMENTED target => panic
 #define NOP target => 0
 #define READ_RS1 reg_set => 0, reg_read => 1, reg_r_sel => insn_rs1
 #define READ_RS1_EAGER reg_set => 0, reg_read => 1, reg_r_sel => insn_rs1_unregistered
@@ -112,6 +112,13 @@ xori:         alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 srli_trampoline: NOT_IMPLEMENTED;
 ori:          alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 andi:         alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+subi:         NOT_IMPLEMENTED;  // 0b1000
+              NOT_IMPLEMENTED;  // 0b1001
+              NOT_IMPLEMENTED;  // 0b1010
+              NOT_IMPLEMENTED;  // 0b1011
+              NOT_IMPLEMENTED;  // 0b1100
+srai_trampoline: NOT_IMPLEMENTED;
+
 
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
 slli_prolog:
@@ -137,10 +144,15 @@ sll:          NOT_IMPLEMENTED;
 slt:          CMP_LT, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sltu:         alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 xor:          alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-// srli_trampoline:
-              NOT_IMPLEMENTED;
+srl_trampoline: NOT_IMPLEMENTED;
 or:           alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 and:          alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+sub:          alu_op => sub, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);  // 0b1000
+              NOT_IMPLEMENTED;  // 0b1001
+              NOT_IMPLEMENTED;  // 0b1010
+              NOT_IMPLEMENTED;  // 0b1011
+              NOT_IMPLEMENTED;  // 0b1101
+sra_trampoline: NOT_IMPLEMENTED;
 
 fast_epilog:
               WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregistered, \
@@ -150,3 +162,4 @@ fast_epilog:
 origin 224;
 // Send PC through ALU
 save_pc: a_src => pc, b_src => target, jmp_type => nop, target => 0;
+panic: jmp_type => direct, target => panic
