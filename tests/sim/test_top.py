@@ -153,6 +153,8 @@ def test_top(sim_mod):
         sll x3, x1, x2
         sra x4, x7, x3
         srl x9, x7, x3
+        fence  # 0x60
+        auipc x10, -1
 """)
 
     regs = [
@@ -189,6 +191,11 @@ def test_top(sim_mod):
                  R4=0xFFFFE000, R3=16, R2=0x3E4, R1=1, PC=0x5C),
         RV32Regs(R9=0x0000E000, R8=0x20000000, R7=0xE0000000, R6=0x80000000,
                  R5=2**32 - 1, R4=0xFFFFE000, R3=16, R2=0x3E4, R1=1, PC=0x60),
+        RV32Regs(R9=0x0000E000, R8=0x20000000, R7=0xE0000000, R6=0x80000000,
+                 R5=2**32 - 1, R4=0xFFFFE000, R3=16, R2=0x3E4, R1=1, PC=0x64),
+        RV32Regs(R10=(2**32 - 4096) + 100, R9=0x0000E000, R8=0x20000000,
+                 R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R4=0xFFFFE000,
+                 R3=16, R2=0x3E4, R1=1, PC=0x68),
     ]
 
     def mem_proc():

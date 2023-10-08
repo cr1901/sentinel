@@ -101,6 +101,10 @@ reg_prolog: src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => map_fu
                 target => reg_ops;
 lui_prolog: a_src => zero, b_src => imm, src_op => latch_a_b, pc_action => inc,
                 jmp_type => direct, target => addi;
+// Only fence. This is a single hart, in-order, multicycle impl, so ignore.
+misc_mem_prolog: pc_action => inc, jmp_type => direct, target => fetch;
+auipc_prolog: src_op => latch_a_b, a_src => pc, b_src => imm, jmp_type => direct, \
+                  target => auipc;
 
 imm_ops:
 addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
@@ -208,8 +212,9 @@ sra_prolog:  READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
              a_src => gp, b_src => one, src_op => latch_a_b, alu_op => sra,
                   jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sra_loop;
 
-fast_epilog:
-              WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregistered, \
+auipc: alu_op => add, pc_action => inc, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+
+fast_epilog: WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregistered, \
                   SKIP_WAIT_IF_ACK;
 
 // Interrupt handler.

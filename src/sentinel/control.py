@@ -155,6 +155,10 @@ class Mapper(Elaboratable):
                 m.d.comb += self.map_adr.eq(9)
             with m.Case(OpcodeType.LUI):
                 m.d.comb += self.map_adr.eq(10)
+            with m.Case(OpcodeType.MISC_MEM):
+                m.d.comb += self.map_adr.eq(11)
+            with m.Case(OpcodeType.AUIPC):
+                m.d.comb += self.map_adr.eq(12)
             with m.Case(OpcodeType.SYSTEM):
                 m.d.comb += self.map_adr.eq(128)
 
