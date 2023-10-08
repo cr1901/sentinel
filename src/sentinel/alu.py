@@ -75,7 +75,7 @@ class CompareGreaterThanEqualUnsigned(Unit):
 AluCtrlSignature = Signature({
     "op": Out(OpType, reset=OpType.NOP),
     "mod": Out(ALUMod),
-    "cmp": In(1),
+    "lsbs_5_zero": In(1),
     "zero": In(1)
 })
 
@@ -193,7 +193,7 @@ class ALU(Component):
         with m.If(self.ctrl.mod == ALUMod.INV_LSB_O):
             m.d.sync += self.data.o[0].eq(~self.o_mux[0])
 
-        m.d.comb += self.ctrl.cmp.eq(self.data.o[0])
+        m.d.comb += self.ctrl.lsbs_5_zero.eq(self.data.o[0:5] == 0)
         m.d.comb += self.ctrl.zero.eq(self.data.o == 0)
 
         return m

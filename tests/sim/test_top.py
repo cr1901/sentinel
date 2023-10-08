@@ -125,8 +125,12 @@ def test_top(sim_mod):
         and  x2, x0, x2
         sub  x6, x1, x6  # 0x40
         lui  x6, 0x80000
-        srai x7, x6, 1
-        srli x8, x6, 1
+        srai x7, x6, 2
+        srli x8, x6, 2
+        li x2, 4 + (1024 - 32)  # 0x50
+        sll x3, x1, x2
+        sra x4, x7, x3
+        srl x9, x7, x3
 """)
 
     regs = [
@@ -152,9 +156,17 @@ def test_top(sim_mod):
         RV32Regs(R6=2**32 - 1, R5=2**32 - 1, R1=1, PC=0x40),
         RV32Regs(R6=2, R5=2**32 - 1, R1=1, PC=0x44),
         RV32Regs(R6=0x80000000, R5=2**32 - 1, R1=1, PC=0x48),
-        RV32Regs(R7=0xC0000000, R6=0x80000000, R5=2**32 - 1, R1=1, PC=0x4C),
-        RV32Regs(R8=0x40000000, R7=0xC0000000, R6=0x80000000, R5=2**32 - 1,
+        RV32Regs(R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R1=1, PC=0x4C),
+        RV32Regs(R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
                  R1=1, PC=0x50),
+        RV32Regs(R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R2=0x3E4, R1=1, PC=0x54),
+        RV32Regs(R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R3=16, R2=0x3E4, R1=1, PC=0x58),
+        RV32Regs(R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=1, PC=0x5C),
+        RV32Regs(R9=0x0000E000, R8=0x20000000, R7=0xE0000000, R6=0x80000000,
+                 R5=2**32 - 1, R4=0xFFFFE000, R3=16, R2=0x3E4, R1=1, PC=0x60),
     ]
 
     def mem_proc():
