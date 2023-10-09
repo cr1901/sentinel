@@ -6,7 +6,7 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
-from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, RegWSel
+from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, RegWSel, MemSel
 
 
 class Top(Component):
@@ -117,8 +117,13 @@ class Top(Component):
         # connect(m, self.datapath.gp.ctrl, self.control.gp)
         # connect(m, self.datapath.pc.ctrl, self.control.pc)
 
+        write_data = Signal.like(self.bus.dat_w)
+        with m.If(self.control.latch_data):
+            m.d.sync += write_data.eq(self.alu.data.o)
+
         m.d.comb += [
-            self.bus.dat_w.eq(self.datapath.gp.dat_w),
+            self.bus.we.eq(self.control.write_mem),
+            self.bus.dat_w.eq(write_data),
             self.datapath.gp.dat_w.eq(self.alu.data.o),
             self.datapath.gp.adr_r.eq(self.reg_r_adr),
             self.datapath.gp.adr_w.eq(self.reg_w_adr),
@@ -126,14 +131,27 @@ class Top(Component):
             self.datapath.pc.dat_w.eq(self.alu.data.o[2:]),
         ]
 
+        data_adr = Signal.like(self.bus.adr)
+        with m.If(self.control.latch_adr):
+            m.d.sync += data_adr.eq(self.alu.data.o)
+
         # DataPath.dat_w constantly has traffic. We only want to latch
         # the address once per mem access, and we want it the address to be
         # valid synchronous with ready assertion.
         with m.If(self.bus.cyc & self.bus.stb):
             with m.If(self.insn_fetch_next):
-                m.d.comb += [self.bus.adr.eq(self.datapath.pc.dat_r)]
+                m.d.comb += [self.bus.adr.eq(self.datapath.pc.dat_r),
+                             self.bus.sel.eq(0xf)]
             with m.Else():
-                m.d.comb += [self.bus.adr.eq(self.datapath.gp.dat_w)]
+                m.d.comb += self.bus.adr.eq(data_adr)
+
+                with m.Switch(self.control.mem_sel):
+                    with m.Case(MemSel.BYTE):
+                        m.d.comb += self.bus.sel.eq(1)
+                    with m.Case(MemSel.HWORD):
+                        m.d.comb += self.bus.sel.eq(3)
+                    with m.Case(MemSel.WORD):
+                        m.d.comb += self.bus.sel.eq(0xf)
 
         # Decode conns
         m.d.comb += [

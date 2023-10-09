@@ -166,15 +166,21 @@ def test_top(sim_mod):
 
             yield
 
-    def cpu_proc_aux(regs):
+    def cpu_proc_aux(regs, mem):
         def check_regs(curr):
             expected_regs = curr
             actual_regs = yield from RV32Regs.from_top_module(m)
             assert expected_regs == actual_regs
 
-        for curr in regs:
+        def check_mem(mem):
+            if mem:
+                for m_adr, m_dat in mem.items():
+                    assert (yield m.mem.mem[m_adr]) == m_dat
+
+        for curr_r, curr_m in zip(regs, mem):
             # Wait for insn.
-            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb)):
+            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
+                       (yield m.cpu.control.insn_fetch)):
                 yield
 
             # Wait for memory to respond.
@@ -188,7 +194,8 @@ def test_top(sim_mod):
             yield
 
             # Check results as new insn begins (i.e. prev results).
-            yield from check_regs(curr)
+            yield from check_regs(curr_r)
+            yield from check_mem(curr_m)
 
     insns = assemble("""
         addi x0, x0, 0  # 0
@@ -220,6 +227,7 @@ def test_top(sim_mod):
         jal jal_dst
         nop
 jal_dst:
+        sb x1, x2, 512
 """)
 
     regs = [
@@ -268,6 +276,19 @@ jal_dst:
                  R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R4=0xFFFFE000,
                  R3=16, R2=0x3E4, R1=0x6C,
                  PC=0x70 >> 2),
+        RV32Regs(R10=(2**32 - 4096) + 100, R9=0x0000E000, R8=0x20000000,
+                 R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R4=0xFFFFE000,
+                 R3=16, R2=0x3E4, R1=0x6C,
+                 PC=0x74 >> 2),
+    ]
+
+    ram = [
+        None,  # 0x0
+        None, None, None, None, None, None, None, None,  # 0x20
+        None, None, None, None, None, None, None, None,  # 0x40
+        None, None, None, None, None, None, None, None,  # 0x60
+        None, None, None,  # 0x70
+        {0x26C: 0xe4},
     ]
 
     m.mem.init_mem = [int.from_bytes(insns[adr:adr+4], byteorder="little")
@@ -277,6 +298,6 @@ jal_dst:
         yield from bus_proc_aux(wait_states=chain([1], repeat(0)))
 
     def cpu_proc():
-        yield from cpu_proc_aux(regs)
+        yield from cpu_proc_aux(regs, ram)
 
     sim.run(sync_processes=[bus_proc, cpu_proc, ucode_panic])

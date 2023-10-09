@@ -1,4 +1,4 @@
-space block_ram: width 44, size 256;
+space block_ram: width 48, size 256;
 
 space block_ram;
 origin 0;
@@ -66,8 +66,14 @@ fields block_ram: {
   // automatically stop a memory request for the cycle after ack, even if
   // mem_req is enabled. Valid on current cycle.
   mem_req: bool, default 0;
+  mem_sel: enum { auto = 0; byte = 1; hword = 2; word = 3}, default auto;
+  // Latch data address register from ALU output.
+  latch_adr: bool, default 0;
+  latch_data: bool, default 0;
+  write_mem: bool, default 0;
 
-  // Current mem request is insn fetch. Valid on current cycle.
+  // Current mem request is insn fetch. Valid on current cycle. If set w/
+  // mem_req, mem_sel ignored/calculated automatically.
   insn_fetch: bool, default 0;
 };
 
@@ -107,6 +113,8 @@ auipc_prolog: src_op => latch_a_b, a_src => pc, b_src => imm, jmp_type => direct
                   target => auipc;
 jal_prolog: src_op => latch_a_b, a_src => pc, b_src => four, \
                   jmp_type => direct, target => jal;
+store_prolog: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, \
+                target => store_ops;
 
 imm_ops:
 addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
@@ -220,6 +228,18 @@ auipc: alu_op => add, pc_action => inc;
 jal: alu_op => add, a_src => pc, b_src => imm, src_op => latch_a_b;
      WRITE_RD, alu_op => add;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
+
+store_ops:
+sb_trampoline: a_src => zero, b_src => gp, src_op => latch_a_b, \
+                   alu_op => add, jmp_type => direct, target => sb;
+
+sb: alu_op => add, latch_adr => 1;
+    latch_data => 1;
+// For stores/loads, we use a wishbone block cycle (don't deassert cyc in
+// between data access and insn fetch)
+sb_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
+              mem_sel => byte, write_mem => 1, jmp_type => direct_zero, target => sb_wait;
+
 
 fast_epilog: WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregistered, \
                   SKIP_WAIT_IF_ACK;

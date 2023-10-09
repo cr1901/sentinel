@@ -57,6 +57,10 @@ class Control(Component):
         self.b_src = Signal.like(self.ucoderom.fields.b_src)
         self.src_op = Signal.like(self.ucoderom.fields.src_op)
         self.mem_req = Signal.like(self.ucoderom.fields.mem_req)
+        self.mem_sel = Signal.like(self.ucoderom.fields.mem_sel)
+        self.latch_adr = Signal.like(self.ucoderom.fields.latch_adr)
+        self.latch_data = Signal.like(self.ucoderom.fields.latch_data)
+        self.write_mem = Signal.like(self.ucoderom.fields.write_mem)
         self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
         self.reg_r_sel = Signal.like(self.ucoderom.fields.reg_r_sel)
         self.reg_w_sel = Signal.like(self.ucoderom.fields.reg_w_sel)
@@ -88,6 +92,10 @@ class Control(Component):
             self.alu.op.eq(self.ucoderom.fields.alu_op),
             self.alu.mod.eq(self.ucoderom.fields.alu_mod),
             self.mem_req.eq(self.ucoderom.fields.mem_req),
+            self.mem_sel.eq(self.ucoderom.fields.mem_sel),
+            self.latch_adr.eq(self.ucoderom.fields.latch_adr),
+            self.latch_data.eq(self.ucoderom.fields.latch_data),
+            self.write_mem.eq(self.ucoderom.fields.write_mem),
             self.insn_fetch.eq(self.ucoderom.fields.insn_fetch),
         ]
 
@@ -161,6 +169,8 @@ class Mapper(Elaboratable):
                 m.d.comb += self.map_adr.eq(12)
             with m.Case(OpcodeType.JAL):
                 m.d.comb += self.map_adr.eq(13)
+            with m.Case(OpcodeType.STORE):
+                m.d.comb += self.map_adr.eq(14)
             with m.Case(OpcodeType.SYSTEM):
                 m.d.comb += self.map_adr.eq(128)
 

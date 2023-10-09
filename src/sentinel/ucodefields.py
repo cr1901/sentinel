@@ -94,3 +94,10 @@ class RegWSel(enum.Enum):
     INSN_RD = 0
     UCODE0 = 2
     UCODE1 = 3
+
+
+class MemSel(enum.Enum):
+    AUTO = 0
+    BYTE = 1
+    HWORD = 2
+    WORD = 3
