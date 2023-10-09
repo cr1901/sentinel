@@ -67,6 +67,7 @@ class BSrc(enum.Enum):
     IMM = 3
     TARGET = 4
     ONE = 5
+    FOUR = 6
 
 
 class ALUMod(enum.Enum):

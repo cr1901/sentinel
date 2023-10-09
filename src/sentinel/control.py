@@ -159,6 +159,8 @@ class Mapper(Elaboratable):
                 m.d.comb += self.map_adr.eq(11)
             with m.Case(OpcodeType.AUIPC):
                 m.d.comb += self.map_adr.eq(12)
+            with m.Case(OpcodeType.JAL):
+                m.d.comb += self.map_adr.eq(13)
             with m.Case(OpcodeType.SYSTEM):
                 m.d.comb += self.map_adr.eq(128)
 

@@ -39,7 +39,7 @@ fields block_ram: {
   // ALU src latch/selection.
   src_op: enum { none = 0; latch_a; latch_b; latch_a_b; }, default none;
   a_src: enum { gp = 0; pc; csr; imm; target; alu_o; zero; }, default gp;
-  b_src: enum { gp = 0; pc; csr; imm; target; one; }, default gp;
+  b_src: enum { gp = 0; pc; csr; imm; target; one; four; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
   alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; cmp_geu; nop; passthru; }, default nop;
@@ -105,6 +105,8 @@ lui_prolog: a_src => zero, b_src => imm, src_op => latch_a_b, pc_action => inc,
 misc_mem_prolog: pc_action => inc, jmp_type => direct, target => fetch;
 auipc_prolog: src_op => latch_a_b, a_src => pc, b_src => imm, jmp_type => direct, \
                   target => auipc;
+jal_prolog: src_op => latch_a_b, a_src => pc, b_src => four, \
+                  jmp_type => direct, target => jal;
 
 imm_ops:
 addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
@@ -212,7 +214,12 @@ sra_prolog:  READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
              a_src => gp, b_src => one, src_op => latch_a_b, alu_op => sra,
                   jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sra_loop;
 
-auipc: alu_op => add, pc_action => inc, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+auipc: alu_op => add, pc_action => inc;
+       WRITE_RD, jmp_type => direct, cond_test => true, target => fetch;
+
+jal: alu_op => add, a_src => pc, b_src => imm, src_op => latch_a_b;
+     WRITE_RD, alu_op => add;
+     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
 fast_epilog: WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregistered, \
                   SKIP_WAIT_IF_ACK;

@@ -217,6 +217,9 @@ def test_top(sim_mod):
         srl x9, x7, x3
         fence  # 0x60
         auipc x10, -1
+        jal jal_dst
+        nop
+jal_dst:
 """)
 
     regs = [
@@ -261,11 +264,14 @@ def test_top(sim_mod):
                  R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R4=0xFFFFE000,
                  R3=16, R2=0x3E4, R1=1,
                  PC=0x68 >> 2),
+        RV32Regs(R10=(2**32 - 4096) + 100, R9=0x0000E000, R8=0x20000000,
+                 R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R4=0xFFFFE000,
+                 R3=16, R2=0x3E4, R1=0x6C,
+                 PC=0x70 >> 2),
     ]
 
     m.mem.init_mem = [int.from_bytes(insns[adr:adr+4], byteorder="little")
                       for adr in range(0, len(insns), 4)]
-    print(list(map(hex, m.mem.init_mem)))
 
     def bus_proc():
         yield from bus_proc_aux(wait_states=chain([1], repeat(0)))

@@ -1,4 +1,4 @@
-from amaranth import Cat, C, Module, Signal, Memory
+from amaranth import Cat, C, Module, Signal, Memory, Mux
 from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 
 from .ucodefields import PcAction, RegSet
@@ -44,7 +44,7 @@ class ProgramCounter(Component):
             with m.Case(PcAction.INC):
                 m.d.sync += self.dat_r.eq(self.dat_r + 1)
             with m.Case(PcAction.LOAD_ALU_O):
-                m.d.sync += self.dat_r.eq(Cat(C(0, 2), self.dat_w))
+                m.d.sync += self.dat_r.eq(self.dat_w)
 
         return m
 
