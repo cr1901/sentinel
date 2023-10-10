@@ -38,6 +38,6 @@ dev = [
 
 [tool.pdm.scripts]
 test = { cmd = "pytest" }
-gen = { cmd = "amaranth generate {args:sentinel.top:Top} verilog -v -" }
+gen = { call = "sentinel.gen:main" }
 ucode = { call = "m5meta:main" }
 bench = { call = "sentinel.bench:main"}

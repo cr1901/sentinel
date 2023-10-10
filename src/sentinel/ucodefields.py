@@ -24,8 +24,6 @@ class OpType(enum.Enum):
     CMP_EQ = 8
     CMP_LTU = 9
     CMP_GEU = 10
-    NOP = 11
-    PASSTHRU = 12
 
 
 class CondTest(enum.Enum):

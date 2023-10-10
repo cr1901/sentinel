@@ -73,7 +73,7 @@ class CompareGreaterThanEqualUnsigned(Unit):
 
 
 AluCtrlSignature = Signature({
-    "op": Out(OpType, reset=OpType.NOP),
+    "op": Out(OpType),
     "mod": Out(ALUMod),
     "lsbs_5_zero": In(1),
     "zero": In(1)

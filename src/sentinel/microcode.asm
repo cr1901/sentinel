@@ -42,7 +42,7 @@ fields block_ram: {
   b_src: enum { gp = 0; pc; imm; one; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
-  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; cmp_geu; nop; passthru; }, default nop;
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; cmp_geu; }, default add;
   // In addition to writing ALU o, write C or D. Valid next cycle.
   // Modify inputs and outputs to ALU.
   alu_mod: enum { none = 0; inv_msb_a_b; inv_lsb_o; twos_comp_b; }, default none;
@@ -83,7 +83,6 @@ fields block_ram: {
 #define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
 #define CMP_NE alu_op => cmp_eq, alu_mod => inv_lsb_o
 #define CMP_LT alu_op => cmp_ltu, alu_mod => inv_msb_a_b
-#define SUB alu_op => add, alu_mod => twos_comp_b
 #define CONDTEST_ALU_O_5_LSBS_NONZERO invert_test => 1, cond_test => cmp_alu_o_5_lsbs_zero
 
 fetch:
