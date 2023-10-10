@@ -52,22 +52,17 @@ class SrcOp(enum.Enum):
 
 class ASrc(enum.Enum):
     GP = 0
-    PC = 1
-    CSR = 2
-    IMM = 3
-    TARGET = 4
-    ALU_O = 5
-    ZERO = 6
+    IMM = 1
+    ALU_O = 2
+    ZERO = 3
+    FOUR = 4
 
 
 class BSrc(enum.Enum):
     GP = 0
     PC = 1
-    CSR = 2
-    IMM = 3
-    TARGET = 4
-    ONE = 5
-    FOUR = 6
+    IMM = 2
+    ONE = 3
 
 
 class ALUMod(enum.Enum):

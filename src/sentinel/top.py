@@ -64,13 +64,12 @@ class Top(Component):
                     m.d.sync += self.a_input.eq(self.datapath.gp.dat_r)
                 with m.Case(ASrc.IMM):
                     m.d.sync += self.a_input.eq(self.decode.imm)
-                with m.Case(ASrc.PC):
-                    m.d.sync += self.a_input.eq(Cat(C(0, 2),
-                                                    self.datapath.pc.dat_r))
                 with m.Case(ASrc.ZERO):
                     m.d.sync += self.a_input.eq(0)
                 with m.Case(ASrc.ALU_O):
                     m.d.sync += self.a_input.eq(self.alu.data.o)
+                with m.Case(ASrc.FOUR):
+                    m.d.sync += self.a_input.eq(4)
 
         with m.If((self.control.src_op == SrcOp.LATCH_B) |
                   (self.control.src_op == SrcOp.LATCH_A_B)):
@@ -79,12 +78,11 @@ class Top(Component):
                     m.d.sync += self.b_input.eq(self.datapath.gp.dat_r)
                 with m.Case(BSrc.IMM):
                     m.d.sync += self.b_input.eq(self.decode.imm)
-                with m.Case(BSrc.TARGET):
-                    m.d.sync += self.b_input.eq(self.decode.dst)
                 with m.Case(BSrc.ONE):
                     m.d.sync += self.b_input.eq(1)
-                with m.Case(BSrc.FOUR):
-                    m.d.sync += self.b_input.eq(4)
+                with m.Case(BSrc.PC):
+                    m.d.sync += self.b_input.eq(Cat(C(0, 2),
+                                                    self.datapath.pc.dat_r))
 
         # Control conns
         m.d.comb += [

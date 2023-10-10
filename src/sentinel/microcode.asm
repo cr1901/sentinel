@@ -38,8 +38,8 @@ fields block_ram: {
 
   // ALU src latch/selection.
   src_op: enum { none = 0; latch_a; latch_b; latch_a_b; }, default none;
-  a_src: enum { gp = 0; pc; csr; imm; target; alu_o; zero; }, default gp;
-  b_src: enum { gp = 0; pc; csr; imm; target; one; four; }, default gp;
+  a_src: enum { gp = 0; imm; alu_o; zero; four; }, default gp;
+  b_src: enum { gp = 0; pc; imm; one; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
   alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; cmp_geu; nop; passthru; }, default nop;
@@ -102,9 +102,9 @@ lui_prolog: a_src => zero, b_src => imm, src_op => latch_a_b, pc_action => inc,
                 jmp_type => direct, target => addi;
 // Only fence. This is a single hart, in-order, multicycle impl, so ignore.
 misc_mem_prolog: pc_action => inc, jmp_type => direct, target => fetch;
-auipc_prolog: src_op => latch_a_b, a_src => pc, b_src => imm, jmp_type => direct, \
+auipc_prolog: src_op => latch_a_b, a_src => imm, b_src => pc, jmp_type => direct, \
                   target => auipc;
-jal_prolog: src_op => latch_a_b, a_src => pc, b_src => four, \
+jal_prolog: src_op => latch_a_b, a_src => four, b_src => pc, \
                   jmp_type => direct, target => jal;
 store_prolog: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, \
                 target => store_ops;
@@ -218,7 +218,7 @@ sra_prolog:  READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
 auipc: alu_op => add, pc_action => inc;
        WRITE_RD, jmp_type => direct, cond_test => true, target => fetch;
 
-jal: alu_op => add, a_src => pc, b_src => imm, src_op => latch_a_b;
+jal: alu_op => add, a_src => imm, b_src => pc, src_op => latch_a_b;
      WRITE_RD, alu_op => add;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
