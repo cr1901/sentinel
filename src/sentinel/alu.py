@@ -1,4 +1,4 @@
-from .ucodefields import OpType, ALUMod
+from .ucodefields import OpType, ALUIMod, ALUOMod
 
 from amaranth import Elaboratable, Signal, Module
 from amaranth.lib.wiring import Component, Signature, In, Out
@@ -67,14 +67,10 @@ class CompareLessThanUnsigned(Unit):
         super().__init__(width, lambda a, b: a < b)
 
 
-class CompareGreaterThanEqualUnsigned(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a >= b)
-
-
 AluCtrlSignature = Signature({
     "op": Out(OpType),
-    "mod": Out(ALUMod),
+    "imod": Out(ALUIMod),
+    "omod": Out(ALUOMod),
     "lsbs_5_zero": In(1),
     "zero": In(1)
 })
@@ -119,7 +115,6 @@ class ALU(Component):
         self.sar = ShiftArithmeticRight(width)
         self.cmp_equal = CompareEqual(width)
         self.cmp_ltu = CompareLessThanUnsigned(width)
-        self.cmp_gteu = CompareGreaterThanEqualUnsigned(width)
 
     def elaborate(self, platform):
         m = Module()
@@ -133,25 +128,24 @@ class ALU(Component):
         m.submodules.sal = self.sar
         m.submodules.cmp_equal = self.cmp_equal
         m.submodules.cmp_ltu = self.cmp_ltu
-        m.submodules.cmp_gteu = self.cmp_gteu
 
         mod_a = Signal.like(self.data.a)
         mod_b = Signal.like(self.data.b)
 
-        with m.Switch(self.ctrl.mod):
-            with m.Case(ALUMod.NONE):
+        with m.Switch(self.ctrl.imod):
+            with m.Case(ALUIMod.NONE):
                 m.d.comb += [
                     mod_a.eq(self.data.a),
                     mod_b.eq(self.data.b)
                 ]
-            with m.Case(ALUMod.INV_MSB_A_B):
+            with m.Case(ALUIMod.INV_MSB_A_B):
                 m.d.comb += [
                     mod_a.eq(self.data.a),
                     mod_b.eq(self.data.b),
                     mod_a[-1].eq(~self.data.a[-1]),
                     mod_b[-1].eq(~self.data.b[-1]),
                 ]
-            with m.Case(ALUMod.TWOS_COMP_B):
+            with m.Case(ALUIMod.TWOS_COMP_B):
                 m.d.comb += [
                     mod_a.eq(self.data.a),
                     mod_b.eq(-self.data.b)
@@ -159,7 +153,7 @@ class ALU(Component):
 
         for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
                        self.sll, self.srl, self.sar, self.cmp_equal,
-                       self.cmp_ltu, self.cmp_gteu]:
+                       self.cmp_ltu]:
             m.d.comb += [
                 submod.a.eq(mod_a),
                 submod.b.eq(mod_b),
@@ -186,11 +180,9 @@ class ALU(Component):
                 m.d.comb += self.o_mux.eq(self.cmp_equal.o)
             with m.Case(OpType.CMP_LTU):
                 m.d.comb += self.o_mux.eq(self.cmp_ltu.o)
-            with m.Case(OpType.CMP_GEU):
-                m.d.comb += self.o_mux.eq(self.cmp_gteu.o)
 
         m.d.sync += self.data.o.eq(self.o_mux)
-        with m.If(self.ctrl.mod == ALUMod.INV_LSB_O):
+        with m.If(self.ctrl.omod == ALUOMod.INV_LSB_O):
             m.d.sync += self.data.o[0].eq(~self.o_mux[0])
 
         m.d.comb += self.ctrl.lsbs_5_zero.eq(self.data.o[0:5] == 0)

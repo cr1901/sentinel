@@ -23,7 +23,6 @@ class OpType(enum.Enum):
     SRA = 7
     CMP_EQ = 8
     CMP_LTU = 9
-    CMP_GEU = 10
 
 
 class CondTest(enum.Enum):
@@ -63,11 +62,15 @@ class BSrc(enum.Enum):
     ONE = 3
 
 
-class ALUMod(enum.Enum):
+class ALUIMod(enum.Enum):
     NONE = 0
     INV_MSB_A_B = 1
-    INV_LSB_O = 2
-    TWOS_COMP_B = 3
+    TWOS_COMP_B = 2
+
+
+class ALUOMod(enum.Enum):
+    NONE = 0
+    INV_LSB_O = 1
 
 
 class RegRSel(enum.Enum):
