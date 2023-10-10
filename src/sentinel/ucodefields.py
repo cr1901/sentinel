@@ -77,23 +77,10 @@ class ALUMod(enum.Enum):
     TWOS_COMP_B = 3
 
 
-class RegSet(enum.Enum):
-    GP = 0
-    SCRATCH = 1
-
-
 class RegRSel(enum.Enum):
     INSN_RS1 = 0
     INSN_RS2 = 1
-    UCODE0 = 2
-    UCODE1 = 3
-    INSN_RS1_UNREGISTERED = 4
-
-
-class RegWSel(enum.Enum):
-    INSN_RD = 0
-    UCODE0 = 2
-    UCODE1 = 3
+    INSN_RS1_UNREGISTERED = 2
 
 
 class MemSel(enum.Enum):

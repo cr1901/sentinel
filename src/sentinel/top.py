@@ -6,7 +6,7 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
-from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, RegWSel, MemSel
+from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, MemSel
 
 
 class Top(Component):
@@ -110,7 +110,6 @@ class Top(Component):
         m.d.comb += [
             self.datapath.gp.ctrl.reg_read.eq(self.control.gp.reg_read),
             self.datapath.gp.ctrl.reg_write.eq(self.control.gp.reg_write),
-            self.datapath.gp.ctrl.reg_set.eq(self.control.gp.reg_set),
             self.datapath.pc.ctrl.action.eq(self.control.pc.action)
         ]
 
@@ -165,24 +164,10 @@ class Top(Component):
                 m.d.comb += self.reg_r_adr.eq(self.decode.src_a)
             with m.Case(RegRSel.INSN_RS2):
                 m.d.comb += self.reg_r_adr.eq(self.decode.src_b)
-            with m.Case(RegRSel.UCODE0):
-                m.d.comb += self.reg_r_adr.eq(
-                    Cat(self.control.target[0:4], 0))
-            with m.Case(RegRSel.UCODE1):
-                m.d.comb += self.reg_r_adr.eq(
-                    Cat(self.control.target[0:4], 1))
             with m.Case(RegRSel.INSN_RS1_UNREGISTERED):
                 m.d.comb += self.reg_r_adr.eq(self.decode.rs1)
 
-        with m.Switch(self.control.reg_w_sel):
-            with m.Case(RegWSel.INSN_RD):
-                m.d.comb += self.reg_w_adr.eq(self.decode.dst)
-            with m.Case(RegWSel.UCODE0):
-                m.d.comb += self.reg_w_adr.eq(
-                    Cat(self.control.target[4:8], 0))
-            with m.Case(RegWSel.UCODE1):
-                m.d.comb += self.reg_w_adr.eq(
-                    Cat(self.control.target[4:8], 1))
+        m.d.comb += self.reg_w_adr.eq(self.decode.dst)
 
         return m
 

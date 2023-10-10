@@ -48,19 +48,12 @@ fields block_ram: {
   alu_mod: enum { none = 0; inv_msb_a_b; inv_lsb_o; twos_comp_b; }, default none;
 
   // Either read or write a register in the register file. _Which_ register
-  // to read/write comes either from the decoded insn or from microcode inputs.
+  // to read/write comes from the decoded insn.
   // Read contents will be on the data bus the next cycle. Written contents
   // will be valid on the next cycle. Reads are transparent.
   reg_read: bool, default 0;
   reg_write: bool, default 0;
-  // GP regs and scratch registers are multiplexed. Use this bit to choose
-  // which set to read/write.
-  reg_set: enum { gp = 0; scratch = 1; }, default gp;
-  // Insn chooses the register to read or write, or ucode does; this field
-  // also provides the top bit. Target 0-3 provides the others.
-  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; ucode0 = 2; ucode1 = 3; insn_rs1_unregistered }, default insn_rs1;
-  // Likewise, target 4-7 provides the other bits.
-  reg_w_sel: enum { insn_rd = 0; ucode0 = 2; ucode1 = 3}, default insn_rd;
+  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; insn_rs1_unregistered }, default insn_rs1;
 
   // Start or continue a memory request. For convenience, an ack will
   // automatically stop a memory request for the cycle after ack, even if
@@ -83,10 +76,10 @@ fields block_ram: {
 #define LATCH_0_TO_TMP(trg) alu_op => nop, alu_tmp => trg
 #define NOT_IMPLEMENTED jmp_type => direct, target => panic
 #define NOP target => 0
-#define READ_RS1 reg_set => 0, reg_read => 1, reg_r_sel => insn_rs1
-#define READ_RS1_EAGER reg_set => 0, reg_read => 1, reg_r_sel => insn_rs1_unregistered
-#define READ_RS2 reg_set => 0, reg_read => 1, reg_r_sel => insn_rs2
-#define WRITE_RD reg_set => 0, reg_write => 1, reg_w_sel => insn_rd
+#define READ_RS1 reg_read => 1, reg_r_sel => insn_rs1
+#define READ_RS1_EAGER reg_read => 1, reg_r_sel => insn_rs1_unregistered
+#define READ_RS2 reg_read => 1, reg_r_sel => insn_rs2
+#define WRITE_RD reg_write => 1
 #define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
 #define CMP_NE alu_op => cmp_eq, alu_mod => inv_lsb_o
 #define CMP_LT alu_op => cmp_ltu, alu_mod => inv_msb_a_b
