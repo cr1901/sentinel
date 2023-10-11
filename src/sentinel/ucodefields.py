@@ -76,6 +76,7 @@ class ALUIMod(enum.Enum):
 class ALUOMod(enum.Enum):
     NONE = 0
     INV_LSB_O = 1
+    CLEAR_LSB_O = 2
 
 
 class RegRSel(enum.Enum):

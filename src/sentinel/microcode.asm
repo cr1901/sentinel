@@ -47,7 +47,7 @@ fields block_ram: {
   // In addition to writing ALU o, write C or D. Valid next cycle.
   // Modify inputs and outputs to ALU.
   alu_i_mod: enum { none = 0; inv_msb_a_b; twos_comp_b; }, default none;
-  alu_o_mod: enum { none = 0; inv_lsb_o; }, default none;
+  alu_o_mod: enum { none = 0; inv_lsb_o; clear_lsb_o }, default none;
 
   // Either read or write a register in the register file. _Which_ register
   // to read/write comes from the decoded insn.
@@ -113,6 +113,8 @@ store_prolog: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_t
                 target => store_ops;
 load_prolog: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, \
                 target => load_ops;
+jalr_prolog: src_op => latch_a_b, a_src => four, b_src => pc, \
+                  jmp_type => direct, target => jalr;
 
 imm_ops:
 addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
@@ -226,6 +228,10 @@ auipc: alu_op => add, pc_action => inc;
 jal: alu_op => add, a_src => imm, b_src => pc, src_op => latch_a_b;
      WRITE_RD, alu_op => add;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
+jalr: alu_op => add, reg_read => 1, reg_r_sel => insn_rs_1;
+      WRITE_RD, a_src => imm, b_src => gp, src_op => latch_a_b;
+      alu_op => add, alu_o_mod => clear_lsb_o;
+      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
 store_ops:
 sb_trampoline: a_src => zero, b_src => gp, src_op => latch_a_b, \
@@ -266,8 +272,9 @@ fast_epilog: WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregist
 
 // Interrupt handler.
 origin 224;
+NOT_IMPLEMENTED;
 // Send PC through ALU
-save_pc: a_src => pc, b_src => target, jmp_type => nop, target => 0;
+// save_pc: a_src => pc, b_src => target, jmp_type => nop, target => 0;
 
 // Misc?
 origin 248;

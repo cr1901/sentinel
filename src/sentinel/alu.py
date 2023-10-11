@@ -221,7 +221,10 @@ class ALU(Component):
         m.d.sync += self.data.o.eq(self.o_mux)
         with m.If(self.ctrl.omod == ALUOMod.INV_LSB_O):
             m.d.sync += self.data.o[0].eq(~self.o_mux[0])
+        with m.Elif(self.ctrl.omod == ALUOMod.CLEAR_LSB_O):
+            m.d.sync += self.data.o[0].eq(0)
 
+        # TODO: LSBS_2_ZERO for JALR/JAL misaligned exceptions?
         m.d.comb += self.ctrl.lsbs_5_zero.eq(self.data.o[0:5] == 0)
         m.d.comb += self.ctrl.zero.eq(self.data.o == 0)
 
