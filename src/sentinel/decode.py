@@ -218,6 +218,7 @@ class Decode(Component):
                         m.d.comb += self.probably_illegal.eq(1)
                 with m.Case(OpcodeType.LOAD):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
+                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
 
                     with m.If((self.funct3 == 3) | (self.funct3 == 6) |
                               (self.funct3 == 7)):

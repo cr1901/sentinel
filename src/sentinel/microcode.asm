@@ -39,10 +39,11 @@ fields block_ram: {
   // ALU src latch/selection.
   src_op: enum { none = 0; latch_a; latch_b; latch_a_b; }, default none;
   a_src: enum { gp = 0; imm; alu_o; zero; four; }, default gp;
-  b_src: enum { gp = 0; pc; imm; one; }, default gp;
+  b_src: enum { gp = 0; pc; imm; one; dat_r; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
-  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; }, default add;
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; \
+                 sextb; sexthw; zextb; zexthw; }, default add;
   // In addition to writing ALU o, write C or D. Valid next cycle.
   // Modify inputs and outputs to ALU.
   alu_i_mod: enum { none = 0; inv_msb_a_b; twos_comp_b; }, default none;
@@ -110,6 +111,8 @@ jal_prolog: src_op => latch_a_b, a_src => four, b_src => pc, \
                   jmp_type => direct, target => jal;
 store_prolog: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, \
                 target => store_ops;
+load_prolog: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, \
+                target => load_ops;
 
 imm_ops:
 addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
@@ -234,6 +237,28 @@ sb: alu_op => add, latch_adr => 1;
 // between data access and insn fetch)
 sb_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => byte, write_mem => 1, jmp_type => direct_zero, target => sb_wait;
+
+load_ops:
+lb_trampoline: alu_op => add, jmp_type => direct, target => lb;
+lh_trampoline: NOT_IMPLEMENTED;
+lw_trampoline: NOT_IMPLEMENTED;
+               NOT_IMPLEMENTED;
+lbu_trampoline: alu_op => add, jmp_type => direct, target => lbu;
+lhu_trampoline: NOT_IMPLEMENTED;
+
+
+lb: latch_adr => 1;
+lb_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => byte, jmp_type => direct, \
+              target => lb_wait;
+          alu_op => sextb, JUMP_TO_OP_END(fast_epilog);
+
+lbu: latch_adr => 1;
+lbu_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => byte, jmp_type => direct, \
+              target => lbu_wait;
+           alu_op => zextb, JUMP_TO_OP_END(fast_epilog);
+
 
 
 fast_epilog: WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregistered, \

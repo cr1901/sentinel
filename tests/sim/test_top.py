@@ -228,6 +228,8 @@ def test_top(sim_mod):
         nop
 jal_dst:
         sb x1, x2, 512
+        lb x11, x1, 512
+        lbu x11, x1, 512
 """)
 
     regs = [
@@ -280,6 +282,12 @@ jal_dst:
                  R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R4=0xFFFFE000,
                  R3=16, R2=0x3E4, R1=0x6C,
                  PC=0x74 >> 2),
+        RV32Regs(R11=0xFFFFFFE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0x78 >> 2),
+        RV32Regs(R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0x7C >> 2),
     ]
 
     ram = [
@@ -288,7 +296,7 @@ jal_dst:
         None, None, None, None, None, None, None, None,  # 0x40
         None, None, None, None, None, None, None, None,  # 0x60
         None, None, None,  # 0x70
-        {0x26C: 0xe4},
+        {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4},
     ]
 
     m.mem.init_mem = [int.from_bytes(insns[adr:adr+4], byteorder="little")

@@ -83,6 +83,8 @@ class Top(Component):
                 with m.Case(BSrc.PC):
                     m.d.sync += self.b_input.eq(Cat(C(0, 2),
                                                     self.datapath.pc.dat_r))
+                with m.Case(BSrc.DAT_R):
+                    m.d.sync += self.b_input.eq(self.bus.dat_r)
 
         # Control conns
         m.d.comb += [
