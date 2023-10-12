@@ -213,6 +213,7 @@ class Decode(Component):
                         m.d.comb += self.probably_illegal.eq(1)
                 with m.Case(OpcodeType.BRANCH):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.B)
+                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
 
                     with m.If((self.funct3 == 2) | (self.funct3 == 3)):
                         m.d.comb += self.probably_illegal.eq(1)

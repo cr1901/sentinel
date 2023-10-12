@@ -240,6 +240,24 @@ jal_dst:
         jalr x12, x3, jalr_dst - 16
         nop  # 0x80
 jalr_dst:
+        beq x0, x13, beq_dst
+        nop
+beq_dst:
+        bne x0, x13, bne_dst
+        blt x10, x11, blt_dst  # 0x90
+bne_dst:
+        nop
+blt_dst:
+        bltu x10, x11, bltu_dst
+        bge x10, x11, bge_dst
+bltu_dst:
+        bgeu x10, x11, bgeu_dst1  # 0xA0
+bge_dst:
+        nop
+bgeu_dst1:
+        bge x0, x13, bgeu_dst2
+        nop
+bgeu_dst2:
 """)
 
     regs = [
@@ -303,6 +321,27 @@ jalr_dst:
         RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
                  R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
                  R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0x84 >> 2),
+        RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0x8C >> 2),
+        RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0x90 >> 2),
+        RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0x98 >> 2),
+        RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0x9C >> 2),
+        RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0xA0 >> 2),
+        RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0xA8 >> 2),
+        RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0xB0 >> 2),
     ]
 
     ram = [
@@ -311,7 +350,10 @@ jalr_dst:
         None, None, None, None, None, None, None, None,  # 0x40
         None, None, None, None, None, None, None, None,  # 0x60
         None, None, None,  # 0x70
-        {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4}  # 0x84
+        {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4},  # 0x84
+        {0x26C: 0xe4}, {0x26C: 0xe4},  # 0x90
+        {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4},  # 0xA0
+        {0x26C: 0xe4}, {0x26C: 0xe4}  # 0xB0
     ]
 
     m.mem.init_mem = [int.from_bytes(insns[adr:adr+4], byteorder="little")
