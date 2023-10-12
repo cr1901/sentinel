@@ -417,11 +417,12 @@ def test_primes(sim_mod, ucode_panic):
     # This is a prime-counting program. It is provided with/disassembled from
     # nextpnr-ice40's examples (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
     # but I don't know about its origins otherwise.
-    # I have modified a hardcoded delay from 360000 to 2 for simulation speed.
+    # I have modified a hardcoded delay from 360000 to 2, as well as stopping
+    # after 17 for simulation speed.
     insns = assemble("""
         li      s0,2
         lui     s1,0x2000  # IO port at 0x2000000
-        li      s3,256
+        li      s3,18  #  Originally 256
 outer:
         addi    s0,s0,1
         blt     s0,s3,noinit
@@ -456,15 +457,20 @@ countdown:
 """)
 
     def io_proc():
-        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53,
-                  59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113,
-                  127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181,
-                  191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251]
+        primes = [3, 5, 7, 11, 13, 17, 2]
+                  # 19, 23, 29, 31, 37, 41, 43, 47, 53,
+                  # 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109,
+                  # 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179,
+                  # 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241,
+                  # 251, 2]
 
         for p in primes:
-            for _ in range(1024):
-                if (yield m.cpu.bus.adr == 0x2000000):
-                    assert (yield m.cpu.dat_w) == p
+            for _ in range(65536):
+                if ((yield m.cpu.bus.adr == 0x2000000 >> 2) and
+                        (yield m.cpu.bus.cyc) and
+                        (yield m.cpu.bus.stb) and
+                        (yield m.cpu.bus.ack)):
+                    assert (yield m.cpu.bus.dat_w) == p
                     break
                 else:
                     yield
