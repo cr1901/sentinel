@@ -120,11 +120,8 @@ class CPUWithMem(Elaboratable):
         return m
 
 
-# This test is a handwritten exercise of going through all RV32I insns. If
-# this test fails, than surely all other, more thorough tests will fail.
-@pytest.mark.module(CPUWithMem())
-@pytest.mark.clks((1.0 / 12e6,))
-def test_top(sim_mod):
+@pytest.fixture
+def ucode_panic(sim_mod):
     sim, m = sim_mod
 
     def ucode_panic():
@@ -148,6 +145,16 @@ def test_top(sim_mod):
                                          "infinite loop")
             else:
                 count = 0
+
+    return ucode_panic
+
+
+# This test is a handwritten exercise of going through all RV32I insns. If
+# this test fails, than surely all other, more thorough tests will fail.
+@pytest.mark.module(CPUWithMem())
+@pytest.mark.clks((1.0 / 12e6,))
+def test_seq(sim_mod, ucode_panic):
+    sim, m = sim_mod
 
     def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
         yield Passive()
@@ -227,11 +234,11 @@ def test_top(sim_mod):
         jal jal_dst
         nop
 jal_dst:
-        sb x1, x2, 512
+        sb x1, x2, 512  # 0x70
         lb x11, x1, 512
         lbu x11, x1, 512
         jalr x12, x3, jalr_dst - 16
-        nop
+        nop  # 0x80
 jalr_dst:
 """)
 
@@ -248,7 +255,8 @@ jalr_dst:
         RV32Regs(R4=0, R3=1, R2=(2**32 - 2047) + 8, R1=8, PC=0x24 >> 2),
         RV32Regs(R2=(2**32 - 2047) + 8, R1=8, PC=0x28 >> 2),
         RV32Regs(R5=2**32 - 1, R2=(2**32 - 2047) + 8, R1=8, PC=0x2C >> 2),
-        RV32Regs(R5=2**32 - 1, R2=(2**32 - 2047) + 8, R1=0xfffffff7, PC=0x30 >> 2),
+        RV32Regs(R5=2**32 - 1, R2=(2**32 - 2047) + 8, R1=0xfffffff7,
+                 PC=0x30 >> 2),
         RV32Regs(R6=2**32 - 1, R5=2**32 - 1, R2=(2**32 - 2047) + 8,
                  R1=0xfffffff7, PC=0x34 >> 2),
         RV32Regs(R6=2**32 - 1, R5=2**32 - 1, R2=(2**32 - 2047) + 8,
@@ -258,7 +266,8 @@ jalr_dst:
         RV32Regs(R6=2**32 - 1, R5=2**32 - 1, R1=1, PC=0x40 >> 2),
         RV32Regs(R6=2, R5=2**32 - 1, R1=1, PC=0x44 >> 2),
         RV32Regs(R6=0x80000000, R5=2**32 - 1, R1=1, PC=0x48 >> 2),
-        RV32Regs(R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R1=1, PC=0x4C >> 2),
+        RV32Regs(R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R1=1,
+                 PC=0x4C >> 2),
         RV32Regs(R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
                  R1=1, PC=0x50 >> 2),
         RV32Regs(R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
@@ -302,7 +311,7 @@ jalr_dst:
         None, None, None, None, None, None, None, None,  # 0x40
         None, None, None, None, None, None, None, None,  # 0x60
         None, None, None,  # 0x70
-        {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4}  # 0x80
+        {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4}  # 0x84
     ]
 
     m.mem.init_mem = [int.from_bytes(insns[adr:adr+4], byteorder="little")
@@ -315,3 +324,73 @@ jalr_dst:
         yield from cpu_proc_aux(regs, ram)
 
     sim.run(sync_processes=[bus_proc, cpu_proc, ucode_panic])
+
+
+@pytest.mark.module(CPUWithMem())
+@pytest.mark.clks((1.0 / 12e6,))
+def test_primes(sim_mod, ucode_panic):
+    sim, m = sim_mod
+
+    # This is a prime-counting program. It is provided with/disassembled from
+    # nextpnr-ice40's examples (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
+    # but I don't know about its origins otherwise.
+    # I have modified a hardcoded delay from 360000 to 2 for simulation speed.
+    insns = assemble("""
+        li      s0,2
+        lui     s1,0x2000  # IO port at 0x2000000
+        li      s3,256
+outer:
+        addi    s0,s0,1
+        blt     s0,s3,noinit
+        li      s0,2
+noinit:
+        li      s2,2
+next_int:
+        bge     s2,s0,write_io
+        mv      a0,s0
+        mv      a1,s2
+        call    prime?
+        beqz    a0,not_prime
+        addi    s2,s2,1
+        j       next_int
+write_io:
+        sw      s0,0(s1)
+        call    delay
+not_prime:
+        j       outer
+prime?:
+        li      t0,1
+submore:
+        sub     a0,a0,a1
+        bge     a0,t0,submore
+        ret
+delay:
+        li      t0,2  # Originally 360000
+countdown:
+        addi    t0,t0,-1
+        bnez    t0,countdown
+        ret
+""")
+
+    def io_proc():
+        primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53,
+                  59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113,
+                  127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181,
+                  191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251]
+
+        for p in primes:
+            for _ in range(1024):
+                if (yield m.cpu.bus.adr == 0x2000000):
+                    assert (yield m.cpu.dat_w) == p
+                    break
+                else:
+                    yield
+            else:
+                raise AssertionError("CPU (but not microcode) probably stuck "
+                                     "in infinite loop")
+            yield
+
+    m.mem.init_mem = [int.from_bytes(insns[adr:adr+4], byteorder="little")
+                      for adr in range(0, len(insns), 4)]
+
+    sim.run(sync_processes=[io_proc, ucode_panic])
