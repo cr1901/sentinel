@@ -6,14 +6,14 @@ groups = ["default", "dev"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:eff8945cb8d7017ca525fb91bec883a9c95506e952763e7c990dd4444cdc2abd"
+content_hash = "sha256:9a0c3bdbb535a2b54cec29badfbd920f2a908c6a96ab55f6b02d94e00d456aed"
 
 [[package]]
 name = "amaranth"
-version = "0.4.dev214+gc7da6c1"
+version = "0.4.dev218+g392ead8"
 requires_python = "~=3.8"
 git = "https://github.com/amaranth-lang/amaranth"
-revision = "c7da6c1292ea60a612ee9fd0f75d603485939580"
+revision = "392ead8d00c9a130b656b3af45c21fa410268301"
 summary = "Amaranth hardware definition language"
 dependencies = [
     "Jinja2~=3.0",
@@ -21,11 +21,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "amaranth-boards"
+version = "0.1.dev238+g91ffa38"
+requires_python = "~=3.8"
+git = "https://github.com/amaranth-lang/amaranth-boards"
+revision = "91ffa38e788a691464a6873d44537eece72ef76e"
+summary = "Board and connector definitions for Amaranth HDL"
+dependencies = [
+    "amaranth<0.5,>=0.3",
+]
+
+[[package]]
 name = "amaranth-soc"
-version = "0.1.dev74+g9ffaf94"
+version = "0.1.dev75+g2d3d176"
 requires_python = "~=3.8"
 git = "https://github.com/amaranth-lang/amaranth-soc"
-revision = "9ffaf949d853467d32e3e19fc0d472de65e45427"
+revision = "2d3d1762d682c8ca5cb60e4a6f0ef9b764f423f2"
 summary = "System on Chip toolkit for Amaranth HDL"
 dependencies = [
     "amaranth @ git+https://github.com/amaranth-lang/amaranth",
