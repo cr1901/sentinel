@@ -45,6 +45,8 @@ class Top(Component):
         m.submodules.datapath = self.datapath
         m.submodules.decode = self.decode
 
+        data_adr = Signal.like(self.alu.data.o)
+
         # ALU conns
         a_mux_o = Signal(32)
         b_mux_o = Signal(32)
@@ -84,7 +86,23 @@ class Top(Component):
                     m.d.sync += self.b_input.eq(Cat(C(0, 2),
                                                     self.datapath.pc.dat_r))
                 with m.Case(BSrc.DAT_R):
-                    m.d.sync += self.b_input.eq(self.bus.dat_r)
+                    with m.Switch(self.control.mem_sel):
+                        with m.Case(MemSel.BYTE):
+                            with m.If(data_adr[0:2] == 0):
+                                m.d.sync += self.b_input.eq(self.bus.dat_r[0:8])  # noqa: E501
+                            with m.Elif(data_adr[0:2] == 1):
+                                m.d.sync += self.b_input.eq(self.bus.dat_r[8:16])  # noqa: E501
+                            with m.Elif(data_adr[0:2] == 2):
+                                m.d.sync += self.b_input.eq(self.bus.dat_r[16:24])  # noqa: E501
+                            with m.Else():
+                                m.d.sync += self.b_input.eq(self.bus.dat_r[24:])  # noqa: E501
+                        with m.Case(MemSel.HWORD):
+                            with m.If(data_adr[1] == 0):
+                                m.d.sync += self.b_input.eq(self.bus.dat_r[0:16])  # noqa: E501
+                            with m.Else():
+                                m.d.sync += self.b_input.eq(self.bus.dat_r[16:])  # noqa: E501
+                        with m.Case(MemSel.WORD):
+                            m.d.sync += self.b_input.eq(self.bus.dat_r)
 
         # Control conns
         m.d.comb += [
@@ -118,7 +136,24 @@ class Top(Component):
 
         write_data = Signal.like(self.bus.dat_w)
         with m.If(self.control.latch_data):
-            m.d.sync += write_data.eq(self.alu.data.o)
+            # TODO: Misaligned accesses
+            with m.Switch(self.control.mem_sel):
+                with m.Case(MemSel.BYTE):
+                    with m.If(data_adr[0:2] == 0):
+                        m.d.sync += write_data[0:8].eq(self.alu.data.o[0:8])
+                    with m.Elif(data_adr[0:2] == 1):
+                        m.d.sync += write_data[8:16].eq(self.alu.data.o[0:8])
+                    with m.Elif(data_adr[0:2] == 2):
+                        m.d.sync += write_data[16:24].eq(self.alu.data.o[0:8])
+                    with m.Else():
+                        m.d.sync += write_data[24:].eq(self.alu.data.o[0:8])
+                with m.Case(MemSel.HWORD):
+                    with m.If(data_adr[1] == 0):
+                        m.d.sync += write_data[0:16].eq(self.alu.data.o[0:16])
+                    with m.Else():
+                        m.d.sync += write_data[16:].eq(self.alu.data.o[0:16])
+                with m.Case(MemSel.WORD):
+                    m.d.sync += write_data.eq(self.alu.data.o)
 
         m.d.comb += [
             self.bus.we.eq(self.control.write_mem),
@@ -130,7 +165,6 @@ class Top(Component):
             self.datapath.pc.dat_w.eq(self.alu.data.o[2:]),
         ]
 
-        data_adr = Signal.like(self.bus.adr)
         with m.If(self.control.latch_adr):
             m.d.sync += data_adr.eq(self.alu.data.o)
 
@@ -142,13 +176,24 @@ class Top(Component):
                 m.d.comb += [self.bus.adr.eq(self.datapath.pc.dat_r),
                              self.bus.sel.eq(0xf)]
             with m.Else():
-                m.d.comb += self.bus.adr.eq(data_adr)
+                m.d.comb += self.bus.adr.eq(data_adr[2:])
 
+                # TODO: Misaligned accesses
                 with m.Switch(self.control.mem_sel):
                     with m.Case(MemSel.BYTE):
-                        m.d.comb += self.bus.sel.eq(1)
+                        with m.If(data_adr[0:2] == 0):
+                            m.d.comb += self.bus.sel.eq(1)
+                        with m.Elif(data_adr[0:2] == 1):
+                            m.d.comb += self.bus.sel.eq(2)
+                        with m.Elif(data_adr[0:2] == 2):
+                            m.d.comb += self.bus.sel.eq(4)
+                        with m.Else():
+                            m.d.comb += self.bus.sel.eq(8)
                     with m.Case(MemSel.HWORD):
-                        m.d.comb += self.bus.sel.eq(3)
+                        with m.If(data_adr[1] == 0):
+                            m.d.comb += self.bus.sel.eq(3)
+                        with m.Else():
+                            m.d.comb += self.bus.sel.eq(0xc)
                     with m.Case(MemSel.WORD):
                         m.d.comb += self.bus.sel.eq(0xf)
 

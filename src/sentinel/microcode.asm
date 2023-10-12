@@ -239,22 +239,40 @@ jalr: alu_op => add, reg_read => 1, reg_r_sel => insn_rs_1;
 store_ops:
 sb_trampoline: a_src => zero, b_src => gp, src_op => latch_a_b, \
                    alu_op => add, jmp_type => direct, target => sb;
+sh_trampoline: a_src => zero, b_src => gp, src_op => latch_a_b, \
+                   alu_op => add, jmp_type => direct, target => sh;
+sw_trampoline: a_src => zero, b_src => gp, src_op => latch_a_b, \
+                   alu_op => add, jmp_type => direct, target => sw;
 
 sb: alu_op => add, latch_adr => 1;
-    latch_data => 1;
+    mem_sel => byte, latch_data => 1;
 // For stores/loads, we use a wishbone block cycle (don't deassert cyc in
 // between data access and insn fetch)
 sb_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => byte, write_mem => 1, jmp_type => direct_zero, target => sb_wait;
 
+sh: alu_op => add, latch_adr => 1;
+    mem_sel => hword, latch_data => 1;
+// For stores/loads, we use a wishbone block cycle (don't deassert cyc in
+// between data access and insn fetch)
+sh_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
+              mem_sel => hword, write_mem => 1, jmp_type => direct_zero, target => sh_wait;
+
+sw: alu_op => add, latch_adr => 1;
+    mem_sel => word, latch_data => 1;
+// For stores/loads, we use a wishbone block cycle (don't deassert cyc in
+// between data access and insn fetch)
+sw_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
+              mem_sel => word, write_mem => 1, jmp_type => direct_zero, target => sw_wait;
+
+
 load_ops:
 lb_trampoline: alu_op => add, jmp_type => direct, target => lb;
-lh_trampoline: NOT_IMPLEMENTED;
-lw_trampoline: NOT_IMPLEMENTED;
+lh_trampoline: alu_op => add, jmp_type => direct, target => lh;
+lw_trampoline: alu_op => add, jmp_type => direct, target => lw;
                NOT_IMPLEMENTED;
 lbu_trampoline: alu_op => add, jmp_type => direct, target => lbu;
-lhu_trampoline: NOT_IMPLEMENTED;
-
+lhu_trampoline: alu_op => add, jmp_type => direct, target => lhu;
 
 lb: latch_adr => 1;
 lb_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
@@ -262,11 +280,29 @@ lb_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
               target => lb_wait;
           alu_op => sextb, JUMP_TO_OP_END(fast_epilog);
 
+lh: latch_adr => 1;
+lh_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
+              target => lh_wait;
+          alu_op => sextb, JUMP_TO_OP_END(fast_epilog);
+
+lw: latch_adr => 1;
+lw_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => word, jmp_type => direct, \
+              target => lw_wait;
+          alu_op => add, JUMP_TO_OP_END(fast_epilog);
+
 lbu: latch_adr => 1;
 lbu_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => byte, jmp_type => direct, \
               target => lbu_wait;
            alu_op => zextb, JUMP_TO_OP_END(fast_epilog);
+
+lhu: latch_adr => 1;
+lhu_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
+              target => lhu_wait;
+           alu_op => zexthw, JUMP_TO_OP_END(fast_epilog);
 
 branch_ops:
 beq_trampoline: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => cmp_eq, \

@@ -234,9 +234,9 @@ def test_seq(sim_mod, ucode_panic):
         jal jal_dst
         nop
 jal_dst:
-        sb x1, x2, 512  # 0x70
-        lb x11, x1, 512
-        lbu x11, x1, 512
+        sb x1, x2, 513  # 0x70
+        lb x11, x1, 513
+        lbu x11, x1, 513
         jalr x12, x3, jalr_dst - 16
         nop  # 0x80
 jalr_dst:
@@ -258,6 +258,12 @@ bgeu_dst1:
         bge x0, x13, bgeu_dst2
         nop
 bgeu_dst2:
+        sh x1, x2, 514  # 0xB0
+        sw x1, x4, 516
+        lh x13, x1, 518
+        lhu x13, x1, 518
+        sb x1, x0, 512  # 0xC0
+        lw x14, x1, 512
 """)
 
     regs = [
@@ -342,6 +348,28 @@ bgeu_dst2:
         RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
                  R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
                  R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0xB0 >> 2),
+        RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0xB4 >> 2),
+        RV32Regs(R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100, R9=0x0000E000,
+                 R8=0x20000000, R7=0xE0000000, R6=0x80000000, R5=2**32 - 1,
+                 R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C, PC=0xB8 >> 2),
+        RV32Regs(R13=0xFFFFFFFF, R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100,
+                 R9=0x0000E000, R8=0x20000000, R7=0xE0000000, R6=0x80000000,
+                 R5=2**32 - 1, R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C,
+                 PC=0xBC >> 2),
+        RV32Regs(R13=0x0000FFFF, R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100,
+                 R9=0x0000E000, R8=0x20000000, R7=0xE0000000, R6=0x80000000,
+                 R5=2**32 - 1, R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C,
+                 PC=0xC0 >> 2),
+        RV32Regs(R13=0x0000FFFF, R12=0x80, R11=0xE4, R10=(2**32 - 4096) + 100,
+                 R9=0x0000E000, R8=0x20000000, R7=0xE0000000, R6=0x80000000,
+                 R5=2**32 - 1, R4=0xFFFFE000, R3=16, R2=0x3E4, R1=0x6C,
+                 PC=0xC4 >> 2),
+        RV32Regs(R14=0x03e4e400, R13=0x0000FFFF, R12=0x80, R11=0xE4,
+                 R10=(2**32 - 4096) + 100, R9=0x0000E000, R8=0x20000000,
+                 R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R4=0xFFFFE000,
+                 R3=16, R2=0x3E4, R1=0x6C, PC=0xC8 >> 2),
     ]
 
     ram = [
@@ -350,10 +378,23 @@ bgeu_dst2:
         None, None, None, None, None, None, None, None,  # 0x40
         None, None, None, None, None, None, None, None,  # 0x60
         None, None, None,  # 0x70
-        {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4},  # 0x84
-        {0x26C: 0xe4}, {0x26C: 0xe4},  # 0x90
-        {0x26C: 0xe4}, {0x26C: 0xe4}, {0x26C: 0xe4},  # 0xA0
-        {0x26C: 0xe4}, {0x26C: 0xe4}  # 0xB0
+        {0x26C >> 2: 0xe4 << 8}, {0x26C >> 2: 0xe4 << 8},
+        {0x26C >> 2: 0xe4 << 8}, {0x26C >> 2: 0xe4 << 8},  # 0x84
+
+        {0x26C >> 2: 0xe4 << 8}, {0x26C >> 2: 0xe4 << 8},  # 0x90
+
+        {0x26C >> 2: 0xe4 << 8}, {0x26C >> 2: 0xe4 << 8},
+        {0x26C >> 2: 0xe4 << 8},  # 0xA0
+
+        {0x26C >> 2: 0xe4 << 8}, {0x26C >> 2: 0xe4 << 8},  # 0xB0
+
+        {0x26C >> 2: 0x03e4e4 << 8},
+        {0x26C >> 2: 0x03e4e4 << 8, 0x270 >> 2: 0xFFFFE000},
+        {0x26C >> 2: 0x03e4e4 << 8, 0x270 >> 2: 0xFFFFE000},
+        {0x26C >> 2: 0x03e4e4 << 8, 0x270 >> 2: 0xFFFFE000},  # 0xC0
+
+        {0x26C >> 2: 0x03e4e400, 0x270 >> 2: 0xFFFFE000},
+        {0x26C >> 2: 0x03e4e400, 0x270 >> 2: 0xFFFFE000},
     ]
 
     m.mem.init_mem = [int.from_bytes(insns[adr:adr+4], byteorder="little")
