@@ -40,5 +40,6 @@ dev = [
 [tool.pdm.scripts]
 test = { cmd = "pytest" }
 gen = { call = "sentinel.gen:generate" }
+demo = { call = "sentinel.gen:demo" }
 ucode = { call = "m5meta:main" }
 bench = { call = "sentinel.bench:main"}

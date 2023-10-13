@@ -1,10 +1,9 @@
 import argparse
 import sys
-import importlib
 from contextlib import contextmanager
 
 from bronzebeard.asm import assemble
-from amaranth import Module, Memory, Signal
+from amaranth import Module, Memory
 from amaranth_soc import wishbone
 from amaranth_soc.memory import MemoryMap
 from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect
@@ -76,13 +75,53 @@ class Leds(Component):
         return m
 
 
-# Reimplementation of nextpnr-ice40's AttoSoC example (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),
+# Reimplementation of nextpnr-ice40's AttoSoC example (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
 # to exercise attaching Sentinel to amaranth-soc's wishbone components.
 class AttoSoC(Elaboratable):
     def __init__(self):
         self.cpu = Top()
         self.mem = WBMemory()
         self.leds = Leds()
+
+        # Primes test firmware from tests and AttoSoC.
+        insns = assemble("""
+            li      s0,2
+            lui     s1,0x2000  # IO port at 0x2000000
+            li      s3,256
+    outer:
+            addi    s0,s0,1
+            blt     s0,s3,noinit
+            li      s0,2
+    noinit:
+            li      s2,2
+    next_int:
+            bge     s2,s0,write_io
+            mv      a0,s0
+            mv      a1,s2
+            call    prime?
+            beqz    a0,not_prime
+            addi    s2,s2,1
+            j       next_int
+    write_io:
+            sw      s0,0(s1)
+            call    delay
+    not_prime:
+            j       outer
+    prime?:
+            li      t0,1
+    submore:
+            sub     a0,a0,a1
+            bge     a0,t0,submore
+            ret
+    delay:
+            li      t0,360000
+    countdown:
+            addi    t0,t0,-1
+            bnez    t0,countdown
+            ret
+""")
+        self.bin = [int.from_bytes(insns[adr:adr+4], byteorder="little")
+                    for adr in range(0, len(insns), 4)]
 
     def elaborate(self, plat):
         m = Module()
@@ -138,66 +177,60 @@ def file_or_stdout(fn):
             fp.close()
 
 
+def generate_args(parser):
+    parser.add_argument("-o", help="output filename")
+    parser.add_argument("-n", help="top-level name")
+
+
 def generate(args=None):
-    if isinstance(args, argparse.Namespace):
-        with file_or_stdout(args.o) as fp:
+    def do_gen(*, n, o):
+        with file_or_stdout(o) as fp:
             m = Top()
-            v = verilog.convert(m, name=args.n or "top")  # noqa: E501
+            v = verilog.convert(m, name=n or "top")  # noqa: E501
             fp.write(v)
+
+    if isinstance(args, argparse.Namespace):
+        do_gen(args)
     else:
-        m = Top()
-        print(verilog.convert(m))
+        if len(sys.argv) < 2:
+            m = Top()
+            print(verilog.convert(m))
+        else:
+            parser = argparse.ArgumentParser(description="Sentinel Verilog generator (invoked from PDM)")  # noqa: E501
+            generate_args(parser)
+            do_gen(**vars(parser.parse_args()))
 
 
-def demo(args):
-    insns = assemble("""
-        li      s0,2
-        lui     s1,0x2000  # IO port at 0x2000000
-        li      s3,256
-outer:
-        addi    s0,s0,1
-        blt     s0,s3,noinit
-        li      s0,2
-noinit:
-        li      s2,2
-next_int:
-        bge     s2,s0,write_io
-        mv      a0,s0
-        mv      a1,s2
-        call    prime?
-        beqz    a0,not_prime
-        addi    s2,s2,1
-        j       next_int
-write_io:
-        sw      s0,0(s1)
-        call    delay
-not_prime:
-        j       outer
-prime?:
-        li      t0,1
-submore:
-        sub     a0,a0,a1
-        bge     a0,t0,submore
-        ret
-delay:
-        li      t0,360000
-countdown:
-        addi    t0,t0,-1
-        bnez    t0,countdown
-        ret
-""")
+def demo_args(parser):
+    parser.add_argument("-p", help="build platform",
+                        choices=("icestick", "ice40_hx8k_b_evn"),
+                        default="icestick")
+    parser.add_argument("-n", help="dry run",
+                        action="store_true")
 
-    asoc = AttoSoC()
-    asoc.mem.init_mem = [int.from_bytes(insns[adr:adr+4], byteorder="little")
-                         for adr in range(0, len(insns), 4)]
 
-    if args.p == "ice40_hx8k_b_evn":
-        plat = ice40_hx8k_b_evn.ICE40HX8KBEVNPlatform()
+def demo(args=None):
+    def do_demo(*, p, n):
+        asoc = AttoSoC()
+        asoc.mem.init_mem = asoc.bin
+
+        if p == "ice40_hx8k_b_evn":
+            plat = ice40_hx8k_b_evn.ICE40HX8KBEVNPlatform()
+        else:
+            plat = icestick.ICEStickPlatform()
+
+        plan = plat.build(asoc, do_build=False, debug_verilog=True)
+        plan.execute_local(run_script=not n)
+
+    if isinstance(args, argparse.Namespace):
+        do_demo(args)
     else:
-        plat = icestick.ICEStickPlatform()
-
-    plan = plat.build(asoc, do_build=False, debug_verilog=True)
-    plan.execute_local(run_script=not args.n)
+        if len(sys.argv) < 2:
+            do_demo(p="icestick", n=False)
+        else:
+            parser = argparse.ArgumentParser(description="Sentinel Demo generator (invoked from PDM)")  # noqa: E501
+            demo_args(parser)
+            do_demo(**vars(parser.parse_args()))
 
 
 def main():
@@ -205,16 +238,11 @@ def main():
     sub = parser.add_subparsers(help="subcommand", required=True)
 
     gen = sub.add_parser("generate", aliases=("gen", "g"))
-    gen.add_argument("-o", help="output filename")
-    gen.add_argument("-n", help="top-level name")
+    generate_args(gen)
     gen.set_defaults(func=generate)
 
     d = sub.add_parser("demo", aliases=("d"))
-    d.add_argument("-p", help="build platform",
-                   choices=("icestick", "ice40_hx8k_b_evn"),
-                   default="icestick")
-    d.add_argument("-n", help="dry run",
-                   action="store_true")
+    demo_args(d)
     d.set_defaults(func=demo)
 
     args = parser.parse_args()
