@@ -53,12 +53,12 @@ class RegFile(Component):
 
     def __init__(self):
         super().__init__()
-        # 31 GP regs, 32 scratch regs
-        self.mem = Memory(width=32, depth=32*2)
 
     def elaborate(self, platform):
         m = Module()
 
+        # 31 GP regs, 32 scratch regs
+        self.mem = Memory(width=32, depth=32*2)
         adr_r_prev = Signal.like(self.adr_r)
 
         m.submodules.rdport = rdport = self.mem.read_port()

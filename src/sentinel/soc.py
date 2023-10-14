@@ -32,18 +32,17 @@ class WBMemory(Component):
         self.depth = depth
         super().__init__()
 
-        self.mem = Memory(width=32, depth=self.depth)
-
     @property
     def init_mem(self):
-        return self.mem.init
+        return self.mem_contents
 
     @init_mem.setter
     def init_mem(self, mem):
-        self.mem.init = mem
+        self.mem_contents = mem
 
     def elaborate(self, plat):
         m = Module()
+        self.mem = Memory(width=32, depth=self.depth, init=self.mem_contents)
         m.submodules.rdport = rdport = self.mem.read_port(transparent=True)
         m.submodules.wrport = wrport = self.mem.write_port(granularity=8)
 

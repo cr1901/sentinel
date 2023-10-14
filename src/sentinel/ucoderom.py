@@ -15,7 +15,7 @@ from .ucodefields import OpType, CondTest, JmpType, PcAction, ASrc, BSrc, \
 
 def ucoderom_signature(ucoderom):
     return Signature({
-        "addr": Out(log2_int(ucoderom.ucode_mem.depth)),
+        "addr": Out(log2_int(ucoderom.depth)),
         "fields": In(ucoderom.field_layout)
     })
 
@@ -52,12 +52,13 @@ class UCodeROM(Component):
         self.hex = hex
 
         self.assemble()
-        self.ucode_mem = Memory(width=self.width, depth=self.depth,
-                                init=self.ucode_contents)
         super().__init__()
 
     def elaborate(self, platform):
         m = Module()
+
+        self.ucode_mem = Memory(width=self.width, depth=self.depth,
+                                init=self.ucode_contents)
         m.submodules.rdport = rdport = \
             self.ucode_mem.read_port(transparent=False)
 
