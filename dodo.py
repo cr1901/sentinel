@@ -19,6 +19,10 @@ def task__upstream_init():
     }
 
 
+# I figured out the correct invocations for compiling and objdump by running
+# the autoconf script, compiling normally, and seeing which flags the compiler
+# and objdump are invoked with. It might not be perfect (but seems to work
+# fine).
 def task__compile_upstream():
     flags = "-march=rv32g -mabi=ilp32 -static -mcmodel=medany \
 -fvisibility=hidden -nostdlib -nostartfiles".split(" ")
@@ -31,6 +35,7 @@ def task__compile_upstream():
     isa_dir = upstream_tests / "riscv-tests/isa/rv32ui"
     macros_dir = upstream_tests / "riscv-tests/isa/macros/scalar"
 
+    # No harm in running once. FIXME: Unix-ism.
     yield {
         "name": "mkdir",
         "actions": [["mkdir", "-p", outdir]],

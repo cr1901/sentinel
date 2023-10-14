@@ -2,13 +2,9 @@ import pytest
 
 from dataclasses import dataclass
 from itertools import repeat, chain
-from amaranth import Module, Memory, Elaboratable, Signal
-from amaranth.lib.wiring import Component, Signature, In, Out, connect
 from amaranth.sim import Passive
-from amaranth_soc import wishbone
-from bronzebeard.asm import assemble
 
-from sentinel.top import Top
+from sentinel.soc import AttoSoC
 
 
 @dataclass
@@ -56,73 +52,9 @@ class RV32Regs:
     PC: int = 0
 
 
-class WBMemory(Component):
-    bus: In(wishbone.Signature(addr_width=30, data_width=32, granularity=8))
-    ctrl: Out(Signature({
-        "force_ws": Out(1)  # noqa: F821
-    }))
-
-    def __init__(self):
-        super().__init__()
-        self.mem = Memory(width=32, depth=0x400)
-
-    @property
-    def init_mem(self):
-        return self.mem.init
-
-    @init_mem.setter
-    def init_mem(self, mem):
-        self.mem.init = mem
-
-    def elaborate(self, plat):
-        m = Module()
-        m.submodules.rdport = rdport = self.mem.read_port(transparent=True)
-        m.submodules.wrport = wrport = self.mem.write_port(granularity=8)
-
-        m.d.comb += [
-            rdport.addr.eq(self.bus.adr),
-            wrport.addr.eq(self.bus.adr),
-            self.bus.dat_r.eq(rdport.data),
-            wrport.data.eq(self.bus.dat_w),
-            rdport.en.eq(self.bus.stb & self.bus.cyc & ~self.bus.we),
-        ]
-
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.we):
-            m.d.comb += wrport.en.eq(self.bus.sel)
-
-        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack &
-                  ~self.ctrl.force_ws):
-            m.d.sync += self.bus.ack.eq(1)
-        with m.Else():
-            m.d.sync += self.bus.ack.eq(0)
-
-        return m
-
-
-class CPUWithMem(Elaboratable):
-    def __init__(self):
-        self.cpu = Top()
-        self.mem = WBMemory()
-
-    def elaborate(self, plat):
-        m = Module()
-
-        dummy = Signal()
-
-        m.submodules.cpu = self.cpu
-        m.submodules.mem = self.mem
-
-        connect(m, self.cpu.bus, self.mem.bus)
-
-        # Make sure clk/rst show up in top-level sim module.
-        m.d.sync += dummy.eq(dummy)
-
-        return m
-
-
 @pytest.fixture
 def ucode_panic(sim_mod):
-    sim, m = sim_mod
+    _, m = sim_mod
 
     def ucode_panic():
         yield Passive()
@@ -151,7 +83,7 @@ def ucode_panic(sim_mod):
 
 # This test is a handwritten exercise of going through all RV32I insns. If
 # this test fails, than surely all other, more thorough tests will fail.
-@pytest.mark.module(CPUWithMem())
+@pytest.mark.module(AttoSoC(sim=True))
 @pytest.mark.clks((1.0 / 12e6,))
 def test_seq(sim_mod, ucode_panic):
     sim, m = sim_mod
@@ -166,7 +98,8 @@ def test_seq(sim_mod, ucode_panic):
                 yield
 
             # Wait state
-            # FIXME: Need add_comb_process. Wait states probably work fine
+            # FIXME: Need add_comb_process to force wait_state to start at
+            # right time. Wait states probably work fine
             # anyway.
             for _ in range(ws):
                 yield
@@ -204,7 +137,7 @@ def test_seq(sim_mod, ucode_panic):
             yield from check_regs(curr_r)
             yield from check_mem(curr_m)
 
-    insns = assemble("""
+    m.rom = """
         addi x0, x0, 0  # 0
         addi x1, x0, 1
         slli x1, x1, 0
@@ -264,7 +197,7 @@ bgeu_dst2:
         lhu x13, x1, 518
         sb x1, x0, 512  # 0xC0
         lw x14, x1, 512
-""")
+"""
 
     regs = [
         RV32Regs(),
@@ -397,19 +330,16 @@ bgeu_dst2:
         {0x26C >> 2: 0x03e4e400, 0x270 >> 2: 0xFFFFE000},
     ]
 
-    m.mem.init_mem = [int.from_bytes(insns[adr:adr+4], byteorder="little")
-                      for adr in range(0, len(insns), 4)]
-
     def bus_proc():
         yield from bus_proc_aux(wait_states=chain([1], repeat(0)))
 
     def cpu_proc():
         yield from cpu_proc_aux(regs, ram)
 
-    sim.run(sync_processes=[bus_proc, cpu_proc, ucode_panic])
+    sim.run(sync_processes=[cpu_proc, ucode_panic])
 
 
-@pytest.mark.module(CPUWithMem())
+@pytest.mark.module(AttoSoC(sim=True))
 @pytest.mark.clks((1.0 / 12e6,))
 def test_primes(sim_mod, ucode_panic):
     sim, m = sim_mod
@@ -419,7 +349,7 @@ def test_primes(sim_mod, ucode_panic):
     # but I don't know about its origins otherwise.
     # I have modified a hardcoded delay from 360000 to 2, as well as stopping
     # after 17 for simulation speed.
-    insns = assemble("""
+    m.rom = """
         li      s0,2
         lui     s1,0x2000  # IO port at 0x2000000
         li      s3,18  #  Originally 256
@@ -454,15 +384,15 @@ countdown:
         addi    t0,t0,-1
         bnez    t0,countdown
         ret
-""")
+"""
 
     def io_proc():
         primes = [3, 5, 7, 11, 13, 17, 2]
-                  # 19, 23, 29, 31, 37, 41, 43, 47, 53,
-                  # 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109,
-                  # 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179,
-                  # 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241,
-                  # 251, 2]
+        # 19, 23, 29, 31, 37, 41, 43, 47, 53,
+        # 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109,
+        # 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179,
+        # 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241,
+        # 251, 2]
 
         for p in primes:
             for _ in range(65536):
@@ -478,8 +408,5 @@ countdown:
                 raise AssertionError("CPU (but not microcode) probably stuck "
                                      "in infinite loop")
             yield
-
-    m.mem.init_mem = [int.from_bytes(insns[adr:adr+4], byteorder="little")
-                      for adr in range(0, len(insns), 4)]
 
     sim.run(sync_processes=[io_proc, ucode_panic])
