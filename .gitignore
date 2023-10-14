@@ -17,3 +17,6 @@ __pycache__/
 # GtkWave
 *.vcd
 *.gtkw
+
+# Doit
+.doit.db.*

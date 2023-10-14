@@ -35,6 +35,7 @@ markers = [
 dev = [
     "flake8>=6.1.0",
     "pytest>=7.4.2",
+    "doit>=0.36.0",
 ]
 
 [tool.pdm.scripts]
@@ -43,3 +44,4 @@ gen = { call = "sentinel.gen:generate" }
 demo = { call = "sentinel.gen:demo" }
 ucode = { call = "m5meta:main" }
 bench = { call = "sentinel.bench:main"}
+compile-upstream = { cmd = "doit _dump_tests"}
