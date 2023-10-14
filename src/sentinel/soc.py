@@ -7,6 +7,7 @@ from amaranth_soc.memory import MemoryMap
 from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
     Signature
 from amaranth.build import ResourceError
+from amaranth.utils import log2_int
 
 from .top import Top
 
@@ -15,7 +16,8 @@ class WBMemory(Component):
     @property
     def signature(self):
         sig = Signature({
-            "bus": In(wishbone.Signature(addr_width=10, data_width=32,
+            "bus": In(wishbone.Signature(addr_width=log2_int(self.depth) - 2,
+                                         data_width=32,
                                          granularity=8)),
         })
 
@@ -25,11 +27,12 @@ class WBMemory(Component):
             }))
         return sig
 
-    def __init__(self, *, sim=False):
+    def __init__(self, *, sim=False, depth=0x400):
         self.sim = sim
+        self.depth = depth
         super().__init__()
 
-        self.mem = Memory(width=32, depth=0x400)
+        self.mem = Memory(width=32, depth=self.depth)
 
     @property
     def init_mem(self):
@@ -94,9 +97,9 @@ class Leds(Component):
 # Reimplementation of nextpnr-ice40's AttoSoC example (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
 # to exercise attaching Sentinel to amaranth-soc's wishbone components.
 class AttoSoC(Elaboratable):
-    def __init__(self, *, sim=False):
+    def __init__(self, *, sim=False, depth=0x400):
         self.cpu = Top()
-        self.mem = WBMemory(sim=sim)
+        self.mem = WBMemory(sim=sim, depth=depth)
         self.leds = Leds()
 
     @property
@@ -110,6 +113,10 @@ class AttoSoC(Elaboratable):
             self.mem.init_mem = [int.from_bytes(insns[adr:adr+4],
                                                 byteorder="little")
                                  for adr in range(0, len(insns), 4)]
+        elif isinstance(source_or_list, (bytes, bytearray)):
+            self.mem.init_mem = [int.from_bytes(source_or_list[adr:adr+4],
+                                                byteorder="little")
+                                 for adr in range(0, len(source_or_list), 4)]
         else:
             self.mem.init_mem = source_or_list
 
@@ -124,9 +131,10 @@ class AttoSoC(Elaboratable):
         m.submodules.leds = self.leds
         m.submodules.decoder = decoder
 
-        mem_bus = wishbone.Interface(addr_width=10, data_width=32,
+        mem_bus = wishbone.Interface(addr_width=log2_int(self.mem.depth) - 2,
+                                     data_width=32,
                                      granularity=8,
-                                     memory_map=MemoryMap(addr_width=12,
+                                     memory_map=MemoryMap(addr_width=log2_int(self.mem.depth),  # noqa: E501
                                                           data_width=8),
                                      path=("mem",))
         led_bus = wishbone.Interface(addr_width=1, data_width=8,

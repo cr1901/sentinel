@@ -2,7 +2,7 @@ import pytest
 
 from amaranth import Value
 from amaranth.hdl.ast import ValueCastable
-from amaranth.sim import Simulator
+from amaranth.sim import Simulator, Passive
 from amaranth.lib.wiring import Signature
 
 
@@ -81,3 +81,32 @@ class SimulatorFixture:
 def sim_mod(request, pytestconfig):
     simfix = SimulatorFixture(request, pytestconfig)
     return (simfix, simfix.mod)
+
+
+@pytest.fixture
+def ucode_panic(sim_mod):
+    _, m = sim_mod
+
+    def ucode_panic():
+        yield Passive()
+
+        addr = 0
+        prev_addr = 0
+        count = 0
+        while True:
+            yield
+
+            if (yield m.cpu.control.ucoderom.addr == 248):
+                raise AssertionError("microcode panic (not implemented)")
+
+            prev_addr = addr
+            addr = (yield m.cpu.control.ucoderom.addr)
+            if prev_addr == addr:
+                count += 1
+                if count > 100:
+                    raise AssertionError("microcode probably stuck in "
+                                         "infinite loop")
+            else:
+                count = 0
+
+    return ucode_panic

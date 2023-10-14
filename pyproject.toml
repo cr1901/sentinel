@@ -30,6 +30,7 @@ markers = [
   "clks: tuple of clocks to register for simulator.",
   "module: top-level module to simulate."
 ]
+addopts="--ignore=tests/upstream/binaries"
 
 [tool.pdm.dev-dependencies]
 dev = [
