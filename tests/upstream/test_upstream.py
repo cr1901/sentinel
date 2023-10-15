@@ -65,8 +65,12 @@ def test_bin(sim_mod, request):
 
 RV32UI_TESTS = [
     "add", "addi", "and",  "andi", "auipc", "beq",  "bge",  "bgeu", "blt",
-    "bltu", "bne", "fence_i", "jal",  "jalr", "lb", "lbu", "lh",  "lhu",
-    "lui", "lw", "ma_data", "or", "ori", "sb", "sh", "simple", "sll", "slli",
+    "bltu", "bne",
+    pytest.param("fence_i", marks=pytest.mark.xfail(reason="Zifencei not implemented")),  # noqa: E501
+    "jal",  "jalr", "lb", "lbu", "lh",  "lhu",
+    "lui", "lw",
+    pytest.param("ma_data", marks=pytest.mark.xfail(reason="misaligned access not yet implemented")),  # noqa: E501
+    "or", "ori", "sb", "sh", "simple", "sll", "slli",
     "slt", "slti", "sltiu", "sltu", "sra", "srai", "srl", "srli", "sub", "sw",
     "xor", "xori"
 ]

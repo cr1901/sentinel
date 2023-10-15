@@ -146,8 +146,8 @@ srai_trampoline: READ_RS1, a_src => zero, src_op => latch_a, \
 slli_prolog:
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
-              a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sll, \
-                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => fetch;
+              READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sll, \
+                  jmp_type => direct, CONDTEST_ALU_CMP_FAILED, target => shift_zero;
 sll_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -159,11 +159,12 @@ sll_loop:
               alu_op => sll, a_src => alu_o, b_src => one, src_op => latch_a_b, \
                   jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sll_loop;
 
+
 srli_prolog:
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
-              a_src => imm, b_src => one, src_op => latch_a_b, alu_op => srl,
-                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => fetch;
+              READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => srl,
+                  jmp_type => direct, CONDTEST_ALU_CMP_FAILED, target => shift_zero;
 srl_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -178,8 +179,8 @@ srl_loop:
 srai_prolog:
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
-              a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sra,
-                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => fetch;
+              READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sra,
+                  jmp_type => direct, CONDTEST_ALU_CMP_FAILED, target => shift_zero;
 sra_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -190,6 +191,9 @@ sra_loop:
               // Then, do the shift, and bail if the shift cnt reached zero.
               alu_op => sra, a_src => alu_o, b_src => one, src_op => latch_a_b, \
                   jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sra_loop;
+
+shift_zero:   a_src => zero, b_src => gp, src_op => latch_a_b;
+              alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 reg_ops:
 add:          alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
@@ -215,15 +219,18 @@ sra_trampoline: READ_RS1, a_src => zero, src_op => latch_a, \
              // the initial zero check.
 sll_prolog:  READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
              a_src => gp, b_src => one, src_op => latch_a_b, alu_op => sll,
-                  jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sll_loop;
+                  jmp_type => direct_zero, CONDTEST_ALU_CMP_FAILED, target => sll_loop;
+             READ_RS1, jmp_type => direct, target => shift_zero;
 
 srl_prolog:  READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
              a_src => gp, b_src => one, src_op => latch_a_b, alu_op => srl,
-                  jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => srl_loop;
+                  jmp_type => direct_zero, CONDTEST_ALU_CMP_FAILED, target => srl_loop;
+             READ_RS1, jmp_type => direct, target => shift_zero;
 
 sra_prolog:  READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
              a_src => gp, b_src => one, src_op => latch_a_b, alu_op => sra,
-                  jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sra_loop;
+                  jmp_type => direct_zero, CONDTEST_ALU_CMP_FAILED, target => sra_loop;
+             READ_RS1, jmp_type => direct, target => shift_zero;
 
 auipc: alu_op => add, pc_action => inc;
        WRITE_RD, jmp_type => direct, cond_test => true, target => fetch;
@@ -284,7 +291,7 @@ lh: latch_adr => 1;
 lh_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
               target => lh_wait;
-          alu_op => sextb, JUMP_TO_OP_END(fast_epilog);
+          alu_op => sexthw, JUMP_TO_OP_END(fast_epilog);
 
 lw: latch_adr => 1;
 lw_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
