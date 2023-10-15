@@ -63,9 +63,18 @@ def test_bin(sim_mod, request):
     m.rom = bytebin
 
 
+RV32UI_TESTS = [
+    "add", "addi", "and",  "andi", "auipc", "beq",  "bge",  "bgeu", "blt",
+    "bltu", "bne", "fence_i", "jal",  "jalr", "lb", "lbu", "lh",  "lhu",
+    "lui", "lw", "ma_data", "or", "ori", "sb", "sh", "simple", "sll", "slli",
+    "slt", "slti", "sltiu", "sltu", "sra", "srai", "srl", "srli", "sub", "sw",
+    "xor", "xori"
+]
+
+
 @pytest.mark.module(AttoSoC(sim=True, depth=4096))
 @pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.parametrize("test_bin", ["simple", "or"], indirect=True)
+@pytest.mark.parametrize("test_bin", RV32UI_TESTS, indirect=True)
 def test_rv32ui(sim_mod, ucode_panic, test_bin):
     sim, m = sim_mod
 
@@ -76,7 +85,9 @@ def test_rv32ui(sim_mod, ucode_panic, test_bin):
                     (yield m.cpu.bus.cyc) and
                     (yield m.cpu.bus.stb) and
                     (yield m.cpu.bus.ack)):
+                yield
                 regs = yield from RV32Regs.from_top_module(m)
+                assert (regs.R3, regs.R10, regs.R17) == (1, 0, 93)
                 break
             else:
                 yield
