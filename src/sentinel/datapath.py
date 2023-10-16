@@ -51,14 +51,25 @@ class ProgramCounter(Component):
 class RegFile(Component):
     signature = GPSignature.flip()
 
-    def __init__(self):
+    def __init__(self, *, formal):
+        self.formal = formal
+
+        # 31 GP regs, 32 scratch regs
+        if self.formal:
+            self.mem = Memory(width=32, depth=32*2)
+
         super().__init__()
 
     def elaborate(self, platform):
         m = Module()
 
         # 31 GP regs, 32 scratch regs
-        self.mem = Memory(width=32, depth=32*2)
+        # Avoid accidentally instantiating rd ports during pytest simulation
+        # with no way to access the underlying memory, unless we're doing
+        # formal (in which we have no choice).
+        # See: https://github.com/amaranth-lang/amaranth/blob/392ead8d00c9a130b656b3af45c21fa410268301/amaranth/hdl/mem.py#L264-L268)  # noqa: E501
+        if not self.formal:
+            self.mem = Memory(width=32, depth=32*2)
         adr_r_prev = Signal.like(self.adr_r)
 
         m.submodules.rdport = rdport = self.mem.read_port()
@@ -92,11 +103,11 @@ class DataPath(Component):
     gp: In(GPSignature)
     pc: In(PcSignature)
 
-    def __init__(self):
+    def __init__(self, *, formal=False):
         super().__init__()
 
         self.pc_mod = ProgramCounter()
-        self.regfile = RegFile()
+        self.regfile = RegFile(formal=formal)
 
     def elaborate(self, platform):
         m = Module()

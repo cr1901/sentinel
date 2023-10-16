@@ -28,13 +28,14 @@ def file_or_stdout(fn):
 def generate_args(parser):
     parser.add_argument("-o", help="output filename")
     parser.add_argument("-n", help="top-level name")
+    parser.add_argument("-f", action="store_true", help="add RVFI connections")
 
 
 def generate(args=None):
-    def do_gen(*, n, o):
+    def do_gen(*, n, o, f):
         with file_or_stdout(o) as fp:
-            m = Top()
-            v = verilog.convert(m, name=n or "top")  # noqa: E501
+            m = Top(formal=f)
+            v = verilog.convert(m, name=n or "sentinel")  # noqa: E501
             fp.write(v)
 
     if isinstance(args, argparse.Namespace):
