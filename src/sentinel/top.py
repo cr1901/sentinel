@@ -272,17 +272,24 @@ class Top(Component):
             m.submodules.rvfi_rs2 = rs2_port = self.datapath.regfile.mem.read_port()
 
             first_insn = Signal(1, reset=1)
+            insn_temp = Signal.like(self.decode.insn)
             with m.FSM() as fsm:
                 # There is nothing to pipeline/interleave, so wait for first
                 # insn to be fetched.
+                # The CHECK_INT_ADDR line is meant to only latch the last insn
+                # that is ACK'd before moving to upc == 1, since the solver
+                # will happily ignore wishbone timing.
                 with m.State("FIRST_INSN"):
-                    with m.If(self.control.insn_fetch & self.bus.ack):
+                    with m.If(self.control.insn_fetch & self.bus.ack &
+                              self.control.ucoderom.addr == CHECK_INT_ADDR):
                         m.next = "VALID_LATCH_DECODER"
 
                 with m.State("VALID_LATCH_DECODER"):
-                    m.d.comb += self.rvfi.valid.eq(1)
+                    m.d.comb += [
+                        self.rvfi.valid.eq(1),
+                    ]
                     m.d.sync += [
-                        self.rvfi.insn.eq(self.decode.insn),
+                        self.rvfi.insn.eq(insn_temp),
                         self.rvfi.order.eq(self.rvfi.order + 1),
                         self.rvfi.trap.eq(self.decode.illegal),
                         self.rvfi.rs1_addr.eq(self.decode.rs1),
@@ -299,7 +306,7 @@ class Top(Component):
                         m.d.comb += self.rvfi.valid.eq(0)
                         m.d.sync += [
                             self.rvfi.order.eq(0),
-                            first_insn.eq(0)
+                            first_insn.eq(0),
                         ]
 
                     # Prepare to read register file.
@@ -358,6 +365,7 @@ class Top(Component):
                             ]
 
                     with m.If(self.control.insn_fetch & self.bus.ack):
+                        m.d.sync += insn_temp.eq(self.decode.insn)
                         m.next = "VALID_LATCH_DECODER"
 
             # rvfi_intr
