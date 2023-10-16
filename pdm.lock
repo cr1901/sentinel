@@ -6,7 +6,7 @@ groups = ["default", "dev"]
 cross_platform = true
 static_urls = false
 lock_version = "4.3"
-content_hash = "sha256:575d4fa19472c82e4afbdbaec43c6422fa6174880070d9b862afc159793d93fa"
+content_hash = "sha256:d824365831c088ac96f4827c2362051a6344c43b481ef4e28be392fff1ab4028"
 
 [[package]]
 name = "amaranth"
@@ -352,6 +352,14 @@ summary = "Pretty-print tabular data"
 files = [
     {file = "tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f"},
     {file = "tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c"},
+]
+
+[[package]]
+name = "verilog-vcd"
+version = "1.11"
+summary = "Module to Parse VCD (Value-Change-Dump) files"
+files = [
+    {file = "Verilog_VCD-1.11.tar.gz", hash = "sha256:2ffa5e3711c57d1312dc411a1918a1f8f171ff10f043c7749fb129ab7642683a"},
 ]
 
 [[package]]

@@ -37,6 +37,7 @@ dev = [
     "flake8>=6.1.0",
     "pytest>=7.4.2",
     "doit>=0.36.0",
+    "Verilog-VCD>=1.11",
 ]
 
 [tool.pdm.scripts]
@@ -46,3 +47,6 @@ demo = { call = "sentinel.gen:demo" }
 ucode = { call = "m5meta:main" }
 bench = { call = "sentinel.bench:main"}
 compile-upstream = { cmd = "doit _dump_tests"}
+rvformal-gen = { cmd = "doit _formal_gen_files"}
+rvformal = { cmd = "doit _run_sby:{args}_vcds"}
+rvformal-all = { cmd = "doit _run_sby"}

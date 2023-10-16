@@ -1,3 +1,6 @@
 [submodule "tests/upstream/riscv-tests"]
 	path = tests/upstream/riscv-tests
 	url = https://github.com/riscv/riscv-tests
+[submodule "tests/formal/riscv-formal"]
+	path = tests/formal/riscv-formal
+	url = https://github.com/YosysHQ/riscv-formal

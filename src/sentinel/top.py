@@ -380,7 +380,7 @@ class Top(Component):
             m.d.comb += self.rvfi.halt.eq(0)
 
             # rvfi_mode
-            m.d.comb += self.rvfi.mode.eq(3)
+            m.d.comb += self.rvfi.mode.eq(2)
 
             # rvfi_ixl
             m.d.comb += self.rvfi.ixl.eq(1)
