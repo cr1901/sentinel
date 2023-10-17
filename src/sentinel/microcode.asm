@@ -190,9 +190,9 @@ slli:
               // reg values again, we need to latch them again.
               READ_RS1, a_src => zero, src_op => latch_a;
               // Bail if shift count was initially zero.
-              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
+              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => add;
               READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sll, \
-                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => shift_zero;
+                  jmp_type => direct, cond_test => cmp_alu_o_5_lsbs_zero, target => shift_zero;
 sll_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -209,9 +209,9 @@ srli:
               // reg values again, we need to latch them again.
               READ_RS1, a_src => zero, src_op => latch_a;
               // Bail if shift count was initially zero.
-              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
+              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => add;
               READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => srl,
-                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => shift_zero;
+                  jmp_type => direct, cond_test => cmp_alu_o_5_lsbs_zero, target => shift_zero;
 srl_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -228,9 +228,9 @@ srai:
               // reg values again, we need to latch them again.
               READ_RS1, a_src => zero, src_op => latch_a;
               // Bail if shift count was initially zero.
-              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
+              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => add;
               READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sra,
-                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => shift_zero;
+                  jmp_type => direct, cond_test => cmp_alu_o_5_lsbs_zero, target => shift_zero;
 sra_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
