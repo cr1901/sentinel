@@ -8,8 +8,7 @@ class JmpType(enum.Enum):
     NOP = 0
     MAP = 1
     DIRECT = 2
-    MAP_FUNCT = 3
-    DIRECT_ZERO = 4
+    DIRECT_ZERO = 3
 
 
 class OpType(enum.Enum):

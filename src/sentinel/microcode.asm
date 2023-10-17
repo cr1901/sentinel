@@ -12,16 +12,13 @@ fields block_ram: {
   // cont: Increment upc by 1.
   // nop: Same as cont, but indicate we are using the target field for
   //      something else.
-  // map: Use address supplied by opcode if test fails. Otherwise, unconditional
+  // map: Use address supplied by decoder if test fails. Otherwise, unconditional
   //      direct.
   // direct: Conditionally use address supplied by target field. Otherwise,
   //         cont.
-  // map_funct: Unconditionally jump to address supplied by target field
-  //            plus an offset based on the current minor opcode.
-  //            See "requested_op" signal.
   // direct_zero: Conditionally use address supplied by target field. Otherwise,
   //              0.
-  jmp_type: enum { cont = 0; nop = 0; map; direct; map_funct; direct_zero; }, default cont;
+  jmp_type: enum { cont = 0; nop = 0; map; direct; direct_zero; }, default cont;
 
   // Various tests (valid current cycle) for conditional jumps:
   // int: Is interrupt line high?
