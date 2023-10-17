@@ -96,58 +96,103 @@ wait_for_ack: INSN_FETCH, READ_RS1_EAGER, invert_test => 1, cond_test => mem_val
               // Illegal insn or insn misaligned exception possible
 check_int:    jmp_type => map, a_src => gp, src_op => latch_a, READ_RS2, \
                   cond_test => exception, target => save_pc;
-
 origin 8;
-imm_prolog: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, \
-                target => imm_ops;
-reg_prolog: src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => map_funct, \
-                target => reg_ops;
-lui_prolog: a_src => zero, b_src => imm, src_op => latch_a_b, pc_action => inc,
-                jmp_type => direct, target => addi;
-// Only fence. This is a single hart, in-order, multicycle impl, so ignore.
-misc_mem_prolog: pc_action => inc, jmp_type => direct, target => fetch;
-auipc_prolog: src_op => latch_a_b, a_src => imm, b_src => pc, jmp_type => direct, \
-                  target => auipc;
-jal_prolog: src_op => latch_a_b, a_src => four, b_src => pc, \
-                  jmp_type => direct, target => jal;
-store_prolog: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, \
-                target => store_ops;
-load_prolog: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => map_funct, \
-                target => load_ops;
-jalr_prolog: src_op => latch_a_b, a_src => four, b_src => pc, \
-                  jmp_type => direct, target => jalr;
-branch_prolog: src_op => latch_b, b_src => gp, jmp_type => map_funct, \
-                target => branch_ops;
+lb_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => lb;
+lh_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => lh;
+lw_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => lw;
+               NOT_IMPLEMENTED;
+lbu_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => lbu;
+lhu_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => lhu;
 
-imm_ops:
-addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-// Trampolines for multicycle ops are almost zero-cost except for microcode space.
-slli_trampoline:
-              // Re: READ_RS1... reg addresses aren't latched, so if we need
-              // reg values again, we need to latch them again.
-              READ_RS1, a_src => zero, src_op => latch_a, \
-                  jmp_type => direct, target => slli_prolog;
-slti:         CMP_LT, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-sltiu:        alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-xori:         alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-srli_trampoline: READ_RS1, a_src => zero, src_op => latch_a, \
-                    jmp_type => direct, target => srli_prolog;
-ori:          alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-andi:         alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-subi:         NOT_IMPLEMENTED;  // 0b1000
+lb: alu_op => add;
+    latch_adr => 1;
+lb_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => byte, jmp_type => direct, \
+              target => lb_wait;
+          alu_op => sextb, JUMP_TO_OP_END(fast_epilog);
+
+lh: alu_op => add;
+    latch_adr => 1;
+lh_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
+              target => lh_wait;
+          alu_op => sexthw, JUMP_TO_OP_END(fast_epilog);
+
+lw: alu_op => add;
+    latch_adr => 1;
+lw_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => word, jmp_type => direct, \
+              target => lw_wait;
+          alu_op => add, JUMP_TO_OP_END(fast_epilog);
+
+lbu: alu_op => add;
+     latch_adr => 1;
+lbu_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => byte, jmp_type => direct, \
+              target => lbu_wait;
+           alu_op => zextb, JUMP_TO_OP_END(fast_epilog);
+
+lhu: alu_op => add;
+     latch_adr => 1;
+lhu_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
+              target => lhu_wait;
+           alu_op => zexthw, JUMP_TO_OP_END(fast_epilog);
+
+origin 0x30;
+misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
+
+origin 0x40;
+addi_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => addi;
+slli_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => slli;
+slti_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => slti;
+sltiu_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => sltiu;
+xori_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => xori;
+srli_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => srli;
+ori_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => ori;
+andi_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => andi;
+              NOT_IMPLEMENTED;  // 0b1000  subi?
               NOT_IMPLEMENTED;  // 0b1001
               NOT_IMPLEMENTED;  // 0b1010
               NOT_IMPLEMENTED;  // 0b1011
               NOT_IMPLEMENTED;  // 0b1100
-srai_trampoline: READ_RS1, a_src => zero, src_op => latch_a, \
-                    jmp_type => direct, target => srai_prolog;
+srai_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => srai;
+
+origin 0x50;
+auipc: src_op => latch_a_b, a_src => imm, b_src => pc;
+       alu_op => add, pc_action => inc;
+       WRITE_RD, jmp_type => direct, cond_test => true, target => fetch;
+           
+addi:         alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+slti:         CMP_LT, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+sltiu:        alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+xori:         alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+ori:          alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+andi:         alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
-slli_prolog:
+slli:
+              // Re: READ_RS1... reg addresses aren't latched, so if we need
+              // reg values again, we need to latch them again.
+              READ_RS1, a_src => zero, src_op => latch_a;
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
               READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sll, \
-                  jmp_type => direct, CONDTEST_ALU_CMP_FAILED, target => shift_zero;
+                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => shift_zero;
 sll_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -159,12 +204,14 @@ sll_loop:
               alu_op => sll, a_src => alu_o, b_src => one, src_op => latch_a_b, \
                   jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sll_loop;
 
-
-srli_prolog:
+srli:
+              // Re: READ_RS1... reg addresses aren't latched, so if we need
+              // reg values again, we need to latch them again.
+              READ_RS1, a_src => zero, src_op => latch_a;
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
               READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => srl,
-                  jmp_type => direct, CONDTEST_ALU_CMP_FAILED, target => shift_zero;
+                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => shift_zero;
 srl_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -176,11 +223,14 @@ srl_loop:
               alu_op => srl, a_src => alu_o, b_src => one, src_op => latch_a_b, \
                   jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => srl_loop;
 
-srai_prolog:
+srai:
+              // Re: READ_RS1... reg addresses aren't latched, so if we need
+              // reg values again, we need to latch them again.
+              READ_RS1, a_src => zero, src_op => latch_a;
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => cmp_eq;
               READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sra,
-                  jmp_type => direct, CONDTEST_ALU_CMP_FAILED, target => shift_zero;
+                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => shift_zero;
 sra_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -195,148 +245,149 @@ sra_loop:
 shift_zero:   a_src => zero, b_src => gp, src_op => latch_a_b;
               alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
-reg_ops:
-add:          alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-sll_trampoline: READ_RS1, a_src => zero, src_op => latch_a, \
-                    jmp_type => direct, target => sll_prolog;
-slt:          CMP_LT, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-sltu:         alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-xor:          alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-srl_trampoline: READ_RS1, a_src => zero, src_op => latch_a, \
-                    jmp_type => direct, target => srl_prolog;
-or:           alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-and:          alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
-sub:          alu_op => sub, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);  // 0b1000
-              NOT_IMPLEMENTED;  // 0b1001
-              NOT_IMPLEMENTED;  // 0b1010
-              NOT_IMPLEMENTED;  // 0b1011
-              NOT_IMPLEMENTED;  // 0b1101
-sra_trampoline: READ_RS1, a_src => zero, src_op => latch_a, \
-                    jmp_type => direct, target => sra_prolog;
+origin 0x80;
+sb_1: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => sb;
+sh_1: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => sh;
+sw_1: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+                target => sw;
 
-             // Re: add; pass through RS2 unmodified, and check whether 5 LSBs
-             // were zero. The shift loops above can be reused once we do
-             // the initial zero check.
-sll_prolog:  READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
-             a_src => gp, b_src => one, src_op => latch_a_b, alu_op => sll,
-                  jmp_type => direct_zero, CONDTEST_ALU_CMP_FAILED, target => sll_loop;
-             READ_RS1, jmp_type => direct, target => shift_zero;
+origin 0x88;
+branch_ops:
+beq_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => beq;
+                
+bne_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bne;
+                NOT_IMPLEMENTED;
+                NOT_IMPLEMENTED;
+blt_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => blt;
+bge_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bge;
+bltu_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bltu;
+bgeu_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bgeu;
 
-srl_prolog:  READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
-             a_src => gp, b_src => one, src_op => latch_a_b, alu_op => srl,
-                  jmp_type => direct_zero, CONDTEST_ALU_CMP_FAILED, target => srl_loop;
-             READ_RS1, jmp_type => direct, target => shift_zero;
+beq: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => cmp_eq, \
+        jmp_type => direct, target => branch_epilog;
+bne: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_NE, \
+        jmp_type => direct, target => branch_epilog;
+blt: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_LT, \
+        jmp_type => direct, target => branch_epilog;
+bge: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_GE, \
+        jmp_type => direct, target => branch_epilog;
+bltu: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => cmp_ltu, \
+        jmp_type => direct, target => branch_epilog;
+bgeu: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_GEU, \
+        jmp_type => direct, target => branch_epilog;
 
-sra_prolog:  READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
-             a_src => gp, b_src => one, src_op => latch_a_b, alu_op => sra,
-                  jmp_type => direct_zero, CONDTEST_ALU_CMP_FAILED, target => sra_loop;
-             READ_RS1, jmp_type => direct, target => shift_zero;
+branch_epilog: alu_op => add, CONDTEST_ALU_CMP_FAILED, pc_action => inc, \
+                  jmp_type => direct, target => fetch;
+        jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
-auipc: alu_op => add, pc_action => inc;
-       WRITE_RD, jmp_type => direct, cond_test => true, target => fetch;
 
-jal: alu_op => add, a_src => imm, b_src => pc, src_op => latch_a_b;
-     WRITE_RD, alu_op => add;
-     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
-jalr: alu_op => add, reg_read => 1, reg_r_sel => insn_rs_1;
-      WRITE_RD, a_src => imm, b_src => gp, src_op => latch_a_b;
+origin 0x98;
+jalr: src_op => latch_a_b, a_src => four, b_src => pc;  // 8
+      alu_op => add, reg_read => 1, reg_r_sel => insn_rs_1; // 9
+      WRITE_RD, a_src => imm, b_src => gp, src_op => latch_a_b; // A
       alu_op => add, alu_o_mod => clear_lsb_o;
       jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
-store_ops:
-sb_trampoline: a_src => zero, b_src => gp, src_op => latch_a_b, \
-                   alu_op => add, jmp_type => direct, target => sb;
-sh_trampoline: a_src => zero, b_src => gp, src_op => latch_a_b, \
-                   alu_op => add, jmp_type => direct, target => sh;
-sw_trampoline: a_src => zero, b_src => gp, src_op => latch_a_b, \
-                   alu_op => add, jmp_type => direct, target => sw;
-
-sb: alu_op => add, latch_adr => 1;
+sb: a_src => zero, b_src => gp, src_op => latch_a_b, alu_op => add;
+    alu_op => add, latch_adr => 1;
     mem_sel => byte, latch_data => 1;
 // For stores/loads, we use a wishbone block cycle (don't deassert cyc in
 // between data access and insn fetch)
 sb_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => byte, write_mem => 1, jmp_type => direct_zero, target => sb_wait;
 
-sh: alu_op => add, latch_adr => 1;
+sh: a_src => zero, b_src => gp, src_op => latch_a_b, alu_op => add;
+    alu_op => add, latch_adr => 1;
     mem_sel => hword, latch_data => 1;
 // For stores/loads, we use a wishbone block cycle (don't deassert cyc in
 // between data access and insn fetch)
 sh_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => hword, write_mem => 1, jmp_type => direct_zero, target => sh_wait;
 
-sw: alu_op => add, latch_adr => 1;
+sw: a_src => zero, b_src => gp, src_op => latch_a_b, alu_op => add;
+    alu_op => add, latch_adr => 1;
     mem_sel => word, latch_data => 1;
 // For stores/loads, we use a wishbone block cycle (don't deassert cyc in
 // between data access and insn fetch)
 sw_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => word, write_mem => 1, jmp_type => direct_zero, target => sw_wait;
 
-
-load_ops:
-lb_trampoline: alu_op => add, jmp_type => direct, target => lb;
-lh_trampoline: alu_op => add, jmp_type => direct, target => lh;
-lw_trampoline: alu_op => add, jmp_type => direct, target => lw;
-               NOT_IMPLEMENTED;
-lbu_trampoline: alu_op => add, jmp_type => direct, target => lbu;
-lhu_trampoline: alu_op => add, jmp_type => direct, target => lhu;
-
-lb: latch_adr => 1;
-lb_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
-              cond_test => mem_valid, mem_sel => byte, jmp_type => direct, \
-              target => lb_wait;
-          alu_op => sextb, JUMP_TO_OP_END(fast_epilog);
-
-lh: latch_adr => 1;
-lh_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
-              cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
-              target => lh_wait;
-          alu_op => sexthw, JUMP_TO_OP_END(fast_epilog);
-
-lw: latch_adr => 1;
-lw_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
-              cond_test => mem_valid, mem_sel => word, jmp_type => direct, \
-              target => lw_wait;
-          alu_op => add, JUMP_TO_OP_END(fast_epilog);
-
-lbu: latch_adr => 1;
-lbu_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
-              cond_test => mem_valid, mem_sel => byte, jmp_type => direct, \
-              target => lbu_wait;
-           alu_op => zextb, JUMP_TO_OP_END(fast_epilog);
-
-lhu: latch_adr => 1;
-lhu_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
-              cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
-              target => lhu_wait;
-           alu_op => zexthw, JUMP_TO_OP_END(fast_epilog);
-
-branch_ops:
-beq_trampoline: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => cmp_eq, \
-                    jmp_type => direct, target => branch_epilog;
-bne_trampoline: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_NE, \
-                    jmp_type => direct, target => branch_epilog;
-                NOT_IMPLEMENTED;
-                NOT_IMPLEMENTED;
-blt_trampoline: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_LT, \
-                    jmp_type => direct, target => branch_epilog;
-bge_trampoline: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_GE, \
-                    jmp_type => direct, target => branch_epilog;
-bltu_trampoline: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => cmp_ltu, \
-                    jmp_type => direct, target => branch_epilog;
-bgeu_trampoline: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_GEU, \
-                    jmp_type => direct, target => branch_epilog;
-
-branch_epilog: alu_op => add, CONDTEST_ALU_CMP_FAILED, pc_action => inc, \
-                  jmp_type => direct, target => fetch;
-        jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
-     
+origin 0xB0;
+jal: src_op => latch_a_b, a_src => four, b_src => pc;
+     alu_op => add, a_src => imm, b_src => pc, src_op => latch_a_b;
+     WRITE_RD, alu_op => add;
+     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
 fast_epilog: WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregistered, \
                   SKIP_WAIT_IF_ACK;
 
+origin 0xc0;
+add_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+                    target => add;
+sll_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+                    target => sll;
+slt_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+                    target => slt;
+sltu_1:       src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+                    target => sltu;
+xor_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+                    target => xor;
+srl_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+                    target => srl;
+or_1:         src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+                    target => or;
+and_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+                    target => and;
+sub_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+                    target => sub;  // 0b1000
+              NOT_IMPLEMENTED;  // 0b1001
+              NOT_IMPLEMENTED;  // 0b1010
+              NOT_IMPLEMENTED;  // 0b1011
+              NOT_IMPLEMENTED;  // 0b1101
+sra_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+                    target => sra;
+
+origin 0xd0;
+lui:    a_src => zero, b_src => imm, src_op => latch_a_b, pc_action => inc, \
+            jmp_type => direct, target => addi;
+
+
+add:          alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+slt:          CMP_LT, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+sltu:         alu_op => cmp_ltu, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+xor:          alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+or:           alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+and:          alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+sub:          alu_op => sub, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
+
+             // Re: add; pass through RS2 unmodified, and check whether 5 LSBs
+             // were zero. The shift loops above can be reused once we do
+             // the initial zero check.
+sll:  
+             READ_RS1, a_src => zero, src_op => latch_a;
+             READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
+             a_src => gp, b_src => one, src_op => latch_a_b, alu_op => sll,
+                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sll_loop;
+             READ_RS1, jmp_type => direct, target => shift_zero;
+
+srl:  
+             READ_RS1, a_src => zero, src_op => latch_a;
+             READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
+             a_src => gp, b_src => one, src_op => latch_a_b, alu_op => srl,
+                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => srl_loop;
+             READ_RS1, jmp_type => direct, target => shift_zero;
+
+sra:  
+             READ_RS1, a_src => zero, src_op => latch_a;
+             READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
+             a_src => gp, b_src => one, src_op => latch_a_b, alu_op => sra,
+                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sra_loop;
+             READ_RS1, jmp_type => direct, target => shift_zero;
+
 // Interrupt handler.
-origin 224;
+origin 0xf0;
 NOT_IMPLEMENTED;
 // Send PC through ALU
 // save_pc: a_src => pc, b_src => target, jmp_type => nop, target => 0;
