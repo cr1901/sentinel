@@ -1,7 +1,7 @@
 from amaranth import Signal, Elaboratable, Module
 from amaranth.lib.wiring import Component, Signature, In, Out
 
-from .decode import OpcodeType, DecodeControlGasket
+from .decode import OpcodeType
 from .alu import AluCtrlSignature
 from .ucoderom import UCodeROM
 from .datapath import GPControlSignature, PCControlSignature
@@ -11,7 +11,7 @@ from .ucodefields import JmpType, CondTest
 
 ControlSignature = Signature({
     "alu": Out(AluCtrlSignature),
-    "decode": In(DecodeControlGasket.signature),
+    "decode": In(1),
     "gp": Out(GPControlSignature),
     "pc": Out(PCControlSignature),
 })
@@ -24,14 +24,14 @@ class Control(Component):
         self.ucoderom = UCodeROM(main_file=ucode)
         # Enums from microcode ROM.
         self.sequencer = Sequencer(self.ucoderom)
-        self.mapper = Mapper()
 
         # Control inputs
         self.vec_adr = Signal.like(self.ucoderom.fields.target)
         # Direct 5 high bits of opcode.
         self.opcode = Signal(OpcodeType)
-        # funct* fields converted to a 4-bit ID.
-        self.requested_op = Signal(4)
+        # RISCV major/minor opcodes compressed into 8 bits to index into
+        # ucode ROM. Chosen through trial and error.
+        self.requested_op = Signal(8)
         # funct12 ECALL (0) or EBREAK (1)
         self.e_type = Signal(1)
         # Load should zero-extend, not sign extend.
@@ -71,7 +71,6 @@ class Control(Component):
 
         m.submodules.ucoderom = self.ucoderom
         m.submodules.sequencer = self.sequencer
-        m.submodules.mapper = self.mapper
 
         # Propogate ucode control signals
         m.d.comb += [
@@ -104,20 +103,11 @@ class Control(Component):
             self.sequencer.jmp_type.eq(self.jmp_type)
         ]
 
-        # Connect mapper to Control.
+        # Connect sequencer to Control.
         m.d.comb += [
-            self.mapper.opcode.eq(self.opcode),
-            self.mapper.requested_op.eq(self.requested_op),
-            self.mapper.e_type.eq(self.e_type),
-        ]
-
-        # Connect sequencer to Control/Mapper.
-        m.d.comb += [
-            # Test not implemented yet!
             self.sequencer.test.eq(self.test),
-            self.sequencer.opcode_adr.eq(self.mapper.map_adr),
+            self.sequencer.opcode_adr.eq(self.requested_op),
             self.sequencer.vec_adr.eq(self.vec_adr),
-            self.sequencer.req_op.eq(self.requested_op)
         ]
 
         # Test mux
@@ -143,44 +133,6 @@ class Control(Component):
         return m
 
 
-# Map from Opcode to start location in UCodeROM
-class Mapper(Elaboratable):
-    def __init__(self):
-        self.opcode = Signal(OpcodeType)
-        self.requested_op = Signal(4)
-        self.e_type = Signal(1)
-        self.map_adr = Signal(8)
-
-    def elaborate(self, platform):
-        m = Module()
-
-        with m.Switch(self.opcode):
-            with m.Case(OpcodeType.OP_IMM):
-                m.d.comb += self.map_adr.eq(8)
-            with m.Case(OpcodeType.OP):
-                m.d.comb += self.map_adr.eq(9)
-            with m.Case(OpcodeType.LUI):
-                m.d.comb += self.map_adr.eq(10)
-            with m.Case(OpcodeType.MISC_MEM):
-                m.d.comb += self.map_adr.eq(11)
-            with m.Case(OpcodeType.AUIPC):
-                m.d.comb += self.map_adr.eq(12)
-            with m.Case(OpcodeType.JAL):
-                m.d.comb += self.map_adr.eq(13)
-            with m.Case(OpcodeType.STORE):
-                m.d.comb += self.map_adr.eq(14)
-            with m.Case(OpcodeType.LOAD):
-                m.d.comb += self.map_adr.eq(15)
-            with m.Case(OpcodeType.JALR):
-                m.d.comb += self.map_adr.eq(16)
-            with m.Case(OpcodeType.BRANCH):
-                m.d.comb += self.map_adr.eq(17)
-            with m.Case(OpcodeType.SYSTEM):
-                m.d.comb += self.map_adr.eq(128)
-
-        return m
-
-
 # Microprogram address generation.
 class Sequencer(Elaboratable):
     def __init__(self, ucoderom):
@@ -192,7 +144,6 @@ class Sequencer(Elaboratable):
         self.opcode_adr = Signal.like(self.adr)
         self.vec_adr = Signal.like(self.adr)
         self.next_adr = Signal.like(self.adr)
-        self.req_op = Signal(4)
 
         # If test succeeds, branch in target/vec_adr is taken, otherwise
         # next_adr.
@@ -217,8 +168,6 @@ class Sequencer(Elaboratable):
                     m.d.comb += self.adr.eq(self.target)
                 with m.Else():
                     m.d.comb += self.adr.eq(self.next_adr)
-            with m.Case(JmpType.MAP_FUNCT):
-                m.d.comb += self.adr.eq(self.target + self.req_op)
             with m.Case(JmpType.DIRECT_ZERO):
                 with m.If(self.test):
                     m.d.comb += self.adr.eq(self.target)

@@ -85,20 +85,6 @@ DecodeSignature = Signature({
 })
 
 
-class DecodeControlGasket(Component):
-    signature = Signature({
-        "opcode": Out(OpcodeType)
-    })
-
-    def __init__(self, decode):
-        self.decode = decode
-        super().__init__()
-
-    def elaborate(self, platform):
-        m = Module()
-        m.d.comb += self.opcode.eq(self.decode.opcode)
-
-
 class Decode(Component):
     signature = DecodeSignature.flip()
 
@@ -117,11 +103,9 @@ class Decode(Component):
         self.e_type = Signal()
         self.custom = Signal()
 
-        # Map from funct3, and funct7, and funct12 bits to a 4-bit ID based on
-        # major opcode.
-        # * For OP/OP_IMM, use a direct concatenation of funct3 and funct7.
-        # * For ECALL/EBREAK, only the low bit of funct12 is used.
-        self.requested_op = Signal(4)
+        # Map from opcode, funct3, and funct7, and funct12 bits to a 8-bit
+        # ID to index into ucode ROM. Chosen through trial and error.
+        self.requested_op = Signal(8)
 
         ###
 
@@ -184,21 +168,25 @@ class Decode(Component):
                                       (self.funct7 != 0b0100000)):
                                 m.d.comb += self.probably_illegal.eq(1)
                         m.d.sync += self.requested_op.eq(Cat(self.funct3,
-                                                             self.funct7[-2]))
+                                                             self.funct7[-2],
+                                                             C(4)))
                     with m.Else():
                         m.d.sync += self.requested_op.eq(Cat(self.funct3,
                                                              C(0)))
                 with m.Case(OpcodeType.LUI):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
+                    m.d.sync += self.requested_op.eq(0xD0)
                 with m.Case(OpcodeType.AUIPC):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
+                    m.d.sync += self.requested_op.eq(0x50)
                 with m.Case(OpcodeType.OP):
                     with m.If((self.funct3 == 0) | (self.funct3 == 5)):
                         with m.If((self.funct7 != 0) &
                                   (self.funct7 != 0b0100000)):
                             m.d.comb += self.probably_illegal.eq(1)
                         m.d.sync += self.requested_op.eq(Cat(self.funct3,
-                                                             self.funct7[-2]))
+                                                             self.funct7[-2],
+                                                             C(0xC)))
                     with m.Else():
                         with m.If(self.funct7 != 0):
                             m.d.comb += self.probably_illegal.eq(1)
@@ -206,27 +194,29 @@ class Decode(Component):
                                                              C(0)))
                 with m.Case(OpcodeType.JAL):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.J)
+                    m.d.sync += self.requested_op.eq(0x98)
                 with m.Case(OpcodeType.JALR):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
+                    m.d.sync += self.requested_op.eq(0xB0)
 
                     with m.If(self.funct3 != 0):
                         m.d.comb += self.probably_illegal.eq(1)
                 with m.Case(OpcodeType.BRANCH):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.B)
-                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
+                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x11)))
 
                     with m.If((self.funct3 == 2) | (self.funct3 == 3)):
                         m.d.comb += self.probably_illegal.eq(1)
                 with m.Case(OpcodeType.LOAD):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
-                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
+                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(1)))
 
                     with m.If((self.funct3 == 3) | (self.funct3 == 6) |
                               (self.funct3 == 7)):
                         m.d.comb += self.probably_illegal.eq(1)
                 with m.Case(OpcodeType.STORE):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.S)
-                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0)))
+                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x10)))
 
                     with m.If(self.funct3 >= 3):
                         m.d.comb += self.probably_illegal.eq(1)
@@ -235,6 +225,7 @@ class Decode(Component):
                 with m.Case(OpcodeType.MISC_MEM):
                     # RS1 and RD should be ignored for FENCE insn in a base
                     # impl.
+                    m.d.sync += self.requested_op.eq(0x30)
 
                     with m.If(self.funct3 != 0):
                         m.d.comb += self.probably_illegal.eq(1)
