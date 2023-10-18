@@ -1,4 +1,4 @@
-from amaranth import Signal, Elaboratable, Module, Cat, C
+from amaranth import Signal, Module, Cat, C
 from amaranth.lib.wiring import Component, Signature, Out, connect
 from amaranth_soc import wishbone
 
@@ -83,8 +83,6 @@ class Top(Component):
         data_adr = Signal.like(self.alu.data.o)
 
         # ALU conns
-        a_mux_o = Signal(32)
-        b_mux_o = Signal(32)
         connect(m, self.alu.ctrl, self.control.alu)
 
         # ALU conns
@@ -250,145 +248,142 @@ class Top(Component):
         m.d.comb += self.reg_w_adr.eq(self.decode.dst)
 
         if self.formal:
-            CHECK_INT_ADDR = 1
-            EXCEPTION_HANDLER_ADDR = 224
-
-            # rvfi_valid
-            curr_upc = Signal.like(self.control.ucoderom.addr)
-            prev_upc = Signal.like(curr_upc)
-
-            # In general, if there's an insn_fetch and ACK, by the next cycle,
-            # the insn has been retired. Handle exceptions to this rule on a
-            # case-by-case basis.
-            m.d.sync += [
-                curr_upc.eq(self.control.ucoderom.addr),
-                prev_upc.eq(curr_upc),
-            ]
-
-            # rvfi_insn/trap/rs1_addr/rs2_addr/rd_addr/rd_wdata/pc_rdata/
-            # valid/order/rs1_data/rs2_data/pc_wdata/mem_addr/mem_rmask/
-            # mem_wmask/mem_rdata/mem_wdata
-            m.submodules.rvfi_rs1 = rs1_port = self.datapath.regfile.mem.read_port()
-            m.submodules.rvfi_rs2 = rs2_port = self.datapath.regfile.mem.read_port()
-
-            first_insn = Signal(1, reset=1)
-            insn_temp = Signal.like(self.decode.insn)
-            with m.FSM() as fsm:
-                # There is nothing to pipeline/interleave, so wait for first
-                # insn to be fetched.
-                # The CHECK_INT_ADDR line is meant to only latch the last insn
-                # that is ACK'd before moving to upc == 1, since the solver
-                # will happily ignore wishbone timing.
-                with m.State("FIRST_INSN"):
-                    with m.If(self.control.insn_fetch & self.bus.ack &
-                              self.control.ucoderom.addr == CHECK_INT_ADDR):
-                        m.next = "VALID_LATCH_DECODER"
-
-                with m.State("VALID_LATCH_DECODER"):
-                    m.d.comb += [
-                        self.rvfi.valid.eq(1),
-                    ]
-                    m.d.sync += [
-                        self.rvfi.insn.eq(insn_temp),
-                        self.rvfi.order.eq(self.rvfi.order + 1),
-                        self.rvfi.trap.eq(self.decode.exception),
-                        self.rvfi.rs1_addr.eq(self.decode.rs1),
-                        self.rvfi.rs2_addr.eq(self.decode.rs2),
-                        # We have access to RD now, but RVFI mandates zero if
-                        # no write. So wait until we know for sure.
-                        self.rvfi.rd_addr.eq(0),
-                        # Ditto.
-                        self.rvfi.rd_wdata.eq(0),
-                        self.rvfi.pc_rdata.eq(self.datapath.pc.dat_r << 2),
-                    ]
-
-                    with m.If(first_insn):
-                        m.d.comb += self.rvfi.valid.eq(0)
-                        m.d.sync += [
-                            self.rvfi.order.eq(0),
-                            first_insn.eq(0),
-                        ]
-
-                    # Prepare to read register file.
-                    m.d.comb += [
-                        rs1_port.addr.eq(self.decode.rs1),
-                        rs2_port.addr.eq(self.decode.rs2)
-                    ]
-
-                    m.next = "WAIT_FOR_ACK"
-
-                with m.State("WAIT_FOR_ACK"):
-                    # Hold addresses in case we're here for a bit.
-                    m.d.comb += [
-                        rs1_port.addr.eq(self.decode.rs1),
-                        rs2_port.addr.eq(self.decode.rs2)
-                    ]
-
-                    m.d.sync += [
-                        self.rvfi.rs1_rdata.eq(rs1_port.data),
-                        self.rvfi.rs2_rdata.eq(rs2_port.data),
-                    ]
-
-                    # And latch write data if there's a write.
-                    with m.If(self.datapath.gp.ctrl.reg_write):
-                        m.d.sync += [
-                            self.rvfi.rd_wdata.eq(self.datapath.gp.dat_w),
-                            self.rvfi.rd_addr.eq(self.datapath.gp.adr_w)
-                        ]
-
-                    # FIXME: Turn into a "peek" action for the PC reg, rather
-                    # than duplicating PC logic here.
-                    with m.If(self.datapath.pc.ctrl.action == PcAction.INC):
-                        m.d.sync += self.rvfi.pc_wdata.eq(
-                            (self.datapath.pc.dat_r + 1) << 2)
-                    with m.Elif(self.datapath.pc.ctrl.action ==
-                                PcAction.LOAD_ALU_O):
-                        m.d.sync += self.rvfi.pc_wdata.eq(
-                            self.datapath.pc.dat_w << 2)
-
-                    with m.If(~self.control.insn_fetch & self.bus.ack):
-                        m.d.sync += [
-                            self.rvfi.mem_addr.eq(self.bus.adr << 2),
-                            self.rvfi.mem_rdata.eq(self.bus.dat_r),
-                            self.rvfi.mem_wdata.eq(self.bus.dat_w),
-                        ]
-
-                        with m.If(self.bus.we):
-                            m.d.sync += [
-                                self.rvfi.mem_rmask.eq(0),
-                                self.rvfi.mem_wmask.eq(self.bus.sel)
-                            ]
-                        with m.Else():
-                            m.d.sync += [
-                                self.rvfi.mem_rmask.eq(self.bus.sel),
-                                self.rvfi.mem_wmask.eq(0)
-                            ]
-
-                    with m.If(self.control.insn_fetch & self.bus.ack):
-                        m.d.sync += insn_temp.eq(self.decode.insn)
-                        m.next = "VALID_LATCH_DECODER"
-
-            # rvfi_intr
-            with m.If(self.rvfi.valid):
-                m.d.sync += self.rvfi.intr.eq(0)
-
-            # FIXME: Imprecise/needs work.
-            with m.If(curr_upc == EXCEPTION_HANDLER_ADDR):
-                m.d.sync += self.rvfi.intr.eq(1)
-
-            # rvfi_halt
-            m.d.comb += self.rvfi.halt.eq(0)
-
-            # rvfi_mode
-            m.d.comb += self.rvfi.mode.eq(2)
-
-            # rvfi_ixl
-            m.d.comb += self.rvfi.ixl.eq(1)
+            self.gen_rvfi(m)
 
         return m
 
+    def gen_rvfi(self, m):
+        CHECK_INT_ADDR = 1
+        EXCEPTION_HANDLER_ADDR = 224
 
-class TopMem(Elaboratable):
-    def __init__(self):
+        # rvfi_valid
+        curr_upc = Signal.like(self.control.ucoderom.addr)
+        prev_upc = Signal.like(curr_upc)
 
-        self.top = Top()
+        # In general, if there's an insn_fetch and ACK, by the next cycle,
+        # the insn has been retired. Handle exceptions to this rule on a
+        # case-by-case basis.
+        m.d.sync += [
+            curr_upc.eq(self.control.ucoderom.addr),
+            prev_upc.eq(curr_upc),
+        ]
+
+        # rvfi_insn/trap/rs1_addr/rs2_addr/rd_addr/rd_wdata/pc_rdata/
+        # valid/order/rs1_data/rs2_data/pc_wdata/mem_addr/mem_rmask/
+        # mem_wmask/mem_rdata/mem_wdata
+        m.submodules.rvfi_rs1 = rs1_port = self.datapath.regfile.mem.read_port()  # noqa: E501
+        m.submodules.rvfi_rs2 = rs2_port = self.datapath.regfile.mem.read_port()  # noqa: E501
+
+        first_insn = Signal(1, reset=1)
+        insn_temp = Signal.like(self.decode.insn)
+        with m.FSM():
+            # There is nothing to pipeline/interleave, so wait for first
+            # insn to be fetched.
+            # The CHECK_INT_ADDR line is meant to only latch the last insn
+            # that is ACK'd before moving to upc == 1, since the solver
+            # will happily ignore wishbone timing.
+            with m.State("FIRST_INSN"):
+                with m.If(self.control.insn_fetch & self.bus.ack &
+                          self.control.ucoderom.addr == CHECK_INT_ADDR):
+                    m.next = "VALID_LATCH_DECODER"
+
+            with m.State("VALID_LATCH_DECODER"):
+                m.d.comb += [
+                    self.rvfi.valid.eq(1),
+                ]
+                m.d.sync += [
+                    self.rvfi.insn.eq(insn_temp),
+                    self.rvfi.order.eq(self.rvfi.order + 1),
+                    self.rvfi.trap.eq(self.decode.exception),
+                    self.rvfi.rs1_addr.eq(self.decode.rs1),
+                    self.rvfi.rs2_addr.eq(self.decode.rs2),
+                    # We have access to RD now, but RVFI mandates zero if
+                    # no write. So wait until we know for sure.
+                    self.rvfi.rd_addr.eq(0),
+                    # Ditto.
+                    self.rvfi.rd_wdata.eq(0),
+                    self.rvfi.pc_rdata.eq(self.datapath.pc.dat_r << 2),
+                ]
+
+                with m.If(first_insn):
+                    m.d.comb += self.rvfi.valid.eq(0)
+                    m.d.sync += [
+                        self.rvfi.order.eq(0),
+                        first_insn.eq(0),
+                    ]
+
+                # Prepare to read register file.
+                m.d.comb += [
+                    rs1_port.addr.eq(self.decode.rs1),
+                    rs2_port.addr.eq(self.decode.rs2)
+                ]
+
+                m.next = "WAIT_FOR_ACK"
+
+            with m.State("WAIT_FOR_ACK"):
+                # Hold addresses in case we're here for a bit.
+                m.d.comb += [
+                    rs1_port.addr.eq(self.decode.rs1),
+                    rs2_port.addr.eq(self.decode.rs2)
+                ]
+
+                m.d.sync += [
+                    self.rvfi.rs1_rdata.eq(rs1_port.data),
+                    self.rvfi.rs2_rdata.eq(rs2_port.data),
+                ]
+
+                # And latch write data if there's a write.
+                with m.If(self.datapath.gp.ctrl.reg_write):
+                    m.d.sync += [
+                        self.rvfi.rd_wdata.eq(self.datapath.gp.dat_w),
+                        self.rvfi.rd_addr.eq(self.datapath.gp.adr_w)
+                    ]
+
+                # FIXME: Turn into a "peek" action for the PC reg, rather
+                # than duplicating PC logic here.
+                with m.If(self.datapath.pc.ctrl.action == PcAction.INC):
+                    m.d.sync += self.rvfi.pc_wdata.eq(
+                        (self.datapath.pc.dat_r + 1) << 2)
+                with m.Elif(self.datapath.pc.ctrl.action ==
+                            PcAction.LOAD_ALU_O):
+                    m.d.sync += self.rvfi.pc_wdata.eq(
+                        self.datapath.pc.dat_w << 2)
+
+                with m.If(~self.control.insn_fetch & self.bus.ack):
+                    m.d.sync += [
+                        self.rvfi.mem_addr.eq(self.bus.adr << 2),
+                        self.rvfi.mem_rdata.eq(self.bus.dat_r),
+                        self.rvfi.mem_wdata.eq(self.bus.dat_w),
+                    ]
+
+                    with m.If(self.bus.we):
+                        m.d.sync += [
+                            self.rvfi.mem_rmask.eq(0),
+                            self.rvfi.mem_wmask.eq(self.bus.sel)
+                        ]
+                    with m.Else():
+                        m.d.sync += [
+                            self.rvfi.mem_rmask.eq(self.bus.sel),
+                            self.rvfi.mem_wmask.eq(0)
+                        ]
+
+                with m.If(self.control.insn_fetch & self.bus.ack):
+                    m.d.sync += insn_temp.eq(self.decode.insn)
+                    m.next = "VALID_LATCH_DECODER"
+
+        # rvfi_intr
+        with m.If(self.rvfi.valid):
+            m.d.sync += self.rvfi.intr.eq(0)
+
+        # FIXME: Imprecise/needs work.
+        with m.If(curr_upc == EXCEPTION_HANDLER_ADDR):
+            m.d.sync += self.rvfi.intr.eq(1)
+
+        # rvfi_halt
+        m.d.comb += self.rvfi.halt.eq(0)
+
+        # rvfi_mode
+        m.d.comb += self.rvfi.mode.eq(2)
+
+        # rvfi_ixl
+        m.d.comb += self.rvfi.ixl.eq(1)
