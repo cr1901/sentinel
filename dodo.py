@@ -13,6 +13,25 @@ DOIT_CONFIG = {
 }
 
 
+def task_demo_luts():
+    build_dir = Path("./build")
+    yosys_log = build_dir / "top.rpt"
+    nextpnr_log = build_dir / "top.rpt"
+    luts_csv = Path("./LUTs.csv")
+    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
+
+    return {
+        "actions": [
+                    "pdm demo",
+                    f"pdm run python -m logLUTs --yosys-log {yosys_log}"
+                    f"--nextpnr-log {nextpnr_log} --git . --target ice40"
+                    f"--add-commit --csvfile {luts_csv}"
+                    ],
+        "targets": [yosys_log, nextpnr_log, luts_csv],
+        "file_dep": [pyfiles],
+    }
+
+
 def task_formal_init():
     formal_tests = Path("./tests/formal/")
     submod = formal_tests / "riscv-formal" / ".git"
