@@ -233,7 +233,6 @@ class Top(Component):
                         m.d.comb += self.bus.sel.eq(0xf)
 
         # Decode conns
-        # insn_reg = Signal.like(self.decode.insn)
         m.d.comb += [
             self.decode.insn.eq(self.bus.dat_r),
             # Decode begins automatically.

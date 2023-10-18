@@ -181,14 +181,14 @@ class Decode(Component):
                     with m.If((self.funct3 == 1) | (self.funct3 == 5)):
                         with m.If(self.funct3 == 1):
                             with m.If(self.funct7 != 0):
-                                m.d.comb += [
+                                m.d.sync += [
                                     self.exception.eq(1),
                                     self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                                 ]
                         with m.Else():
                             with m.If((self.funct7 != 0) &
                                       (self.funct7 != 0b0100000)):
-                                m.d.comb += [
+                                m.d.sync += [
                                     self.exception.eq(1),
                                     self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                                 ]
@@ -208,7 +208,7 @@ class Decode(Component):
                     with m.If((self.funct3 == 0) | (self.funct3 == 5)):
                         with m.If((self.funct7 != 0) &
                                   (self.funct7 != 0b0100000)):
-                            m.d.comb += [
+                            m.d.sync += [
                                 self.exception.eq(1),
                                 self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                             ]
@@ -217,7 +217,7 @@ class Decode(Component):
                                                              C(0xC)))
                     with m.Else():
                         with m.If(self.funct7 != 0):
-                            m.d.comb += [
+                            m.d.sync += [
                                 self.exception.eq(1),
                                 self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                             ]
@@ -232,7 +232,7 @@ class Decode(Component):
                     m.d.sync += self.requested_op.eq(0x98)
 
                     with m.If(self.funct3 != 0):
-                        m.d.comb += [
+                        m.d.sync += [
                             self.exception.eq(1),
                             self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                         ]
@@ -241,7 +241,7 @@ class Decode(Component):
                     m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x11)))
 
                     with m.If((self.funct3 == 2) | (self.funct3 == 3)):
-                        m.d.comb += [
+                        m.d.sync += [
                             self.exception.eq(1),
                             self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                         ]
@@ -251,7 +251,7 @@ class Decode(Component):
 
                     with m.If((self.funct3 == 3) | (self.funct3 == 6) |
                               (self.funct3 == 7)):
-                        m.d.comb += [
+                        m.d.sync += [
                             self.exception.eq(1),
                             self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                         ]
@@ -260,12 +260,12 @@ class Decode(Component):
                     m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x10)))
 
                     with m.If(self.funct3 >= 3):
-                        m.d.comb += [
+                        m.d.sync += [
                             self.exception.eq(1),
                             self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                         ]
                 with m.Case(OpcodeType.CUSTOM_0):
-                    m.d.comb += [
+                    m.d.sync += [
                             self.exception.eq(1),
                             self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                         ]
@@ -275,7 +275,7 @@ class Decode(Component):
                     m.d.sync += self.requested_op.eq(0x30)
 
                     with m.If(self.funct3 != 0):
-                        m.d.comb += [
+                        m.d.sync += [
                             self.exception.eq(1),
                             self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                         ]
@@ -283,30 +283,32 @@ class Decode(Component):
                     with m.Switch(self.funct3):
                         # ECALL/EBREAK- Handled specially as it always traps.
                         with m.Case(0):
-                            m.d.comb += self.exception.eq(1)
+                            m.d.sync += self.exception.eq(1)
 
                             with m.If(self.funct12[0]):
-                                m.d.comb += self.e_type.cause.eq(MachineCauseValues.BREAKPOINT)  # noqa: E501
+                                m.d.sync += self.e_type.cause.eq(MachineCauseValues.BREAKPOINT)  # noqa: E501
                             with m.Else():
-                                m.d.comb += self.e_type.cause.eq(MachineCauseValues.ECALL_MMODE)  # noqa: E501
+                                m.d.sync += self.e_type.cause.eq(MachineCauseValues.ECALL_MMODE)  # noqa: E501
 
                             with m.If((self.funct12[1:] != 0) |
                                       (self.rs1 != 0) |
                                       (self.rd != 0) | (self.funct3 != 0)):
-                                m.d.comb += self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                                m.d.sync += self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                        with m.Case(4):
+                            m.d.sync += self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
                         with m.Default():
                             # CSR insns.
                             pass
                 with m.Case():
                     # Catch-all for all ones.
-                    m.d.comb += [
+                    m.d.sync += [
                         self.exception.eq(1),
                         self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)
                     ]
 
             # Catch-all for compressed insns, zero insn.
             with m.If(self.insn[0:2] != 0b11):
-                m.d.comb += [
+                m.d.sync += [
                     self.exception.eq(1),
                     self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)
                 ]
