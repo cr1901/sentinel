@@ -1,6 +1,6 @@
-import enum
-
-from amaranth import Signal, Module, Cat, Value, C, Elaboratable
+from amaranth import Signal, Module, Cat, Value, C, Elaboratable, unsigned
+from amaranth.lib import enum
+from amaranth.lib import data
 from amaranth.lib.wiring import Component, Signature, In, Out
 
 
@@ -71,6 +71,31 @@ class OpcodeType(enum.Enum):
     SYSTEM = 0b11100
 
 
+class MachineCauseValues(enum.Enum, shape=unsigned(31)):
+    INSN_MISALIGNED = 0
+    INSN_FAULT = 1
+    ILLEGAL_INSN = 2
+    BREAKPOINT = 3
+    LOAD_MISALIGNED = 4
+    LOAD_FAULT = 5
+    STORE_MISALIGNED = 6
+    STORE_FAULT = 7
+    ECALL_UMODE = 8
+    ECALL_SMODE = 9
+    ECALL_MMODE = 11
+    INSN_PAGE_FAULT = 12
+    LOAD_PAGE_FAULT = 13
+    STORE_PAGE_FAULT = 15
+    MSOFT_INT = 3
+    MTIMER_INT = 7
+    MEXT_INT = 11
+
+
+class MachineCause(data.Struct):
+    cause: MachineCauseValues
+    interrupt: unsigned(1)
+
+
 DecodeSignature = Signature({
     "do_decode": Out(1),
     "insn": Out(32),
@@ -78,10 +103,11 @@ DecodeSignature = Signature({
     "src_b": In(5),
     "imm": In(32),
     "dst": In(5),
-    "illegal": In(1),
     "width": In(1),
     "custom": In(1),
-    "opcode": In(OpcodeType)
+    "opcode": In(OpcodeType),
+    "exception": In(1),
+    "e_type": In(MachineCause)
 })
 
 
@@ -98,9 +124,9 @@ class Decode(Component):
         self.imm = Signal(32)
         self.dst = Signal(5)
         self.shift = Signal()
-        self.illegal = Signal()
         self.width = Signal()
-        self.e_type = Signal()
+        self.exception = Signal()
+        self.e_type = Signal(MachineCause)
         self.custom = Signal()
 
         # Map from opcode, funct3, and funct7, and funct12 bits to a 8-bit
@@ -117,9 +143,6 @@ class Decode(Component):
         self.funct7 = Signal(7)
         self.funct12 = Signal(12)
 
-        self.definitely_illegal = Signal()
-        self.probably_illegal = Signal()
-
         self.immgen = ImmediateGenerator()
 
     def elaborate(self, platform):
@@ -129,8 +152,6 @@ class Decode(Component):
 
         m.d.comb += [
             self.immgen.insn.eq(self.insn),
-            self.definitely_illegal.eq(self.insn.all() | ~self.insn.any() |
-                                       (self.insn[0:2] != 0b11)),
             # Helpers
             self.opcode.eq(self.insn[2:7]),
             self.rd.eq(self.insn[7:12]),
@@ -143,8 +164,6 @@ class Decode(Component):
 
         with m.If(self.do_decode):
             m.d.sync += [
-                self.illegal.eq(self.definitely_illegal |
-                                self.probably_illegal),
                 self.imm.eq(self.immgen.imm),
 
                 # For now, unconditionally propogate these and rely on
@@ -162,11 +181,17 @@ class Decode(Component):
                     with m.If((self.funct3 == 1) | (self.funct3 == 5)):
                         with m.If(self.funct3 == 1):
                             with m.If(self.funct7 != 0):
-                                m.d.comb += self.probably_illegal.eq(1)
+                                m.d.comb += [
+                                    self.exception.eq(1),
+                                    self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                                ]
                         with m.Else():
                             with m.If((self.funct7 != 0) &
                                       (self.funct7 != 0b0100000)):
-                                m.d.comb += self.probably_illegal.eq(1)
+                                m.d.comb += [
+                                    self.exception.eq(1),
+                                    self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                                ]
                         m.d.sync += self.requested_op.eq(Cat(self.funct3,
                                                              self.funct7[-2],
                                                              C(4)))
@@ -183,13 +208,19 @@ class Decode(Component):
                     with m.If((self.funct3 == 0) | (self.funct3 == 5)):
                         with m.If((self.funct7 != 0) &
                                   (self.funct7 != 0b0100000)):
-                            m.d.comb += self.probably_illegal.eq(1)
+                            m.d.comb += [
+                                self.exception.eq(1),
+                                self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                            ]
                         m.d.sync += self.requested_op.eq(Cat(self.funct3,
                                                              self.funct7[-2],
                                                              C(0xC)))
                     with m.Else():
                         with m.If(self.funct7 != 0):
-                            m.d.comb += self.probably_illegal.eq(1)
+                            m.d.comb += [
+                                self.exception.eq(1),
+                                self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                            ]
                         m.d.sync += self.requested_op.eq(Cat(self.funct3,
                                                              self.funct7[-2],
                                                              C(0xC)))
@@ -201,43 +232,84 @@ class Decode(Component):
                     m.d.sync += self.requested_op.eq(0x98)
 
                     with m.If(self.funct3 != 0):
-                        m.d.comb += self.probably_illegal.eq(1)
+                        m.d.comb += [
+                            self.exception.eq(1),
+                            self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                        ]
                 with m.Case(OpcodeType.BRANCH):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.B)
                     m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x11)))
 
                     with m.If((self.funct3 == 2) | (self.funct3 == 3)):
-                        m.d.comb += self.probably_illegal.eq(1)
+                        m.d.comb += [
+                            self.exception.eq(1),
+                            self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                        ]
                 with m.Case(OpcodeType.LOAD):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
                     m.d.sync += self.requested_op.eq(Cat(self.funct3, C(1)))
 
                     with m.If((self.funct3 == 3) | (self.funct3 == 6) |
                               (self.funct3 == 7)):
-                        m.d.comb += self.probably_illegal.eq(1)
+                        m.d.comb += [
+                            self.exception.eq(1),
+                            self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                        ]
                 with m.Case(OpcodeType.STORE):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.S)
                     m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x10)))
 
                     with m.If(self.funct3 >= 3):
-                        m.d.comb += self.probably_illegal.eq(1)
+                        m.d.comb += [
+                            self.exception.eq(1),
+                            self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                        ]
                 with m.Case(OpcodeType.CUSTOM_0):
-                    m.d.comb += self.probably_illegal.eq(1)
+                    m.d.comb += [
+                            self.exception.eq(1),
+                            self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                        ]
                 with m.Case(OpcodeType.MISC_MEM):
                     # RS1 and RD should be ignored for FENCE insn in a base
                     # impl.
                     m.d.sync += self.requested_op.eq(0x30)
 
                     with m.If(self.funct3 != 0):
-                        m.d.comb += self.probably_illegal.eq(1)
+                        m.d.comb += [
+                            self.exception.eq(1),
+                            self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                        ]
                 with m.Case(OpcodeType.SYSTEM):
-                    m.d.comb += self.e_type.eq(self.funct12[0])
+                    with m.Switch(self.funct3):
+                        # ECALL/EBREAK- Handled specially as it always traps.
+                        with m.Case(0):
+                            m.d.comb += self.exception.eq(1)
 
-                    with m.If((self.funct12[1:] != 0) | (self.rs1 != 0) |
-                              (self.rd != 0) | (self.funct3 != 0)):
-                        m.d.comb += self.probably_illegal.eq(1)
+                            with m.If(self.funct12[0]):
+                                m.d.comb += self.e_type.cause.eq(MachineCauseValues.BREAKPOINT)  # noqa: E501
+                            with m.Else():
+                                m.d.comb += self.e_type.cause.eq(MachineCauseValues.ECALL_MMODE)  # noqa: E501
+
+                            with m.If((self.funct12[1:] != 0) |
+                                      (self.rs1 != 0) |
+                                      (self.rd != 0) | (self.funct3 != 0)):
+                                m.d.comb += self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)  # noqa: E501
+                        with m.Default():
+                            # CSR insns.
+                            pass
                 with m.Case():
-                    m.d.comb += self.probably_illegal.eq(1)
+                    # Catch-all for all ones.
+                    m.d.comb += [
+                        self.exception.eq(1),
+                        self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)
+                    ]
+
+            # Catch-all for compressed insns, zero insn.
+            with m.If(self.insn[0:2] != 0b11):
+                m.d.comb += [
+                    self.exception.eq(1),
+                    self.e_type.cause.eq(MachineCauseValues.ILLEGAL_INSN)
+                ]
 
         return m
 

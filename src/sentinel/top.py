@@ -149,7 +149,7 @@ class Top(Component):
             self.control.mem_valid.eq(self.bus.ack),
 
             # TODO: Spin out into a register of exception sources.
-            self.control.exception.eq(self.decode.illegal)
+            self.control.exception.eq(self.decode.exception)
         ]
 
         # An ACK stops the request b/c the microcode's to avoid a 1-cycle delay
@@ -233,6 +233,7 @@ class Top(Component):
                         m.d.comb += self.bus.sel.eq(0xf)
 
         # Decode conns
+        # insn_reg = Signal.like(self.decode.insn)
         m.d.comb += [
             self.decode.insn.eq(self.bus.dat_r),
             # Decode begins automatically.
@@ -291,7 +292,7 @@ class Top(Component):
                     m.d.sync += [
                         self.rvfi.insn.eq(insn_temp),
                         self.rvfi.order.eq(self.rvfi.order + 1),
-                        self.rvfi.trap.eq(self.decode.illegal),
+                        self.rvfi.trap.eq(self.decode.exception),
                         self.rvfi.rs1_addr.eq(self.decode.rs1),
                         self.rvfi.rs2_addr.eq(self.decode.rs2),
                         # We have access to RD now, but RVFI mandates zero if
