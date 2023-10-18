@@ -39,7 +39,7 @@ fields block_ram: {
   b_src: enum { gp = 0; pc; imm; one; dat_r; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
-  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_eq; cmp_ltu; \
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_ltu; \
                  sextb; sexthw; zextb; zexthw; }, default add;
   // In addition to writing ALU o, write C or D. Valid next cycle.
   // Modify inputs and outputs to ALU.
@@ -262,10 +262,6 @@ bge_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bge;
 bltu_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bltu;
 bgeu_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bgeu;
 
-beq: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => cmp_eq, \
-        jmp_type => direct, target => branch_epilog;
-bne: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_NE, \
-        jmp_type => direct, target => branch_epilog;
 blt: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_LT, \
         jmp_type => direct, target => branch_epilog;
 bge: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_GE, \
@@ -310,6 +306,16 @@ sw: a_src => zero, b_src => gp, src_op => latch_a_b, alu_op => add;
 // between data access and insn fetch)
 sw_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => word, write_mem => 1, jmp_type => direct_zero, target => sw_wait;
+
+beq: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => sub;
+     alu_op => add, invert_test => 1, cond_test => cmp_alu_o_zero, pc_action => inc, \
+                  jmp_type => direct, target => fetch;
+     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
+
+bne: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => sub;
+     alu_op => add, cond_test => cmp_alu_o_zero, pc_action => inc, \
+                  jmp_type => direct, target => fetch;
+     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
 origin 0xB0;
 jal: src_op => latch_a_b, a_src => four, b_src => pc;

@@ -20,12 +20,11 @@ class OpType(enum.Enum):
     SLL = 5
     SRL = 6
     SRA = 7
-    CMP_EQ = 8
-    CMP_LTU = 9
-    SEXTB = 10
-    SEXTHW = 11
-    ZEXTB = 12
-    ZEXTHW = 13
+    CMP_LTU = 8
+    SEXTB = 9
+    SEXTHW = 10
+    ZEXTB = 11
+    ZEXTHW = 12
 
 
 class CondTest(enum.Enum):

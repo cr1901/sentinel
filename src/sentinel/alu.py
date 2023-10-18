@@ -57,11 +57,6 @@ class ShiftArithmeticRight(Unit):
         super().__init__(width, lambda a, _: a.as_signed() >> 1)
 
 
-class CompareEqual(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a == b)
-
-
 class CompareLessThanUnsigned(Unit):
     def __init__(self, width):
         super().__init__(width, lambda a, b: a < b)
@@ -133,7 +128,6 @@ class ALU(Component):
         self.sll = ShiftLogicalLeft(width)
         self.srl = ShiftLogicalRight(width)
         self.sar = ShiftArithmeticRight(width)
-        self.cmp_equal = CompareEqual(width)
         self.cmp_ltu = CompareLessThanUnsigned(width)
         self.sextb = SignExtendByte(width)
         self.sexthw = SignExtendHalfWord(width)
@@ -150,7 +144,6 @@ class ALU(Component):
         m.submodules.sll = self.sll
         m.submodules.srl = self.srl
         m.submodules.sal = self.sar
-        m.submodules.cmp_equal = self.cmp_equal
         m.submodules.cmp_ltu = self.cmp_ltu
         m.submodules.sextb = self.sextb
         m.submodules.sexthw = self.sexthw
@@ -180,9 +173,8 @@ class ALU(Component):
                 ]
 
         for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
-                       self.sll, self.srl, self.sar, self.cmp_equal,
-                       self.cmp_ltu, self.sextb, self.sexthw, self.zextb,
-                       self.zexthw]:
+                       self.sll, self.srl, self.sar, self.cmp_ltu, self.sextb,
+                       self.sexthw, self.zextb, self.zexthw]:
             m.d.comb += [
                 submod.a.eq(mod_a),
                 submod.b.eq(mod_b),
@@ -205,8 +197,6 @@ class ALU(Component):
                 m.d.comb += self.o_mux.eq(self.srl.o)
             with m.Case(OpType.SRA):
                 m.d.comb += self.o_mux.eq(self.sar.o)
-            with m.Case(OpType.CMP_EQ):
-                m.d.comb += self.o_mux.eq(self.cmp_equal.o)
             with m.Case(OpType.CMP_LTU):
                 m.d.comb += self.o_mux.eq(self.cmp_ltu.o)
             with m.Case(OpType.SEXTB):
