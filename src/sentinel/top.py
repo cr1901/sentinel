@@ -6,7 +6,7 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
-from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, MemSel, PcAction
+from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, RegWSel, MemSel, PcAction
 
 
 RVFISignature = Signature({
@@ -245,7 +245,14 @@ class Top(Component):
             with m.Case(RegRSel.INSN_RS1_UNREGISTERED):
                 m.d.comb += self.reg_r_adr.eq(self.decode.rs1)
 
-        m.d.comb += self.reg_w_adr.eq(self.decode.dst)
+        with m.Switch(self.control.reg_w_sel):
+            with m.Case(RegWSel.INSN_RD):
+                m.d.comb += self.reg_w_adr.eq(self.decode.dst)
+            with m.Case(RegWSel.ZERO):
+                m.d.comb += [
+                    self.reg_r_adr.eq(0),
+                    self.datapath.gp.ctrl.allow_zero_wr.eq(1)
+                ]
 
         if self.formal:
             self.gen_rvfi(m)

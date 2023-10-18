@@ -63,6 +63,7 @@ class Control(Component):
         self.write_mem = Signal.like(self.ucoderom.fields.write_mem)
         self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
         self.reg_r_sel = Signal.like(self.ucoderom.fields.reg_r_sel)
+        self.reg_w_sel = Signal.like(self.ucoderom.fields.reg_w_sel)
 
         super().__init__()
 
@@ -82,6 +83,7 @@ class Control(Component):
             self.gp.reg_read.eq(self.ucoderom.fields.reg_read),
             self.gp.reg_write.eq(self.ucoderom.fields.reg_write),
             self.reg_r_sel.eq(self.ucoderom.fields.reg_r_sel),
+            self.reg_w_sel.eq(self.ucoderom.fields.reg_w_sel),
             self.a_src.eq(self.ucoderom.fields.a_src),
             self.b_src.eq(self.ucoderom.fields.b_src),
             self.src_op.eq(self.ucoderom.fields.src_op),
@@ -140,7 +142,9 @@ class Sequencer(Elaboratable):
         self.target = Signal.like(ucoderom.fields.target)
         self.jmp_type = Signal.like(ucoderom.fields.jmp_type)
 
-        self.adr = Signal.like(ucoderom.fields.target)
+        # upc == 2 is reset; 0 is "do insn fetch". 0 is so important, that
+        # it's an implied target in DIRECT_ZERO.
+        self.adr = Signal.like(ucoderom.fields.target, reset=2)
         self.opcode_adr = Signal.like(self.adr)
         self.vec_adr = Signal.like(self.adr)
         self.next_adr = Signal.like(self.adr)

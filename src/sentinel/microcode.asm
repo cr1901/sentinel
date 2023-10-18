@@ -53,6 +53,7 @@ fields block_ram: {
   reg_read: bool, default 0;
   reg_write: bool, default 0;
   reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; insn_rs1_unregistered }, default insn_rs1;
+  reg_w_sel: enum { insn_rd = 0; zero = 1; }, default insn_rd;
 
   // Start or continue a memory request. For convenience, an ack will
   // automatically stop a memory request for the cycle after ack, even if
@@ -93,6 +94,12 @@ wait_for_ack: INSN_FETCH, READ_RS1_EAGER, invert_test => 1, cond_test => mem_val
               // Illegal insn or insn misaligned exception possible
 check_int:    jmp_type => map, a_src => gp, src_op => latch_a, READ_RS2, \
                   cond_test => exception, target => save_pc;
+origin 2;
+       // Make sure x0 is initialized with 0.
+reset: src_op => latch_a_b, b_src => one, a_src => zero;
+       alu_op => and;
+       jmp_type => direct, reg_write => 1, reg_w_sel => zero, target => fetch;
+
 origin 8;
 lb_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => lb;

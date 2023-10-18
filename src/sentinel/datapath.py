@@ -11,6 +11,7 @@ PCControlSignature = Signature({
 GPControlSignature = Signature({
     "reg_read": Out(1),
     "reg_write": Out(1),
+    "allow_zero_wr": Out(1)
 })
 
 GPSignature = Signature({
@@ -54,23 +55,25 @@ class RegFile(Component):
     def __init__(self, *, formal):
         self.formal = formal
 
-        # 31 GP regs, 32 scratch regs
+        # 32 GP regs, 32 scratch regs
+        # 0xdeadbeef is a fake init value to ensure that microcode reset
+        # properly initializes r0. If somehow we ever get to ASIC stage,
+        # this will be removed.
         if self.formal:
-            self.mem = Memory(width=32, depth=32*2)
+            self.mem = Memory(width=32, depth=32*2, init=[0xdeadbeef])
 
         super().__init__()
 
     def elaborate(self, platform):
         m = Module()
 
-        # 31 GP regs, 32 scratch regs
+        # 32 GP regs, 32 scratch regs
         # Avoid accidentally instantiating rd ports during pytest simulation
         # with no way to access the underlying memory, unless we're doing
         # formal (in which we have no choice).
         # See: https://github.com/amaranth-lang/amaranth/blob/392ead8d00c9a130b656b3af45c21fa410268301/amaranth/hdl/mem.py#L264-L268)  # noqa: E501
         if not self.formal:
-            self.mem = Memory(width=32, depth=32*2)
-        adr_r_prev = Signal.like(self.adr_r)
+            self.mem = Memory(width=32, depth=32*2, init=[0xdeadbeef])
 
         m.submodules.rdport = rdport = self.mem.read_port()
         m.submodules.wrport = wrport = self.mem.write_port()
@@ -82,19 +85,9 @@ class RegFile(Component):
             wrport.data.eq(self.dat_w),
         ]
 
-        # We have to simulate a single cycle latency for accessing the zero
-        # reg.
-        m.d.sync += adr_r_prev.eq(self.adr_r)
-
-        # Zero register logic- ignore writes/return 0 for reads.
-        with m.If(adr_r_prev == 0):
-            m.d.comb += self.dat_r.eq(0)
-        with m.Else():
-            m.d.comb += self.dat_r.eq(rdport.data)
-
-        # If you write to address 0, well, congrats, you're not reading
-        # that data back!
-        m.d.comb += wrport.en.eq(self.ctrl.reg_write)
+        m.d.comb += self.dat_r.eq(rdport.data)
+        m.d.comb += wrport.en.eq(self.ctrl.reg_write &
+                                 (self.adr_w != 0 | self.ctrl.allow_zero_wr))
 
         return m
 

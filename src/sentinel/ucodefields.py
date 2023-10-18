@@ -83,6 +83,11 @@ class RegRSel(enum.Enum):
     INSN_RS1_UNREGISTERED = 2
 
 
+class RegWSel(enum.Enum):
+    INSN_RD = 0
+    ZERO = 1
+
+
 class MemSel(enum.Enum):
     AUTO = 0
     BYTE = 1
