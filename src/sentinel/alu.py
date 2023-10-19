@@ -62,26 +62,6 @@ class CompareLessThanUnsigned(Unit):
         super().__init__(width, lambda a, b: a < b)
 
 
-class SignExtendByte(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda _, b: b[0:8].as_signed())
-
-
-class SignExtendHalfWord(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda _, b: b[0:16].as_signed())
-
-
-class ZeroExtendByte(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda _, b: b[0:8])
-
-
-class ZeroExtendHalfWord(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda _, b: b[0:16])
-
-
 AluCtrlSignature = Signature({
     "op": Out(OpType),
     "imod": Out(ALUIMod),
@@ -129,10 +109,6 @@ class ALU(Component):
         self.srl = ShiftLogicalRight(width)
         self.sar = ShiftArithmeticRight(width)
         self.cmp_ltu = CompareLessThanUnsigned(width)
-        self.sextb = SignExtendByte(width)
-        self.sexthw = SignExtendHalfWord(width)
-        self.zextb = ZeroExtendByte(width)
-        self.zexthw = ZeroExtendHalfWord(width)
 
     def elaborate(self, platform):
         m = Module()
@@ -145,10 +121,6 @@ class ALU(Component):
         m.submodules.srl = self.srl
         m.submodules.sal = self.sar
         m.submodules.cmp_ltu = self.cmp_ltu
-        m.submodules.sextb = self.sextb
-        m.submodules.sexthw = self.sexthw
-        m.submodules.zextb = self.zextb
-        m.submodules.zexthw = self.zexthw
 
         mod_a = Signal.like(self.data.a)
         mod_b = Signal.like(self.data.b)
@@ -173,8 +145,7 @@ class ALU(Component):
                 ]
 
         for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
-                       self.sll, self.srl, self.sar, self.cmp_ltu, self.sextb,
-                       self.sexthw, self.zextb, self.zexthw]:
+                       self.sll, self.srl, self.sar, self.cmp_ltu]:
             m.d.comb += [
                 submod.a.eq(mod_a),
                 submod.b.eq(mod_b),
@@ -199,14 +170,6 @@ class ALU(Component):
                 m.d.comb += self.o_mux.eq(self.sar.o)
             with m.Case(OpType.CMP_LTU):
                 m.d.comb += self.o_mux.eq(self.cmp_ltu.o)
-            with m.Case(OpType.SEXTB):
-                m.d.comb += self.o_mux.eq(self.sextb.o)
-            with m.Case(OpType.SEXTHW):
-                m.d.comb += self.o_mux.eq(self.sexthw.o)
-            with m.Case(OpType.ZEXTB):
-                m.d.comb += self.o_mux.eq(self.zextb.o)
-            with m.Case(OpType.ZEXTHW):
-                m.d.comb += self.o_mux.eq(self.zexthw.o)
 
         m.d.sync += self.data.o.eq(self.o_mux)
         with m.If(self.ctrl.omod == ALUOMod.INV_LSB_O):

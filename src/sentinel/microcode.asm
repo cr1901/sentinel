@@ -39,8 +39,7 @@ fields block_ram: {
   b_src: enum { gp = 0; pc; imm; one; dat_r; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
-  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_ltu; \
-                 sextb; sexthw; zextb; zexthw; }, default add;
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_ltu; }, default add;
   // In addition to writing ALU o, write C or D. Valid next cycle.
   // Modify inputs and outputs to ALU.
   alu_i_mod: enum { none = 0; inv_msb_a_b; twos_comp_b; }, default none;
@@ -59,7 +58,9 @@ fields block_ram: {
   // automatically stop a memory request for the cycle after ack, even if
   // mem_req is enabled. Valid on current cycle.
   mem_req: bool, default 0;
-  mem_sel: enum { auto = 0; byte = 1; hword = 2; word = 3}, default auto;
+  mem_sel: enum { auto = 0; byte = 1; hword = 2; word = 3; }, default auto;
+  mem_extend: enum { zero = 0; sign = 1}, default zero;
+
   // Latch data address register from ALU output.
   latch_adr: bool, default 0;
   latch_data: bool, default 0;
@@ -115,17 +116,17 @@ lhu_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
 
 lb: alu_op => add;
     latch_adr => 1;
-lb_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
-              cond_test => mem_valid, mem_sel => byte, jmp_type => direct, \
+lb_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => byte, mem_extend => sign, jmp_type => direct, \
               target => lb_wait;
-          alu_op => sextb, JUMP_TO_OP_END(fast_epilog);
+          alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 lh: alu_op => add;
     latch_adr => 1;
-lh_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
-              cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
+lh_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
+              cond_test => mem_valid, mem_sel => hword, mem_extend => sign, jmp_type => direct, \
               target => lh_wait;
-          alu_op => sexthw, JUMP_TO_OP_END(fast_epilog);
+          alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 lw: alu_op => add;
     latch_adr => 1;
@@ -136,17 +137,17 @@ lw_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, inve
 
 lbu: alu_op => add;
      latch_adr => 1;
-lbu_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
+lbu_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => byte, jmp_type => direct, \
               target => lbu_wait;
-           alu_op => zextb, JUMP_TO_OP_END(fast_epilog);
+           alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 lhu: alu_op => add;
      latch_adr => 1;
-lhu_wait:  b_src => dat_r, src_op => latch_b, mem_req => 1, invert_test => 1, \
+lhu_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
               target => lhu_wait;
-           alu_op => zexthw, JUMP_TO_OP_END(fast_epilog);
+           alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 origin 0x30;
 misc_mem: pc_action => inc, jmp_type => direct, target => fetch;

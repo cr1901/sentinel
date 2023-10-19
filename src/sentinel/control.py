@@ -64,6 +64,7 @@ class Control(Component):
         self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
         self.reg_r_sel = Signal.like(self.ucoderom.fields.reg_r_sel)
         self.reg_w_sel = Signal.like(self.ucoderom.fields.reg_w_sel)
+        self.mem_extend = Signal.like(self.ucoderom.fields.mem_extend)
 
         super().__init__()
 
@@ -96,6 +97,7 @@ class Control(Component):
             self.latch_data.eq(self.ucoderom.fields.latch_data),
             self.write_mem.eq(self.ucoderom.fields.write_mem),
             self.insn_fetch.eq(self.ucoderom.fields.insn_fetch),
+            self.mem_extend.eq(self.ucoderom.fields.mem_extend),
         ]
 
         # Connect ucode ROM to sequencer

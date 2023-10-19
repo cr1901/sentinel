@@ -6,7 +6,8 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
-from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, RegWSel, MemSel, PcAction
+from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, RegWSel, MemSel, \
+    PcAction, MemExtend
 
 
 RVFISignature = Signature({
@@ -106,6 +107,7 @@ class Top(Component):
                 with m.Case(ASrc.FOUR):
                     m.d.sync += self.a_input.eq(4)
 
+        raw_dat_r = Signal.like(self.b_input)
         with m.If((self.control.src_op == SrcOp.LATCH_B) |
                   (self.control.src_op == SrcOp.LATCH_A_B)):
             with m.Switch(self.control.b_src):
@@ -122,18 +124,28 @@ class Top(Component):
                     with m.Switch(self.control.mem_sel):
                         with m.Case(MemSel.BYTE):
                             with m.If(data_adr[0:2] == 0):
-                                m.d.sync += self.b_input.eq(self.bus.dat_r[0:8])  # noqa: E501
+                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[0:8])
                             with m.Elif(data_adr[0:2] == 1):
-                                m.d.sync += self.b_input.eq(self.bus.dat_r[8:16])  # noqa: E501
+                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[8:16])
                             with m.Elif(data_adr[0:2] == 2):
-                                m.d.sync += self.b_input.eq(self.bus.dat_r[16:24])  # noqa: E501
+                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[16:24])
                             with m.Else():
-                                m.d.sync += self.b_input.eq(self.bus.dat_r[24:])  # noqa: E501
+                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[24:])
+
+                            with m.If(self.control.mem_extend == MemExtend.SIGN):  # noqa: E501
+                                m.d.sync += self.b_input.eq(raw_dat_r[0:8].as_signed())  # noqa: E501
+                            with m.Else():
+                                m.d.sync += self.b_input.eq(raw_dat_r[0:8])
                         with m.Case(MemSel.HWORD):
                             with m.If(data_adr[1] == 0):
-                                m.d.sync += self.b_input.eq(self.bus.dat_r[0:16])  # noqa: E501
+                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[0:16])
                             with m.Else():
-                                m.d.sync += self.b_input.eq(self.bus.dat_r[16:])  # noqa: E501
+                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[16:])
+
+                            with m.If(self.control.mem_extend == MemExtend.SIGN):  # noqa: E501
+                                m.d.sync += self.b_input.eq(raw_dat_r[0:16].as_signed())  # noqa: E501
+                            with m.Else():
+                                m.d.sync += self.b_input.eq(raw_dat_r[0:16])
                         with m.Case(MemSel.WORD):
                             m.d.sync += self.b_input.eq(self.bus.dat_r)
 

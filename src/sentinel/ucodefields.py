@@ -21,10 +21,6 @@ class OpType(enum.Enum):
     SRL = 6
     SRA = 7
     CMP_LTU = 8
-    SEXTB = 9
-    SEXTHW = 10
-    ZEXTB = 11
-    ZEXTHW = 12
 
 
 class CondTest(enum.Enum):
@@ -93,3 +89,8 @@ class MemSel(enum.Enum):
     BYTE = 1
     HWORD = 2
     WORD = 3
+
+
+class MemExtend(enum.Enum):
+    ZERO = 0
+    SIGN = 1
