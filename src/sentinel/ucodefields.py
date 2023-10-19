@@ -64,7 +64,6 @@ class BSrc(enum.Enum):
 class ALUIMod(enum.Enum):
     NONE = 0
     INV_MSB_A_B = 1
-    TWOS_COMP_B = 2
 
 
 class ALUOMod(enum.Enum):

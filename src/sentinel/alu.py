@@ -118,24 +118,16 @@ class ALU(Component):
         mod_a = Signal.like(self.data.a)
         mod_b = Signal.like(self.data.b)
 
-        with m.Switch(self.ctrl.imod):
-            with m.Case(ALUIMod.NONE):
-                m.d.comb += [
-                    mod_a.eq(self.data.a),
-                    mod_b.eq(self.data.b)
-                ]
-            with m.Case(ALUIMod.INV_MSB_A_B):
-                m.d.comb += [
-                    mod_a.eq(self.data.a),
-                    mod_b.eq(self.data.b),
-                    mod_a[-1].eq(~self.data.a[-1]),
-                    mod_b[-1].eq(~self.data.b[-1]),
-                ]
-            with m.Case(ALUIMod.TWOS_COMP_B):
-                m.d.comb += [
-                    mod_a.eq(self.data.a),
-                    mod_b.eq(-self.data.b)
-                ]
+        m.d.comb += [
+            mod_a.eq(self.data.a),
+            mod_b.eq(self.data.b)
+        ]
+
+        with m.If(self.ctrl.imod == ALUIMod.INV_MSB_A_B):
+            m.d.comb += [
+                mod_a[-1].eq(~self.data.a[-1]),
+                mod_b[-1].eq(~self.data.b[-1]),
+            ]
 
         for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
                        self.sll, self.srl, self.sar]:

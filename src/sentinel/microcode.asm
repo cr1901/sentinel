@@ -42,7 +42,7 @@ fields block_ram: {
   alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_ltu; }, default add;
   // In addition to writing ALU o, write C or D. Valid next cycle.
   // Modify inputs and outputs to ALU.
-  alu_i_mod: enum { none = 0; inv_msb_a_b; twos_comp_b; }, default none;
+  alu_i_mod: enum { none = 0; inv_msb_a_b; }, default none;
   alu_o_mod: enum { none = 0; inv_lsb_o; clear_lsb_o }, default none;
 
   // Either read or write a register in the register file. _Which_ register
