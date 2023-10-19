@@ -57,11 +57,6 @@ class ShiftArithmeticRight(Unit):
         super().__init__(width, lambda a, _: a.as_signed() >> 1)
 
 
-class CompareLessThanUnsigned(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a < b)
-
-
 AluCtrlSignature = Signature({
     "op": Out(OpType),
     "imod": Out(ALUIMod),
@@ -101,14 +96,13 @@ class ALU(Component):
         self.o_mux = Signal(width)
 
         self.add = Adder(width)
-        self.sub = Subtractor(width)
+        self.sub = Subtractor(width + 1)
         self.and_ = AND(width)
         self.or_ = OR(width)
         self.xor = XOR(width)
         self.sll = ShiftLogicalLeft(width)
         self.srl = ShiftLogicalRight(width)
         self.sar = ShiftArithmeticRight(width)
-        self.cmp_ltu = CompareLessThanUnsigned(width)
 
     def elaborate(self, platform):
         m = Module()
@@ -120,7 +114,6 @@ class ALU(Component):
         m.submodules.sll = self.sll
         m.submodules.srl = self.srl
         m.submodules.sal = self.sar
-        m.submodules.cmp_ltu = self.cmp_ltu
 
         mod_a = Signal.like(self.data.a)
         mod_b = Signal.like(self.data.b)
@@ -145,7 +138,7 @@ class ALU(Component):
                 ]
 
         for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
-                       self.sll, self.srl, self.sar, self.cmp_ltu]:
+                       self.sll, self.srl, self.sar]:
             m.d.comb += [
                 submod.a.eq(mod_a),
                 submod.b.eq(mod_b),
@@ -169,7 +162,7 @@ class ALU(Component):
             with m.Case(OpType.SRA):
                 m.d.comb += self.o_mux.eq(self.sar.o)
             with m.Case(OpType.CMP_LTU):
-                m.d.comb += self.o_mux.eq(self.cmp_ltu.o)
+                m.d.comb += self.o_mux.eq(self.sub.o[32])
 
         m.d.sync += self.data.o.eq(self.o_mux)
         with m.If(self.ctrl.omod == ALUOMod.INV_LSB_O):
