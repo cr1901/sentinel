@@ -75,15 +75,13 @@ fields block_ram: {
 #define INSN_FETCH insn_fetch => 1, mem_req => 1
 #define SKIP_WAIT_IF_ACK jmp_type => direct_zero, cond_test => mem_valid, target => check_int
 #define JUMP_TO_OP_END(trg) cond_test => true, jmp_type => direct, target => trg
-#define LATCH_0_TO_TMP(trg) alu_op => nop, alu_tmp => trg
 #define NOT_IMPLEMENTED jmp_type => direct, target => panic
 #define NOP target => 0
 #define READ_RS1 reg_read => 1, reg_r_sel => insn_rs1
 #define READ_RS1_EAGER reg_read => 1, reg_r_sel => insn_rs1_unregistered
 #define READ_RS2 reg_read => 1, reg_r_sel => insn_rs2
 #define WRITE_RD reg_write => 1
-#define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
-#define CMP_NE alu_op => cmp_eq, alu_o_mod => inv_lsb_o
+#define READ_RS1_WRITE_RD READ_RS1_EAGER, reg_write => 1, reg_w_sel => insn_rd
 #define CMP_LT alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b
 #define CMP_GEU alu_op => cmp_ltu, alu_o_mod => inv_lsb_o
 #define CMP_GE  alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b, alu_o_mod => inv_lsb_o
@@ -334,8 +332,7 @@ jal: latch_a => 1, latch_b => 1, a_src => four, b_src => pc;
      WRITE_RD, alu_op => add;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
-fast_epilog: WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregistered, \
-                  SKIP_WAIT_IF_ACK;
+fast_epilog: INSN_FETCH, READ_RS1_WRITE_RD, SKIP_WAIT_IF_ACK;
 
 origin 0xc0;
 add_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
