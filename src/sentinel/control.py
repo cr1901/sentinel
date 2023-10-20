@@ -55,7 +55,8 @@ class Control(Component):
         # Control outputs- mostly from microcode ROM.
         self.a_src = Signal.like(self.ucoderom.fields.a_src)
         self.b_src = Signal.like(self.ucoderom.fields.b_src)
-        self.src_op = Signal.like(self.ucoderom.fields.src_op)
+        self.latch_a = Signal.like(self.ucoderom.fields.latch_a)
+        self.latch_b = Signal.like(self.ucoderom.fields.latch_b)
         self.mem_req = Signal.like(self.ucoderom.fields.mem_req)
         self.mem_sel = Signal.like(self.ucoderom.fields.mem_sel)
         self.latch_adr = Signal.like(self.ucoderom.fields.latch_adr)
@@ -87,7 +88,8 @@ class Control(Component):
             self.reg_w_sel.eq(self.ucoderom.fields.reg_w_sel),
             self.a_src.eq(self.ucoderom.fields.a_src),
             self.b_src.eq(self.ucoderom.fields.b_src),
-            self.src_op.eq(self.ucoderom.fields.src_op),
+            self.latch_a.eq(self.ucoderom.fields.latch_a),
+            self.latch_b.eq(self.ucoderom.fields.latch_b),
             self.alu.op.eq(self.ucoderom.fields.alu_op),
             self.alu.imod.eq(self.ucoderom.fields.alu_i_mod),
             self.alu.omod.eq(self.ucoderom.fields.alu_o_mod),

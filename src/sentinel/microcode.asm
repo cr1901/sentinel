@@ -34,7 +34,8 @@ fields block_ram: {
   pc_action: enum { hold = 0; inc; load_alu_o; }, default hold;
 
   // ALU src latch/selection.
-  src_op: enum { none = 0; latch_a; latch_b; latch_a_b; }, default none;
+  latch_a: bool, default 0;
+  latch_b: bool, default 0;
   a_src: enum { gp = 0; imm; alu_o; zero; four; }, default gp;
   b_src: enum { gp = 0; pc; imm; one; dat_r; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
@@ -86,6 +87,8 @@ fields block_ram: {
 #define CMP_LT alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b
 #define CMP_GEU alu_op => cmp_ltu, alu_o_mod => inv_lsb_o
 #define CMP_GE  alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b, alu_o_mod => inv_lsb_o
+// The LT[U]/GE[U] tests will either return zero or one; this makes it fine
+// to reuse the conditional meant for shift ops.
 #define CONDTEST_ALU_CMP_FAILED cond_test => cmp_alu_o_5_lsbs_zero
 #define CONDTEST_ALU_O_5_LSBS_NONZERO invert_test => 1, cond_test => cmp_alu_o_5_lsbs_zero
 
@@ -93,58 +96,58 @@ fetch:
 wait_for_ack: INSN_FETCH, READ_RS1_EAGER, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
               // Illegal insn or insn misaligned exception possible
-check_int:    jmp_type => map, a_src => gp, src_op => latch_a, READ_RS2, \
+check_int:    jmp_type => map, a_src => gp, latch_a => 1, READ_RS2, \
                   cond_test => exception, target => save_pc;
 origin 2;
        // Make sure x0 is initialized with 0.
-reset: src_op => latch_a_b, b_src => one, a_src => zero;
+reset: latch_a => 1, latch_b => 1, b_src => one, a_src => zero;
        alu_op => and;
        jmp_type => direct, reg_write => 1, reg_w_sel => zero, target => fetch;
 
 origin 8;
-lb_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+lb_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => lb;
-lh_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+lh_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => lh;
-lw_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+lw_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => lw;
                NOT_IMPLEMENTED;
-lbu_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+lbu_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => lbu;
-lhu_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+lhu_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => lhu;
 
 lb: alu_op => add;
     latch_adr => 1;
-lb_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
+lb_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => byte, mem_extend => sign, jmp_type => direct, \
               target => lb_wait;
           alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 lh: alu_op => add;
     latch_adr => 1;
-lh_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
+lh_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => hword, mem_extend => sign, jmp_type => direct, \
               target => lh_wait;
           alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 lw: alu_op => add;
     latch_adr => 1;
-lw_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
+lw_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => word, jmp_type => direct, \
               target => lw_wait;
           alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 lbu: alu_op => add;
      latch_adr => 1;
-lbu_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
+lbu_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => byte, jmp_type => direct, \
               target => lbu_wait;
            alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 lhu: alu_op => add;
      latch_adr => 1;
-lhu_wait:  a_src => zero, b_src => dat_r, src_op => latch_a_b, mem_req => 1, invert_test => 1, \
+lhu_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
               target => lhu_wait;
            alu_op => add, JUMP_TO_OP_END(fast_epilog);
@@ -153,32 +156,32 @@ origin 0x30;
 misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
 
 origin 0x40;
-addi_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+addi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => addi;
-slli_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+slli_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => slli;
-slti_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+slti_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => slti;
-sltiu_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+sltiu_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => sltiu;
-xori_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+xori_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => xori;
-srli_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+srli_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => srli;
-ori_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+ori_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => ori;
-andi_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+andi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => andi;
               NOT_IMPLEMENTED;  // 0b1000  subi?
               NOT_IMPLEMENTED;  // 0b1001
               NOT_IMPLEMENTED;  // 0b1010
               NOT_IMPLEMENTED;  // 0b1011
               NOT_IMPLEMENTED;  // 0b1100
-srai_1: src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+srai_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => srai;
 
 origin 0x50;
-auipc: src_op => latch_a_b, a_src => imm, b_src => pc;
+auipc: latch_a => 1, latch_b => 1, a_src => imm, b_src => pc;
        alu_op => add, pc_action => inc;
        WRITE_RD, jmp_type => direct, cond_test => true, target => fetch;
            
@@ -193,10 +196,10 @@ andi:         alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 slli:
               // Re: READ_RS1... reg addresses aren't latched, so if we need
               // reg values again, we need to latch them again.
-              READ_RS1, a_src => zero, src_op => latch_a;
+              READ_RS1, a_src => zero, latch_a => 1;
               // Bail if shift count was initially zero.
-              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => add;
-              READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sll, \
+              a_src => gp, b_src => imm, latch_a => 1, latch_b => 1, alu_op => add;
+              READ_RS1, a_src => imm, b_src => one, latch_a => 1, latch_b => 1, alu_op => sll, \
                   jmp_type => direct, cond_test => cmp_alu_o_5_lsbs_zero, target => shift_zero;
 sll_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
@@ -204,18 +207,18 @@ sll_loop:
               // will never see this intermediate result).
               // Also write the previous shift, either from prolog or last
               // loop iteration.
-              alu_op => sub, a_src => alu_o, src_op => latch_a, WRITE_RD;
+              alu_op => sub, a_src => alu_o, latch_a => 1, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
-              alu_op => sll, a_src => alu_o, b_src => one, src_op => latch_a_b, \
+              alu_op => sll, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
                   jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sll_loop;
 
 srli:
               // Re: READ_RS1... reg addresses aren't latched, so if we need
               // reg values again, we need to latch them again.
-              READ_RS1, a_src => zero, src_op => latch_a;
+              READ_RS1, a_src => zero, latch_a => 1;
               // Bail if shift count was initially zero.
-              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => add;
-              READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => srl,
+              a_src => gp, b_src => imm, latch_a => 1, latch_b => 1, alu_op => add;
+              READ_RS1, a_src => imm, b_src => one, latch_a => 1, latch_b => 1, alu_op => srl,
                   jmp_type => direct, cond_test => cmp_alu_o_5_lsbs_zero, target => shift_zero;
 srl_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
@@ -223,18 +226,18 @@ srl_loop:
               // will never see this intermediate result).
               // Also write the previous shift, either from prolog or last
               // loop iteration.
-              alu_op => sub, a_src => alu_o, src_op => latch_a, WRITE_RD;
+              alu_op => sub, a_src => alu_o, latch_a => 1, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
-              alu_op => srl, a_src => alu_o, b_src => one, src_op => latch_a_b, \
+              alu_op => srl, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
                   jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => srl_loop;
 
 srai:
               // Re: READ_RS1... reg addresses aren't latched, so if we need
               // reg values again, we need to latch them again.
-              READ_RS1, a_src => zero, src_op => latch_a;
+              READ_RS1, a_src => zero, latch_a => 1;
               // Bail if shift count was initially zero.
-              a_src => gp, b_src => imm, src_op => latch_a_b, alu_op => add;
-              READ_RS1, a_src => imm, b_src => one, src_op => latch_a_b, alu_op => sra,
+              a_src => gp, b_src => imm, latch_a => 1, latch_b => 1, alu_op => add;
+              READ_RS1, a_src => imm, b_src => one, latch_a => 1, latch_b => 1, alu_op => sra,
                   jmp_type => direct, cond_test => cmp_alu_o_5_lsbs_zero, target => shift_zero;
 sra_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
@@ -242,41 +245,41 @@ sra_loop:
               // will never see this intermediate result).
               // Also write the previous shift, either from prolog or last
               // loop iteration.
-              alu_op => sub, a_src => alu_o, src_op => latch_a, WRITE_RD;
+              alu_op => sub, a_src => alu_o, latch_a => 1, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
-              alu_op => sra, a_src => alu_o, b_src => one, src_op => latch_a_b, \
+              alu_op => sra, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
                   jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sra_loop;
 
-shift_zero:   a_src => zero, b_src => gp, src_op => latch_a_b;
+shift_zero:   a_src => zero, b_src => gp, latch_a => 1, latch_b => 1;
               alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 origin 0x80;
-sb_1: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+sb_1: READ_RS2, latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => sb;
-sh_1: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+sh_1: READ_RS2, latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => sh;
-sw_1: READ_RS2, src_op => latch_b, b_src => imm, pc_action => inc, jmp_type => direct, \
+sw_1: READ_RS2, latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => sw;
 
 origin 0x88;
 branch_ops:
-beq_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => beq;
+beq_1: latch_b => 1, b_src => gp, jmp_type => direct, target => beq;
                 
-bne_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bne;
+bne_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bne;
                 NOT_IMPLEMENTED;
                 NOT_IMPLEMENTED;
-blt_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => blt;
-bge_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bge;
-bltu_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bltu;
-bgeu_1: src_op => latch_b, b_src => gp, jmp_type => direct, target => bgeu;
+blt_1: latch_b => 1, b_src => gp, jmp_type => direct, target => blt;
+bge_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bge;
+bltu_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bltu;
+bgeu_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bgeu;
 
-blt: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_LT, \
+blt: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_LT, \
         jmp_type => direct, target => branch_epilog;
-bge: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_GE, \
+bge: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_GE, \
         jmp_type => direct, target => branch_epilog;
-bltu: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => cmp_ltu, \
+bltu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => cmp_ltu, \
         jmp_type => direct, target => branch_epilog;
-bgeu: a_src => imm, b_src => pc, src_op => latch_a_b, CMP_GEU, \
+bgeu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_GEU, \
         jmp_type => direct, target => branch_epilog;
 
 branch_epilog: alu_op => add, CONDTEST_ALU_CMP_FAILED, pc_action => inc, \
@@ -285,13 +288,13 @@ branch_epilog: alu_op => add, CONDTEST_ALU_CMP_FAILED, pc_action => inc, \
 
 
 origin 0x98;
-jalr: src_op => latch_a_b, a_src => four, b_src => pc;  // 8
+jalr: latch_a => 1, latch_b => 1, a_src => four, b_src => pc;  // 8
       alu_op => add, reg_read => 1, reg_r_sel => insn_rs_1; // 9
-      WRITE_RD, a_src => imm, b_src => gp, src_op => latch_a_b; // A
+      WRITE_RD, a_src => imm, b_src => gp, latch_a => 1, latch_b => 1; // A
       alu_op => add, alu_o_mod => clear_lsb_o;
       jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
-sb: a_src => zero, b_src => gp, src_op => latch_a_b, alu_op => add;
+sb: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
     alu_op => add, latch_adr => 1;
     mem_sel => byte, latch_data => 1;
 // For stores/loads, we use a wishbone block cycle (don't deassert cyc in
@@ -299,7 +302,7 @@ sb: a_src => zero, b_src => gp, src_op => latch_a_b, alu_op => add;
 sb_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => byte, write_mem => 1, jmp_type => direct_zero, target => sb_wait;
 
-sh: a_src => zero, b_src => gp, src_op => latch_a_b, alu_op => add;
+sh: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
     alu_op => add, latch_adr => 1;
     mem_sel => hword, latch_data => 1;
 // For stores/loads, we use a wishbone block cycle (don't deassert cyc in
@@ -307,7 +310,7 @@ sh: a_src => zero, b_src => gp, src_op => latch_a_b, alu_op => add;
 sh_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => hword, write_mem => 1, jmp_type => direct_zero, target => sh_wait;
 
-sw: a_src => zero, b_src => gp, src_op => latch_a_b, alu_op => add;
+sw: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
     alu_op => add, latch_adr => 1;
     mem_sel => word, latch_data => 1;
 // For stores/loads, we use a wishbone block cycle (don't deassert cyc in
@@ -315,19 +318,19 @@ sw: a_src => zero, b_src => gp, src_op => latch_a_b, alu_op => add;
 sw_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => word, write_mem => 1, jmp_type => direct_zero, target => sw_wait;
 
-beq: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => sub;
+beq: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
      alu_op => add, invert_test => 1, cond_test => cmp_alu_o_zero, pc_action => inc, \
                   jmp_type => direct, target => fetch;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
-bne: a_src => imm, b_src => pc, src_op => latch_a_b, alu_op => sub;
+bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
      alu_op => add, cond_test => cmp_alu_o_zero, pc_action => inc, \
                   jmp_type => direct, target => fetch;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
 origin 0xB0;
-jal: src_op => latch_a_b, a_src => four, b_src => pc;
-     alu_op => add, a_src => imm, b_src => pc, src_op => latch_a_b;
+jal: latch_a => 1, latch_b => 1, a_src => four, b_src => pc;
+     alu_op => add, a_src => imm, b_src => pc, latch_a => 1, latch_b => 1;
      WRITE_RD, alu_op => add;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
@@ -335,33 +338,33 @@ fast_epilog: WRITE_RD, INSN_FETCH, reg_read => 1, reg_r_sel => insn_rs1_unregist
                   SKIP_WAIT_IF_ACK;
 
 origin 0xc0;
-add_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+add_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => add;
-sll_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+sll_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => sll;
-slt_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+slt_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => slt;
-sltu_1:       src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+sltu_1:       latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => sltu;
-xor_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+xor_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => xor;
-srl_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+srl_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => srl;
-or_1:         src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+or_1:         latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => or;
-and_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+and_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => and;
-sub_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+sub_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => sub;  // 0b1000
               NOT_IMPLEMENTED;  // 0b1001
               NOT_IMPLEMENTED;  // 0b1010
               NOT_IMPLEMENTED;  // 0b1011
               NOT_IMPLEMENTED;  // 0b1101
-sra_1:        src_op => latch_b, b_src => gp, pc_action => inc, jmp_type => direct, \
+sra_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => sra;
 
 origin 0xd0;
-lui:    a_src => zero, b_src => imm, src_op => latch_a_b, pc_action => inc, \
+lui:    a_src => zero, b_src => imm, latch_a => 1, latch_b => 1, pc_action => inc, \
             jmp_type => direct, target => addi;
 
 
@@ -377,23 +380,23 @@ sub:          alu_op => sub, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
              // were zero. The shift loops above can be reused once we do
              // the initial zero check.
 sll:  
-             READ_RS1, a_src => zero, src_op => latch_a;
-             READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
-             a_src => gp, b_src => one, src_op => latch_a_b, alu_op => sll,
+             READ_RS1, a_src => zero, latch_a => 1;
+             READ_RS2, a_src => gp, latch_a => 1, alu_op => add;
+             a_src => gp, b_src => one, latch_a => 1, latch_b => 1, alu_op => sll,
                   jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sll_loop;
              READ_RS1, jmp_type => direct, target => shift_zero;
 
 srl:  
-             READ_RS1, a_src => zero, src_op => latch_a;
-             READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
-             a_src => gp, b_src => one, src_op => latch_a_b, alu_op => srl,
+             READ_RS1, a_src => zero, latch_a => 1;
+             READ_RS2, a_src => gp, latch_a => 1, alu_op => add;
+             a_src => gp, b_src => one, latch_a => 1, latch_b => 1, alu_op => srl,
                   jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => srl_loop;
              READ_RS1, jmp_type => direct, target => shift_zero;
 
 sra:  
-             READ_RS1, a_src => zero, src_op => latch_a;
-             READ_RS2, a_src => gp, src_op => latch_a, alu_op => add;
-             a_src => gp, b_src => one, src_op => latch_a_b, alu_op => sra,
+             READ_RS1, a_src => zero, latch_a => 1;
+             READ_RS2, a_src => gp, latch_a => 1, alu_op => add;
+             a_src => gp, b_src => one, latch_a => 1, latch_b => 1, alu_op => sra,
                   jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sra_loop;
              READ_RS1, jmp_type => direct, target => shift_zero;
 

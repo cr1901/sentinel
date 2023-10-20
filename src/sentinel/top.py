@@ -6,7 +6,7 @@ from .alu import ALU
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
-from .ucodefields import ASrc, BSrc, SrcOp, RegRSel, RegWSel, MemSel, \
+from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
     PcAction, MemExtend
 
 
@@ -93,8 +93,7 @@ class Top(Component):
         ]
 
         # Connect ALU sources
-        with m.If((self.control.src_op == SrcOp.LATCH_A) |
-                  (self.control.src_op == SrcOp.LATCH_A_B)):
+        with m.If(self.control.latch_a):
             with m.Switch(self.control.a_src):
                 with m.Case(ASrc.GP):
                     m.d.sync += self.a_input.eq(self.datapath.gp.dat_r)
@@ -108,8 +107,7 @@ class Top(Component):
                     m.d.sync += self.a_input.eq(4)
 
         raw_dat_r = Signal.like(self.b_input)
-        with m.If((self.control.src_op == SrcOp.LATCH_B) |
-                  (self.control.src_op == SrcOp.LATCH_A_B)):
+        with m.If(self.control.latch_b):
             with m.Switch(self.control.b_src):
                 with m.Case(BSrc.GP):
                     m.d.sync += self.b_input.eq(self.datapath.gp.dat_r)

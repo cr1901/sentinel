@@ -37,13 +37,6 @@ class PcAction(enum.Enum):
     LOAD_ALU_O = 2
 
 
-class SrcOp(enum.Enum):
-    NONE = 0
-    LATCH_A = 1
-    LATCH_B = 2
-    LATCH_A_B = 3
-
-
 class ASrc(enum.Enum):
     GP = 0
     IMM = 1
