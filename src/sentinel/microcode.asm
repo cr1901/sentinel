@@ -25,7 +25,7 @@ fields block_ram: {
   // exception: Illegal insn, EBRAK, ECALL, misaligned insn, misaligned ld/st?
   // mem_valid: Is current dat_r valid? Did write finish?
   // true: Unconditionally succeed
-  cond_test: enum { intr; exception; cmp_alu_o_5_lsbs_zero; cmp_alu_o_zero; mem_valid; true}, default true;
+  cond_test: enum { exception; cmp_alu_o_5_lsbs_zero; cmp_alu_o_zero; mem_valid; true}, default true;
 
   // Invert the results of the test above. Valid current cycle.
   invert_test: bool, default 0;

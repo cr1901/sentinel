@@ -24,12 +24,11 @@ class OpType(enum.Enum):
 
 
 class CondTest(enum.Enum):
-    INTR = 0
-    EXCEPTION = 1
-    CMP_ALU_O_5_LSBS_ZERO = 2
-    CMP_ALU_O_ZERO = 3
-    MEM_VALID = 4
-    TRUE = 5
+    EXCEPTION = 0
+    CMP_ALU_O_5_LSBS_ZERO = 1
+    CMP_ALU_O_ZERO = 2
+    MEM_VALID = 3
+    TRUE = 4
 
 
 class PcAction(enum.Enum):
