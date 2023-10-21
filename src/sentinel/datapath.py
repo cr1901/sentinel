@@ -3,6 +3,8 @@ from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 
 from .ucodefields import PcAction
 
+from .csr import MStatus, MTVec, MIP, MIE, MCause
+
 
 PCControlSignature = Signature({
     "action": Out(PcAction)
@@ -11,7 +13,7 @@ PCControlSignature = Signature({
 GPControlSignature = Signature({
     "reg_read": Out(1),
     "reg_write": Out(1),
-    "allow_zero_wr": Out(1)
+    "allow_zero_wr": Out(1),
 })
 
 GPSignature = Signature({
@@ -21,6 +23,29 @@ GPSignature = Signature({
     "dat_w": Out(32),
     "ctrl": Out(GPControlSignature)
 })
+
+
+CSRControlSignature = Signature({
+    "reg_read": Out(1),
+    "reg_write": Out(1),
+})
+
+
+CSRSignature = Signature({
+    # Some CSRs (mepc, mcause, mscratch, mtvec) are stored in the
+    # unused portion of the block RAM used for GP registers.
+    "adr_r": Out(5),
+    "adr_w": Out(5),
+    # Some CSRs must be implemented as FFs so the rest of the core can use
+    # them.
+    "status_r": In(MIP),
+    "mip_r": In(MIP),
+    "mie_r": In(MIE),
+    "dat_r": In(32),
+    "dat_w": Out(32),
+    "ctrl": Out(CSRControlSignature)
+})
+
 
 PcSignature = Signature({
     "dat_r": In(30),

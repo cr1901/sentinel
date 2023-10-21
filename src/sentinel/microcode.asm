@@ -150,8 +150,14 @@ lhu_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req =>
               target => lhu_wait;
            alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
+origin 0x28;
+ro_zero_1: a_src => zero, b_src => one, latch_a => 1, latch_b => 1, jmp_type => direct, \
+             target => ro_zero;
+
 origin 0x30;
 misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
+
+ro_zero: alu_op => and, JUMP_TO_OP_END(fast_epilog);
 
 origin 0x40;
 addi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
