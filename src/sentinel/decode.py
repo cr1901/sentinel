@@ -1,5 +1,4 @@
-from amaranth import Signal, Module, Cat, Value, C, Elaboratable, Memory, \
-    Mux
+from amaranth import Signal, Module, Cat, Value, C, Elaboratable, Memory
 from amaranth.lib import enum
 from amaranth.lib.wiring import Component, Signature, In, Out
 
@@ -142,19 +141,12 @@ class Decode(Component):
         self.mmode_csr_map = Memory(width=2, depth=2048,
                                     init=self.mmode_csr_quadrant_init())
 
-        use_csr = Signal()
-        non_csr_req_op = Signal.like(self.requested_op)
-        csr_req_op = Signal.like(self.requested_op)
-        non_csr_exception = Signal.like(self.exception)
-        csr_exception = Signal.like(self.exception)
-        non_csr_e_type = Signal.like(self.e_type)
-        csr_e_type = Signal.like(non_csr_e_type)
+        forward_csr = Signal()
+        m.d.sync += forward_csr.eq(0)
 
-        m.d.comb += [
-            self.requested_op.eq(Mux(use_csr, csr_req_op, non_csr_req_op)),
-            self.exception.eq(Mux(use_csr, csr_exception, non_csr_exception)),
-            self.e_type.eq(Mux(use_csr, csr_e_type, non_csr_e_type))
-        ]
+        csr_req_op = Signal.like(self.requested_op)
+        csr_exception = Signal.like(self.exception)
+        csr_e_type = Signal.like(self.e_type)
 
         with m.If(self.do_decode):
             m.d.sync += [
@@ -176,137 +168,146 @@ class Decode(Component):
                         with m.If(self.funct3 == 1):
                             with m.If(self.funct7 != 0):
                                 m.d.sync += [
-                                    non_csr_exception.eq(1),
-                                    non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                                    self.exception.eq(1),
+                                    self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                                 ]
                         with m.Else():
                             with m.If((self.funct7 != 0) &
                                       (self.funct7 != 0b0100000)):
                                 m.d.sync += [
-                                    non_csr_exception.eq(1),
-                                    non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                                    self.exception.eq(1),
+                                    self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                                 ]
-                        m.d.sync += non_csr_req_op.eq(Cat(self.funct3,
-                                                          self.funct7[-2],
-                                                          C(4)))
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
+                                                             self.funct7[-2],
+                                                             C(4)))
                     with m.Else():
-                        m.d.sync += non_csr_req_op.eq(Cat(self.funct3,
-                                                          C(8)))
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
+                                                             C(8)))
                 with m.Case(OpcodeType.LUI):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
-                    m.d.sync += non_csr_req_op.eq(0xD0)
+                    m.d.sync += self.requested_op.eq(0xD0)
                 with m.Case(OpcodeType.AUIPC):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
-                    m.d.sync += non_csr_req_op.eq(0x50)
+                    m.d.sync += self.requested_op.eq(0x50)
                 with m.Case(OpcodeType.OP):
                     with m.If((self.funct3 == 0) | (self.funct3 == 5)):
                         with m.If((self.funct7 != 0) &
                                   (self.funct7 != 0b0100000)):
                             m.d.sync += [
-                                non_csr_exception.eq(1),
-                                non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                                self.exception.eq(1),
+                                self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                             ]
-                        m.d.sync += non_csr_req_op.eq(Cat(self.funct3,
-                                                          self.funct7[-2],
-                                                          C(0xC)))
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
+                                                             self.funct7[-2],
+                                                             C(0xC)))
                     with m.Else():
                         with m.If(self.funct7 != 0):
                             m.d.sync += [
-                                non_csr_exception.eq(1),
-                                non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                                self.exception.eq(1),
+                                self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                             ]
-                        m.d.sync += non_csr_req_op.eq(Cat(self.funct3,
-                                                          self.funct7[-2],
-                                                          C(0xC)))
+                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
+                                                             self.funct7[-2],
+                                                             C(0xC)))
                 with m.Case(OpcodeType.JAL):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.J)
-                    m.d.sync += non_csr_req_op.eq(0xB0)
+                    m.d.sync += self.requested_op.eq(0xB0)
                 with m.Case(OpcodeType.JALR):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
-                    m.d.sync += non_csr_req_op.eq(0x98)
+                    m.d.sync += self.requested_op.eq(0x98)
 
                     with m.If(self.funct3 != 0):
                         m.d.sync += [
-                            non_csr_exception.eq(1),
-                            non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                            self.exception.eq(1),
+                            self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                         ]
                 with m.Case(OpcodeType.BRANCH):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.B)
-                    m.d.sync += non_csr_req_op.eq(Cat(self.funct3, C(0x11)))
+                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x11)))
 
                     with m.If((self.funct3 == 2) | (self.funct3 == 3)):
                         m.d.sync += [
-                            non_csr_exception.eq(1),
-                            non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                            self.exception.eq(1),
+                            self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                         ]
                 with m.Case(OpcodeType.LOAD):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
-                    m.d.sync += non_csr_req_op.eq(Cat(self.funct3, C(1)))
+                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(1)))
 
                     with m.If((self.funct3 == 3) | (self.funct3 == 6) |
                               (self.funct3 == 7)):
                         m.d.sync += [
-                            non_csr_exception.eq(1),
-                            non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                            self.exception.eq(1),
+                            self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                         ]
                 with m.Case(OpcodeType.STORE):
                     m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.S)
-                    m.d.sync += non_csr_req_op.eq(Cat(self.funct3, C(0x10)))
+                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x10)))
 
                     with m.If(self.funct3 >= 3):
                         m.d.sync += [
-                            non_csr_exception.eq(1),
-                            non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                            self.exception.eq(1),
+                            self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                         ]
                 with m.Case(OpcodeType.CUSTOM_0):
                     m.d.sync += [
-                        non_csr_exception.eq(1),
-                        non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                        self.exception.eq(1),
+                        self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                     ]
                 with m.Case(OpcodeType.MISC_MEM):
                     # RS1 and RD should be ignored for FENCE insn in a base
                     # impl.
-                    m.d.sync += non_csr_req_op.eq(0x30)
+                    m.d.sync += self.requested_op.eq(0x30)
 
                     with m.If(self.funct3 != 0):
                         m.d.sync += [
-                            non_csr_exception.eq(1),
-                            non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                            self.exception.eq(1),
+                            self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                         ]
                 with m.Case(OpcodeType.SYSTEM):
                     with m.Switch(self.funct3):
                         # ECALL/EBREAK- Handled specially as it always traps.
                         with m.Case(0):
-                            m.d.sync += non_csr_exception.eq(1)
+                            m.d.sync += self.exception.eq(1)
 
                             with m.If(self.funct12 == 0):
-                                m.d.sync += non_csr_e_type.eq(MCause.Cause.BREAKPOINT)  # noqa: E501
+                                m.d.sync += self.e_type.eq(MCause.Cause.BREAKPOINT)  # noqa: E501
                             with m.Elif(self.funct12 == 1):
-                                m.d.sync += non_csr_e_type.eq(MCause.Cause.ECALL_MMODE)  # noqa: E501
+                                m.d.sync += self.e_type.eq(MCause.Cause.ECALL_MMODE)  # noqa: E501
                             with m.Elif(self.funct12 == 0b001100000010):
-                                m.d.sync += non_csr_exception.eq(0)
+                                m.d.sync += self.exception.eq(0)
                                 pass  # mret
                             with m.Else():
-                                m.d.sync += non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                                m.d.sync += self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
 
                             with m.If((self.rs1 != 0) |
                                       (self.rd != 0) | (self.funct3 != 0)):
-                                m.d.sync += non_csr_exception.eq(1)
-                                m.d.sync += non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                                m.d.sync += self.exception.eq(1)
+                                m.d.sync += self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                         with m.Case(4):
-                            m.d.sync += non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
+                            m.d.sync += self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                         with m.Default():
-                            m.d.comb += use_csr.eq(1)
-
                             ro0 = Signal()
                             illegal = Signal()
+
+                            # CSR ops take two cycles to decode. Rather than
+                            # penalize the rest of the core, have the microcode
+                            # jump to a temporary location. The next cycle
+                            # will have the microcode jump to the _real_ CSR
+                            # routine.
+                            m.d.sync += [
+                                self.requested_op.eq(0x28),
+                                forward_csr.eq(1)
+                            ]
 
                             m.submodules.csr_map = rdport = \
                                 self.mmode_csr_map.read_port()
 
                             # It's possible to decode this manually, but
                             # my experience is that it destroys timing.
-                            # So use a 2048x2-bit block RAM.
+                            # So use a 2048x2-bit block RAM. This causes
+                            # CSRs to require (up to) two cycles to decode.
                             rdport.addr.eq(Cat(self.funct12[0:8],
                                                self.funct12[10:12]))
                             m.d.comb += illegal.eq(rdport.data[1])
@@ -321,7 +322,7 @@ class Decode(Component):
                                             csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                                         ]
                                     with m.Elif(ro0):
-                                        m.d.comb += csr_req_op.eq(0x28)
+                                        m.d.comb += csr_req_op.eq(0x29)
                                     with m.Else():
                                         pass
 
@@ -335,16 +336,23 @@ class Decode(Component):
                 with m.Case():
                     # Catch-all for all ones.
                     m.d.sync += [
-                        non_csr_exception.eq(1),
-                        non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)
+                        self.exception.eq(1),
+                        self.e_type.eq(MCause.Cause.ILLEGAL_INSN)
                     ]
 
             # Catch-all for compressed insns, zero insn.
             with m.If(self.insn[0:2] != 0b11):
                 m.d.sync += [
-                    non_csr_exception.eq(1),
-                    non_csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)
+                    self.exception.eq(1),
+                    self.e_type.eq(MCause.Cause.ILLEGAL_INSN)
                 ]
+
+        with m.If(forward_csr):
+            m.d.sync += [
+                self.requested_op.eq(csr_req_op),
+                self.exception.eq(csr_exception),
+                self.e_type.eq(csr_e_type)
+            ]
 
         return m
 
@@ -362,7 +370,7 @@ class Decode(Component):
         init[idx(0xF13)] = 2  # mimpid
         init[idx(0xF14)] = 2  # mhartid
         init[idx(0xF15)] = 2  # mconfigptr
-        init[idx(0x300)] = 2  # mstatus
+        init[idx(0x300)] = 0  # mstatus
         init[idx(0x301)] = 2  # misa
         init[idx(0x302)] = 1  # medeleg
         init[idx(0x303)] = 1  # mideleg
