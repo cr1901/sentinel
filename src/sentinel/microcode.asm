@@ -48,11 +48,13 @@ fields block_ram: {
 
   // Either read or write a register in the register file. _Which_ register
   // to read/write comes from the decoded insn.
-  // Read contents will be on the data bus the next cycle. Written contents
-  // will be valid on the next cycle. Reads are transparent.
+  // Read contents will be on the data bus the next cycle, _except_
+  // when insn_rs1 is paired with insn_fetch (in which contents are valid
+  // on the current cycle). Written contents will be valid on the next cycle.
+  // Reads are transparent.
   reg_read: bool, default 0;
   reg_write: bool, default 0;
-  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; insn_rs1_unregistered }, default insn_rs1;
+  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; }, default insn_rs1;
   reg_w_sel: enum { insn_rd = 0; zero = 1; }, default insn_rd;
 
   // Start or continue a memory request. For convenience, an ack will
@@ -73,15 +75,15 @@ fields block_ram: {
 };
 
 #define INSN_FETCH insn_fetch => 1, mem_req => 1
+#define INSN_FETCH_EAGER_READ_RS1 INSN_FETCH, READ_RS1
 #define SKIP_WAIT_IF_ACK jmp_type => direct_zero, cond_test => mem_valid, target => check_int
 #define JUMP_TO_OP_END(trg) cond_test => true, jmp_type => direct, target => trg
 #define NOT_IMPLEMENTED jmp_type => direct, target => panic
 #define NOP target => 0
 #define READ_RS1 reg_read => 1, reg_r_sel => insn_rs1
-#define READ_RS1_EAGER reg_read => 1, reg_r_sel => insn_rs1_unregistered
 #define READ_RS2 reg_read => 1, reg_r_sel => insn_rs2
 #define WRITE_RD reg_write => 1
-#define READ_RS1_WRITE_RD READ_RS1_EAGER, reg_write => 1, reg_w_sel => insn_rd
+#define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
 #define CMP_LT alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b
 #define CMP_GEU alu_op => cmp_ltu, alu_o_mod => inv_lsb_o
 #define CMP_GE  alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b, alu_o_mod => inv_lsb_o
@@ -91,7 +93,7 @@ fields block_ram: {
 #define CONDTEST_ALU_O_5_LSBS_NONZERO invert_test => 1, cond_test => cmp_alu_o_5_lsbs_zero
 
 fetch:
-wait_for_ack: INSN_FETCH, READ_RS1_EAGER, invert_test => 1, cond_test => mem_valid, \
+wait_for_ack: INSN_FETCH_EAGER_READ_RS1, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
               // Illegal insn or insn misaligned exception possible
 check_int:    jmp_type => map, a_src => gp, latch_a => 1, READ_RS2, \
@@ -341,7 +343,7 @@ jal: latch_a => 1, latch_b => 1, a_src => four, b_src => pc;
      WRITE_RD, alu_op => add;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
-fast_epilog: INSN_FETCH, READ_RS1_WRITE_RD, SKIP_WAIT_IF_ACK;
+fast_epilog: INSN_FETCH_EAGER_READ_RS1, WRITE_RD, SKIP_WAIT_IF_ACK;
 
 origin 0xc0;
 add_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \

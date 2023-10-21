@@ -34,8 +34,8 @@ CSRControlSignature = Signature({
 CSRSignature = Signature({
     # Some CSRs (mepc, mcause, mscratch, mtvec) are stored in the
     # unused portion of the block RAM used for GP registers.
-    "adr_r": Out(5),
-    "adr_w": Out(5),
+    "adr_r": Out(4),
+    "adr_w": Out(4),
     # Some CSRs must be implemented as FFs so the rest of the core can use
     # them.
     "status_r": In(MIP),

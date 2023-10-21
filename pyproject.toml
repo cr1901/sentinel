@@ -44,6 +44,7 @@ dev = [
 
 [tool.pdm.scripts]
 test = { cmd = "pytest" }
+test-quick = { cmd = "pytest -k \"test_top or test_upstream\"" }
 gen = { call = "sentinel.gen:generate" }
 demo = { call = "sentinel.gen:demo" }
 ucode = { call = "m5meta:main" }

@@ -67,7 +67,6 @@ class ALUOMod(enum.Enum):
 class RegRSel(enum.Enum):
     INSN_RS1 = 0
     INSN_RS2 = 1
-    INSN_RS1_UNREGISTERED = 2
 
 
 class RegWSel(enum.Enum):
