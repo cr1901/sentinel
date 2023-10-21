@@ -140,13 +140,22 @@ class Decode(Component):
 
         self.mmode_csr_map = Memory(width=2, depth=2048,
                                     init=self.mmode_csr_quadrant_init())
+        m.submodules.csr_map = rdport = self.mmode_csr_map.read_port()
+
+        # It's possible to decode this manually, but
+        # my experience is that it destroys timing.
+        # So use a 2048x2-bit block RAM. This causes
+        # CSRs to require (up to) two cycles to decode.
+        m.d.comb += rdport.addr.eq(Cat(self.funct12[0:8],
+                                       self.funct12[10:12]))  # noqa: E501
 
         forward_csr = Signal()
-        m.d.sync += forward_csr.eq(0)
-
+        csr_quadrant = Signal(2)
         csr_req_op = Signal.like(self.requested_op)
         csr_exception = Signal.like(self.exception)
         csr_e_type = Signal.like(self.e_type)
+
+        m.d.sync += forward_csr.eq(0)
 
         with m.If(self.do_decode):
             m.d.sync += [
@@ -288,9 +297,6 @@ class Decode(Component):
                         with m.Case(4):
                             m.d.sync += self.e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
                         with m.Default():
-                            ro0 = Signal()
-                            illegal = Signal()
-
                             # CSR ops take two cycles to decode. Rather than
                             # penalize the rest of the core, have the microcode
                             # jump to a temporary location. The next cycle
@@ -298,40 +304,9 @@ class Decode(Component):
                             # routine.
                             m.d.sync += [
                                 self.requested_op.eq(0x28),
+                                csr_quadrant.eq(self.funct12[8:10]),
                                 forward_csr.eq(1)
                             ]
-
-                            m.submodules.csr_map = rdport = \
-                                self.mmode_csr_map.read_port()
-
-                            # It's possible to decode this manually, but
-                            # my experience is that it destroys timing.
-                            # So use a 2048x2-bit block RAM. This causes
-                            # CSRs to require (up to) two cycles to decode.
-                            rdport.addr.eq(Cat(self.funct12[0:8],
-                                               self.funct12[10:12]))
-                            m.d.comb += illegal.eq(rdport.data[1])
-                            m.d.comb += ro0.eq(rdport.data[1])
-
-                            with m.Switch(self.funct12[8:10]):
-                                # Machine Mode CSRs.
-                                with m.Case(0b11):
-                                    with m.If(illegal):
-                                        m.d.comb += [
-                                            csr_exception.eq(1),
-                                            csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
-                                        ]
-                                    with m.Elif(ro0):
-                                        m.d.comb += csr_req_op.eq(0x29)
-                                    with m.Else():
-                                        pass
-
-                                # Other modes.
-                                with m.Default():
-                                    m.d.comb += [
-                                        csr_exception.eq(1),
-                                        csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)  # noqa: E501
-                                    ]
 
                 with m.Case():
                     # Catch-all for all ones.
@@ -348,11 +323,37 @@ class Decode(Component):
                 ]
 
         with m.If(forward_csr):
-            m.d.sync += [
-                self.requested_op.eq(csr_req_op),
-                self.exception.eq(csr_exception),
-                self.e_type.eq(csr_e_type)
-            ]
+            ro0 = Signal()
+            illegal = Signal()
+
+            with m.Switch(csr_quadrant):
+                # Machine Mode CSRs.
+                with m.Case(0b11):
+                    with m.If(illegal):
+                        m.d.comb += [
+                            csr_exception.eq(1),
+                            csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)
+                        ]
+                    with m.Elif(ro0):
+                        m.d.comb += csr_req_op.eq(0x29)
+                    with m.Else():
+                        pass
+
+                # Other modes.
+                with m.Default():
+                    m.d.comb += [
+                        csr_exception.eq(1),
+                        csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)
+                    ]
+
+                m.d.comb += illegal.eq(rdport.data[0])
+                m.d.comb += ro0.eq(rdport.data[1])
+
+                m.d.sync += [
+                    self.requested_op.eq(csr_req_op),
+                    self.exception.eq(csr_exception),
+                    self.e_type.eq(csr_e_type)
+                ]
 
         return m
 

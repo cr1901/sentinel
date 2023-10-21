@@ -160,7 +160,7 @@ ro_zero_1: a_src => zero, b_src => one, latch_a => 1, latch_b => 1, jmp_type => 
 origin 0x30;
 misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
 
-ro_zero: alu_op => and, JUMP_TO_OP_END(fast_epilog);
+ro_zero: alu_op => and, pc_action => inc, JUMP_TO_OP_END(fast_epilog);
 
 origin 0x40;
 addi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
