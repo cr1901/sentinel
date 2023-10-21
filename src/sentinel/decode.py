@@ -151,6 +151,7 @@ class Decode(Component):
 
         forward_csr = Signal()
         csr_quadrant = Signal(2)
+        csr_op = Signal.like(self.funct3)
         csr_req_op = Signal.like(self.requested_op)
         csr_exception = Signal.like(self.exception)
         csr_e_type = Signal.like(self.e_type)
@@ -303,8 +304,9 @@ class Decode(Component):
                             # will have the microcode jump to the _real_ CSR
                             # routine.
                             m.d.sync += [
-                                self.requested_op.eq(0x28),
+                                self.requested_op.eq(0x24),
                                 csr_quadrant.eq(self.funct12[8:10]),
+                                csr_op.eq(self.funct3),
                                 forward_csr.eq(1)
                             ]
 
@@ -326,28 +328,69 @@ class Decode(Component):
             ro0 = Signal()
             illegal = Signal()
 
+            m.d.comb += illegal.eq(rdport.data[0])
+            m.d.comb += ro0.eq(rdport.data[1])
+
             with m.Switch(csr_quadrant):
                 # Machine Mode CSRs.
                 with m.Case(0b11):
+                    # Most CSR accesses.
                     with m.If(illegal):
                         m.d.comb += [
                             csr_exception.eq(1),
                             csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)
                         ]
-                    with m.Elif(ro0):
-                        m.d.comb += csr_req_op.eq(0x29)
-                    with m.Else():
-                        pass
 
-                # Other modes.
+                    # Read-only Zero CSRs.
+                    with m.Elif(ro0):
+                        # CSRRW and CSRRWI don't have a mechanism to only
+                        # read a register.
+                        with m.If((csr_op != 1) &
+                                  (csr_op != 5) &
+                                  (self.rs1 == 0)):
+                            m.d.comb += csr_req_op.eq(0x25)
+                        with m.Else():
+                            m.d.comb += [
+                                csr_exception.eq(1),
+                                csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)
+                            ]
+
+                    with m.Else():
+                        # Jump to microcode routines for actual, implemented
+                        # CSR registers.
+                        with m.If((csr_op == 1)):
+                            m.d.comb += csr_req_op.eq(0x26)
+                        with m.If((csr_op == 2) & (self.rs1 == 0)):
+                            m.d.comb += csr_req_op.eq(0x27)
+                        with m.Elif((csr_op == 2) & (self.rs1 != 0)):
+                            m.d.comb += csr_req_op.eq(0x28)
+                        with m.If((csr_op == 3) & (self.rs1 == 0)):
+                            m.d.comb += csr_req_op.eq(0x29)
+                        with m.Elif((csr_op == 3) & (self.rs1 != 0)):
+                            m.d.comb += csr_req_op.eq(0x2a)
+                        with m.If((csr_op == 5)):
+                            m.d.comb += csr_req_op.eq(0x2b)
+                        with m.If((csr_op == 6) & (self.rs1 == 0)):
+                            m.d.comb += csr_req_op.eq(0x2c)
+                        with m.Elif((csr_op == 6) & (self.rs1 != 0)):
+                            m.d.comb += csr_req_op.eq(0x2d)
+                        with m.If((csr_op == 7) & (self.rs1 == 0)):
+                            m.d.comb += csr_req_op.eq(0x2e)
+                        with m.Elif((csr_op == 7) & (self.rs1 != 0)):
+                            m.d.comb += csr_req_op.eq(0x2f)
+                        with m.Else():
+                            # This should be unreachable.
+                            m.d.comb += [
+                                csr_exception.eq(1),
+                                csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)
+                            ]
+
+                # Other Modes (User, Supervisor).
                 with m.Default():
                     m.d.comb += [
                         csr_exception.eq(1),
                         csr_e_type.eq(MCause.Cause.ILLEGAL_INSN)
                     ]
-
-                m.d.comb += illegal.eq(rdport.data[0])
-                m.d.comb += ro0.eq(rdport.data[1])
 
                 m.d.sync += [
                     self.requested_op.eq(csr_req_op),
@@ -364,6 +407,7 @@ class Decode(Component):
         # illegal: bit 0 set
         # zero: bit 1 set
         # mstatus, mie, mtvec, mscratch, mepc, mcause, mip: both bits clear
+        # These registers are actually implemented.
         init = [1]*2048  # By default, access is illegal.
 
         init[idx(0xF11)] = 2  # mvendorid

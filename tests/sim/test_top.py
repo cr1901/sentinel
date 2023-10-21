@@ -468,7 +468,7 @@ def test_csr_ro0(sim_mod, ucode_panic):
 
     m.rom = """
         addi x1, x0, 1  # 0
-        csrrw x1, x0, -0xEF  # mvendorid
+        csrrs x1, x0, -0xEF  # mvendorid
 """
 
     regs = [

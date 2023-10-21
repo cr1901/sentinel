@@ -150,7 +150,7 @@ lhu_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req =>
               target => lhu_wait;
            alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
-origin 0x28;
+origin 0x24;
 // CSR ops take two cycles to decode. This is effectively a no-op in case
 // there's an illegal CSR access or something.
 csr_trampoline: jmp_type => map, cond_test => exception, target => save_pc;
