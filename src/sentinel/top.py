@@ -105,6 +105,8 @@ class Top(Component):
                     m.d.sync += self.a_input.eq(self.alu.data.o)
                 with m.Case(ASrc.FOUR):
                     m.d.sync += self.a_input.eq(4)
+                with m.Case(ASrc.NEG_ONE):
+                    m.d.sync += self.a_input.eq(C(-1, 32))
 
         raw_dat_r = Signal.like(self.b_input)
         with m.If(self.control.latch_b):

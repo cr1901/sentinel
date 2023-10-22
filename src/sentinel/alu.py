@@ -57,11 +57,6 @@ class ShiftArithmeticRight(Unit):
         super().__init__(width, lambda a, _: a.as_signed() >> 1)
 
 
-class BitClear(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a & ~b)
-
-
 AluCtrlSignature = Signature({
     "op": Out(OpType),
     "imod": Out(ALUIMod),
@@ -108,7 +103,6 @@ class ALU(Component):
         self.sll = ShiftLogicalLeft(width)
         self.srl = ShiftLogicalRight(width)
         self.sar = ShiftArithmeticRight(width)
-        self.bic = BitClear(width)
 
     def elaborate(self, platform):
         m = Module()
@@ -120,7 +114,6 @@ class ALU(Component):
         m.submodules.sll = self.sll
         m.submodules.srl = self.srl
         m.submodules.sal = self.sar
-        m.submodules.bic = self.bic
 
         mod_a = Signal.like(self.data.a)
         mod_b = Signal.like(self.data.b)
@@ -137,7 +130,7 @@ class ALU(Component):
             ]
 
         for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
-                       self.sll, self.srl, self.sar, self.bic]:
+                       self.sll, self.srl, self.sar]:
             m.d.comb += [
                 submod.a.eq(mod_a),
                 submod.b.eq(mod_b),
@@ -162,8 +155,6 @@ class ALU(Component):
                 m.d.comb += self.o_mux.eq(self.sar.o)
             with m.Case(OpType.CMP_LTU):
                 m.d.comb += self.o_mux.eq(self.sub.o[32])
-            with m.Case(OpType.BIC):
-                m.d.comb += self.o_mux.eq(self.bic.o)
 
         m.d.sync += self.data.o.eq(self.o_mux)
         with m.If(self.ctrl.omod == ALUOMod.INV_LSB_O):
