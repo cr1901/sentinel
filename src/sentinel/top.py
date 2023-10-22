@@ -70,8 +70,8 @@ class Top(Component):
         self.b_input = Signal(32)
 
         # Decode
-        self.reg_r_adr = Signal(5)
-        self.reg_w_adr = Signal(5)
+        self.reg_r_adr = Signal(6)
+        self.reg_w_adr = Signal(6)
 
     def elaborate(self, platform):
         m = Module()
@@ -146,6 +146,8 @@ class Top(Component):
                                 m.d.sync += self.b_input.eq(raw_dat_r[0:16])
                         with m.Case(MemSel.WORD):
                             m.d.sync += self.b_input.eq(self.bus.dat_r)
+                with m.Case(BSrc.CSR_IMM):
+                    m.d.sync += self.b_input.eq(self.decode.rs1)
 
         # Control conns
         m.d.comb += [
@@ -255,14 +257,40 @@ class Top(Component):
                     m.d.comb += self.reg_r_adr.eq(self.decode.src_a)
             with m.Case(RegRSel.INSN_RS2):
                 m.d.comb += self.reg_r_adr.eq(self.decode.src_b)
+            with m.Case(RegRSel.INSN_CSR):
+                # Squash CSR encoding down to only bits that vary between
+                # the 7 implemented CSRs.
+                m.d.comb += [
+                    self.reg_r_adr.eq(Cat(self.decode.funct12[0:3],
+                                          self.decode.funct12[6])),
+                    self.datapath.gp.ctrl.csr_access.eq(1)
+                ]
+            with m.Case(RegRSel.TRG_CSR):
+                m.d.comb += [
+                    self.reg_r_adr.eq(self.control.target[0:4]),
+                    self.datapath.gp.ctrl.csr_access.eq(1)
+                ]
 
         with m.Switch(self.control.reg_w_sel):
             with m.Case(RegWSel.INSN_RD):
                 m.d.comb += self.reg_w_adr.eq(self.decode.dst)
             with m.Case(RegWSel.ZERO):
                 m.d.comb += [
-                    self.reg_r_adr.eq(0),
+                    self.reg_w_adr.eq(0),
                     self.datapath.gp.ctrl.allow_zero_wr.eq(1)
+                ]
+            with m.Case(RegRSel.INSN_CSR):
+                # Squash CSR encoding down to only bits that vary between
+                # the 7 implemented CSRs.
+                m.d.comb += [
+                    self.reg_w_adr.eq(Cat(self.decode.funct12[0:3],
+                                          self.decode.funct12[6])),
+                    self.datapath.gp.ctrl.csr_access.eq(1)
+                ]
+            with m.Case(RegRSel.TRG_CSR):
+                m.d.comb += [
+                    self.reg_w_adr.eq(self.control.target[0:4]),
+                    self.datapath.gp.ctrl.csr_access.eq(1)
                 ]
 
         if self.formal:

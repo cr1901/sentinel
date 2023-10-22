@@ -14,6 +14,7 @@ GPControlSignature = Signature({
     "reg_read": Out(1),
     "reg_write": Out(1),
     "allow_zero_wr": Out(1),
+    "csr_access": Out(1)
 })
 
 GPSignature = Signature({
@@ -25,25 +26,17 @@ GPSignature = Signature({
 })
 
 
-CSRControlSignature = Signature({
-    "reg_read": Out(1),
-    "reg_write": Out(1),
-})
-
-
 CSRSignature = Signature({
     # Some CSRs (mepc, mcause, mscratch, mtvec) are stored in the
-    # unused portion of the block RAM used for GP registers.
-    "adr_r": Out(4),
-    "adr_w": Out(4),
-    # Some CSRs must be implemented as FFs so the rest of the core can use
+    # unused portion of the block RAM used for GP registers. However, some
+    # CSRs must be implemented as FFs so the rest of the core can use
     # them.
+    #
+    # Read/write CSRs via block RAM, and shadow the bits that must
+    # exposed to the core at all times via FFs.
     "status_r": In(MIP),
     "mip_r": In(MIP),
     "mie_r": In(MIE),
-    "dat_r": In(32),
-    "dat_w": Out(32),
-    "ctrl": Out(CSRControlSignature)
 })
 
 
@@ -55,6 +48,7 @@ PcSignature = Signature({
 
 DataPathSignature = Signature({
     "gp": Out(GPSignature),
+    "csr": Out(CSRSignature),
     "pc": Out(PcSignature),
 })
 
@@ -105,8 +99,8 @@ class RegFile(Component):
 
         m.d.comb += [
             rdport.en.eq(self.ctrl.reg_read),
-            rdport.addr.eq(self.adr_r),
-            wrport.addr.eq(self.adr_w),
+            rdport.addr.eq(Cat(self.adr_r, self.ctrl.csr_access)),
+            wrport.addr.eq(Cat(self.adr_w, self.ctrl.csr_access)),
             wrport.data.eq(self.dat_w),
         ]
 
@@ -119,6 +113,7 @@ class RegFile(Component):
 
 class DataPath(Component):
     gp: In(GPSignature)
+    csr: In(CSRSignature)
     pc: In(PcSignature)
 
     def __init__(self, *, formal=False):
@@ -130,10 +125,29 @@ class DataPath(Component):
     def elaborate(self, platform):
         m = Module()
 
+        # CSR shadows
+        mstatus = Signal(MStatus)
+        mip = Signal(MIP)
+        mie = Signal(MIE)
+
         m.submodules.pc_mod = self.pc_mod
         m.submodules.regfile = self.regfile
 
         connect(m, self.regfile, flipped(self.gp))
         connect(m, self.pc_mod, flipped(self.pc))
+
+        m.d.comb += [
+            self.csr.status_r.eq(mstatus),
+            self.csr.mip_r.eq(mip),
+            self.csr.mie_r.eq(mie)
+        ]
+
+        with m.If(self.gp.ctrl.csr_access & self.gp.ctrl.reg_write):
+            with m.If(self.gp.adr_w == 0):
+                m.d.sync += mstatus.eq(self.gp.dat_w)
+            with m.If(self.gp.adr_w == 4):
+                m.d.sync += mie.eq(self.gp.dat_w)
+            with m.If(self.gp.adr_w == 0xC):
+                m.d.sync += mip.eq(self.gp.dat_w)
 
         return m

@@ -86,6 +86,7 @@ fields block_ram: {
 #define READ_RS1 reg_read => 1, reg_r_sel => insn_rs1
 #define READ_RS2 reg_read => 1, reg_r_sel => insn_rs2
 #define WRITE_RD reg_write => 1
+#define WRITE_RD_CSR reg_write => 1, reg_w_sel => insn_csr
 #define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
 #define CMP_LT alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b
 #define CMP_GEU alu_op => cmp_ltu, alu_o_mod => inv_lsb_o
@@ -161,19 +162,22 @@ origin 0x24;
 csr_trampoline: jmp_type => map, cond_test => exception, target => save_pc;
 csrro0_1: a_src => zero, b_src => one, latch_a => 1, latch_b => 1, jmp_type => direct, \
              target => csrro0;
-csrw_1: NOT_IMPLEMENTED;
+csrw_1: NOT_IMPLEMENTED;  // reg_read => 1, reg_r_sel => insn_csr, 
 csrrw_1: NOT_IMPLEMENTED;
 csrr_1: NOT_IMPLEMENTED;
 csrrs_1: NOT_IMPLEMENTED;
 csrrc_1: NOT_IMPLEMENTED;
-csrwi_1: NOT_IMPLEMENTED;
+csrwi_1: a_src => zero, b_src => csr_imm, latch_a => 1, latch_b => 1, jmp_type => direct, \
+             target => csrwi;
+csrrwi_1: NOT_IMPLEMENTED;
 csrrsi_1: NOT_IMPLEMENTED;
 csrrci_1: NOT_IMPLEMENTED;
 
 origin 0x30;
 misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
 
-csrro0: alu_op => and, pc_action => inc, JUMP_TO_OP_END(fast_epilog);
+csrro0: alu_op => and, pc_action => inc, target => fetch;
+csrwi: alu_op => add, pc_action => inc, JUMP_TO_OP_END(fast_epilog_csr);
 
 origin 0x40;
 addi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
@@ -355,6 +359,7 @@ jal: latch_a => 1, latch_b => 1, a_src => four, b_src => pc;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
 fast_epilog: INSN_FETCH_EAGER_READ_RS1, WRITE_RD, SKIP_WAIT_IF_ACK;
+fast_epilog_csr: INSN_FETCH_EAGER_READ_RS1, WRITE_RD_CSR, SKIP_WAIT_IF_ACK;
 
 origin 0xc0;
 add_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
@@ -421,7 +426,7 @@ sra:
 
 // Interrupt handler.
 origin 0xf0;
-NOT_IMPLEMENTED;
+save_pc: NOT_IMPLEMENTED;
 // Send PC through ALU
 // save_pc: a_src => pc, b_src => target, jmp_type => nop, target => 0;
 
