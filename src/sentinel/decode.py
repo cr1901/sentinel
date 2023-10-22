@@ -348,6 +348,7 @@ class Decode(Component):
                         with m.If((csr_op != 1) &
                                   (csr_op != 5) &
                                   (self.rs1 == 0)):
+                            # csrro0
                             m.d.comb += csr_req_op.eq(0x25)
                         with m.Else():
                             m.d.comb += [
@@ -358,26 +359,42 @@ class Decode(Component):
                     with m.Else():
                         # Jump to microcode routines for actual, implemented
                         # CSR registers.
-                        with m.If((csr_op == 1)):
+                        with m.If((csr_op == 1) & (self.rd == 0)):
+                            # csrw
                             m.d.comb += csr_req_op.eq(0x26)
-                        with m.If((csr_op == 2) & (self.rs1 == 0)):
+                        with m.If((csr_op == 1) & (self.rd != 0)):
+                            # csrrw
                             m.d.comb += csr_req_op.eq(0x27)
-                        with m.Elif((csr_op == 2) & (self.rs1 != 0)):
+                        with m.If((csr_op == 2) & (self.rs1 == 0)):
+                            # csrr
                             m.d.comb += csr_req_op.eq(0x28)
-                        with m.If((csr_op == 3) & (self.rs1 == 0)):
+                        with m.Elif((csr_op == 2) & (self.rs1 != 0)):
+                            # csrrs
                             m.d.comb += csr_req_op.eq(0x29)
+                        with m.If((csr_op == 3) & (self.rs1 == 0)):
+                            # csrrc, no write
+                            m.d.comb += csr_req_op.eq(0x28)
                         with m.Elif((csr_op == 3) & (self.rs1 != 0)):
+                            # csrrc
+                            m.d.comb += csr_req_op.eq(0x30)
+                        with m.If((csr_op == 5) & (self.rd == 0)):
+                            # csrwi
                             m.d.comb += csr_req_op.eq(0x2a)
-                        with m.If((csr_op == 5)):
+                        with m.If((csr_op == 5) & (self.rd != 0)):
+                            # csrrwi
                             m.d.comb += csr_req_op.eq(0x2b)
                         with m.If((csr_op == 6) & (self.rs1 == 0)):
-                            m.d.comb += csr_req_op.eq(0x2c)
+                            # csrrsi, no write
+                            m.d.comb += csr_req_op.eq(0x28)
                         with m.Elif((csr_op == 6) & (self.rs1 != 0)):
-                            m.d.comb += csr_req_op.eq(0x2d)
+                            # csrrsi
+                            m.d.comb += csr_req_op.eq(0x2c)
                         with m.If((csr_op == 7) & (self.rs1 == 0)):
-                            m.d.comb += csr_req_op.eq(0x2e)
+                            # csrrci, no write
+                            m.d.comb += csr_req_op.eq(0x28)
                         with m.Elif((csr_op == 7) & (self.rs1 != 0)):
-                            m.d.comb += csr_req_op.eq(0x2f)
+                            # csrrci
+                            m.d.comb += csr_req_op.eq(0x2d)
                         with m.Else():
                             # This should be unreachable.
                             m.d.comb += [
@@ -407,7 +424,7 @@ class Decode(Component):
         # illegal: bit 0 set
         # zero: bit 1 set
         # mstatus, mie, mtvec, mscratch, mepc, mcause, mip: both bits clear
-        # These registers are actually implemented.
+        # ^These registers are actually implemented.
         init = [1]*2048  # By default, access is illegal.
 
         init[idx(0xF11)] = 2  # mvendorid

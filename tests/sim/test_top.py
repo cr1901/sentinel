@@ -52,6 +52,19 @@ class RV32Regs:
     PC: int = 0
 
 
+@dataclass
+class CSRRegs:
+    @classmethod
+    def from_top_module(cls, m):
+        csrregs = {}
+
+        # csrregs["mscratch"] =
+
+        return cls(**csrregs)
+
+    MSCRATCH: int = 0
+
+
 @pytest.fixture
 def ucode_panic(sim_mod):
     _, m = sim_mod

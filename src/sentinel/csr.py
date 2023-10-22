@@ -27,7 +27,7 @@ class MTVec(Struct):
 
 class MIP(Struct):
     _padding0: unsigned(3)
-    msip: unsigned(1)
+    msip: unsigned(1)  # Not implemented
     _padding1: unsigned(3)
     mtip: unsigned(1)  # Not implemented
     _padding2: unsigned(3)
@@ -37,7 +37,7 @@ class MIP(Struct):
 
 class MIE(Struct):
     _padding0: unsigned(3)
-    msip: unsigned(1)
+    msip: unsigned(1)  # Not implemented
     _padding1: unsigned(3)
     mtip: unsigned(1)  # Not implemented
     _padding2: unsigned(3)

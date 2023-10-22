@@ -37,7 +37,7 @@ fields block_ram: {
   latch_a: bool, default 0;
   latch_b: bool, default 0;
   a_src: enum { gp = 0; imm; alu_o; zero; four; }, default gp;
-  b_src: enum { gp = 0; pc; imm; one; dat_r; }, default gp;
+  b_src: enum { gp = 0; pc; imm; one; dat_r; csr_imm; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
   alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_ltu; }, default add;
@@ -54,8 +54,8 @@ fields block_ram: {
   // Reads are transparent.
   reg_read: bool, default 0;
   reg_write: bool, default 0;
-  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; }, default insn_rs1;
-  reg_w_sel: enum { insn_rd = 0; zero = 1; }, default insn_rd;
+  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; insn_csr; trg_csr; }, default insn_rs1;
+  reg_w_sel: enum { insn_rd = 0; zero = 1; insn_csr; trg_csr; }, default insn_rd;
 
   // Start or continue a memory request. For convenience, an ack will
   // automatically stop a memory request for the cycle after ack, even if
@@ -72,6 +72,9 @@ fields block_ram: {
   // Current mem request is insn fetch. Valid on current cycle. If set w/
   // mem_req, mem_sel ignored/calculated automatically.
   insn_fetch: bool, default 0;
+
+  except_ctl: enum { none; latch_decoder; latch_jal; latch_adr; enter_int; \
+                     leave_int }, default none;
 };
 
 #define INSN_FETCH insn_fetch => 1, mem_req => 1
@@ -156,13 +159,21 @@ origin 0x24;
 // CSR ops take two cycles to decode. This is effectively a no-op in case
 // there's an illegal CSR access or something.
 csr_trampoline: jmp_type => map, cond_test => exception, target => save_pc;
-ro_zero_1: a_src => zero, b_src => one, latch_a => 1, latch_b => 1, jmp_type => direct, \
-             target => ro_zero;
+csrro0_1: a_src => zero, b_src => one, latch_a => 1, latch_b => 1, jmp_type => direct, \
+             target => csrro0;
+csrw_1: NOT_IMPLEMENTED;
+csrrw_1: NOT_IMPLEMENTED;
+csrr_1: NOT_IMPLEMENTED;
+csrrs_1: NOT_IMPLEMENTED;
+csrrc_1: NOT_IMPLEMENTED;
+csrwi_1: NOT_IMPLEMENTED;
+csrrsi_1: NOT_IMPLEMENTED;
+csrrci_1: NOT_IMPLEMENTED;
 
 origin 0x30;
 misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
 
-ro_zero: alu_op => and, pc_action => inc, JUMP_TO_OP_END(fast_epilog);
+csrro0: alu_op => and, pc_action => inc, JUMP_TO_OP_END(fast_epilog);
 
 origin 0x40;
 addi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
