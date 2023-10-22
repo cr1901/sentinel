@@ -94,11 +94,55 @@ def ucode_panic(sim_mod):
     return ucode_panic
 
 
+@pytest.fixture
+def cpu_proc_aux(sim_mod):
+    _, m = sim_mod
+
+    def cpu_proc_aux(regs, mem, csrs):
+        def check_regs(curr):
+            expected_regs = curr
+            actual_regs = yield from RV32Regs.from_top_module(m)
+            assert expected_regs == actual_regs
+
+        def check_mem(mem):
+            if mem:
+                for m_adr, m_dat in mem.items():
+                    assert (yield m.mem.mem[m_adr]) == m_dat
+
+        def check_csrs(curr):
+            expected_regs = curr
+            actual_regs = yield from CSRRegs.from_top_module(m)
+            assert expected_regs == actual_regs
+
+        for curr_r, curr_m, curr_c in zip(regs, mem, csrs):
+            # Wait for insn.
+            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
+                       (yield m.cpu.control.insn_fetch)):
+                yield
+
+            # Wait for memory to respond.
+            while not (yield m.cpu.bus.ack):
+                yield
+
+            # When ACK is asserted, we should always be going to uinsn
+            # "check_int".
+            assert (yield m.cpu.control.sequencer.adr) == 2 or \
+                (yield m.cpu.control.sequencer.adr) == 1
+            yield
+
+            # Check results as new insn begins (i.e. prev results).
+            yield from check_regs(curr_r)
+            yield from check_mem(curr_m)
+            yield from check_csrs(curr_c)
+
+    return cpu_proc_aux
+
+
 # This test is a handwritten exercise of going through all RV32I insns. If
 # this test fails, than surely all other, more thorough tests will fail.
 @pytest.mark.module(AttoSoC(sim=True))
 @pytest.mark.clks((1.0 / 12e6,))
-def test_seq(sim_mod, ucode_panic):
+def test_seq(sim_mod, ucode_panic, cpu_proc_aux):
     sim, m = sim_mod
 
     def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
@@ -118,37 +162,6 @@ def test_seq(sim_mod, ucode_panic):
                 yield
 
             yield
-
-    def cpu_proc_aux(regs, mem):
-        def check_regs(curr):
-            expected_regs = curr
-            actual_regs = yield from RV32Regs.from_top_module(m)
-            assert expected_regs == actual_regs
-
-        def check_mem(mem):
-            if mem:
-                for m_adr, m_dat in mem.items():
-                    assert (yield m.mem.mem[m_adr]) == m_dat
-
-        for curr_r, curr_m in zip(regs, mem):
-            # Wait for insn.
-            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
-                       (yield m.cpu.control.insn_fetch)):
-                yield
-
-            # Wait for memory to respond.
-            while not (yield m.cpu.bus.ack):
-                yield
-
-            # When ACK is asserted, we should always be going to uinsn
-            # "check_int".
-            assert (yield m.cpu.control.sequencer.adr) == 2 or \
-                (yield m.cpu.control.sequencer.adr) == 1
-            yield
-
-            # Check results as new insn begins (i.e. prev results).
-            yield from check_regs(curr_r)
-            yield from check_mem(curr_m)
 
     m.rom = """
         addi x0, x0, 0  # 0
@@ -343,11 +356,13 @@ bgeu_dst2:
         {0x26C >> 2: 0x03e4e400, 0x270 >> 2: 0xFFFFE000},
     ]
 
+    csrs = [CSRRegs()]*len(regs)
+
     def bus_proc():
         yield from bus_proc_aux(wait_states=chain([1], repeat(0)))
 
     def cpu_proc():
-        yield from cpu_proc_aux(regs, ram)
+        yield from cpu_proc_aux(regs, ram, csrs)
 
     sim.run(sync_processes=[cpu_proc, ucode_panic])
 
@@ -427,7 +442,7 @@ countdown:
 
 @pytest.mark.module(AttoSoC(sim=True))
 @pytest.mark.clks((1.0 / 12e6,))
-def test_csr_ro0(sim_mod, ucode_panic):
+def test_csr_ro0(sim_mod, ucode_panic, cpu_proc_aux):
     sim, m = sim_mod
 
     def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
@@ -447,37 +462,6 @@ def test_csr_ro0(sim_mod, ucode_panic):
                 yield
 
             yield
-
-    def cpu_proc_aux(regs, mem):
-        def check_regs(curr):
-            expected_regs = curr
-            actual_regs = yield from RV32Regs.from_top_module(m)
-            assert expected_regs == actual_regs
-
-        def check_mem(mem):
-            if mem:
-                for m_adr, m_dat in mem.items():
-                    assert (yield m.mem.mem[m_adr]) == m_dat
-
-        for curr_r, curr_m in zip(regs, mem):
-            # Wait for insn.
-            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
-                       (yield m.cpu.control.insn_fetch)):
-                yield
-
-            # Wait for memory to respond.
-            while not (yield m.cpu.bus.ack):
-                yield
-
-            # When ACK is asserted, we should always be going to uinsn
-            # "check_int".
-            assert (yield m.cpu.control.sequencer.adr) == 2 or \
-                (yield m.cpu.control.sequencer.adr) == 1
-            yield
-
-            # Check results as new insn begins (i.e. prev results).
-            yield from check_regs(curr_r)
-            yield from check_mem(curr_m)
 
     m.rom = """
         addi x1, x0, 1  # 0
@@ -496,15 +480,17 @@ def test_csr_ro0(sim_mod, ucode_panic):
         None
     ]
 
+    csrs = [CSRRegs()]*3
+
     def cpu_proc():
-        yield from cpu_proc_aux(regs, ram)
+        yield from cpu_proc_aux(regs, ram, csrs)
 
     sim.run(sync_processes=[cpu_proc, ucode_panic])
 
 
 @pytest.mark.module(AttoSoC(sim=True))
 @pytest.mark.clks((1.0 / 12e6,))
-def test_csrw(sim_mod, ucode_panic):
+def test_csrw(sim_mod, ucode_panic, cpu_proc_aux):
     sim, m = sim_mod
 
     def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
@@ -524,43 +510,6 @@ def test_csrw(sim_mod, ucode_panic):
                 yield
 
             yield
-
-    def cpu_proc_aux(regs, mem, csrs):
-        def check_regs(curr):
-            expected_regs = curr
-            actual_regs = yield from RV32Regs.from_top_module(m)
-            assert expected_regs == actual_regs
-
-        def check_mem(mem):
-            if mem:
-                for m_adr, m_dat in mem.items():
-                    assert (yield m.mem.mem[m_adr]) == m_dat
-
-        def check_csrs(curr):
-            expected_regs = curr
-            actual_regs = yield from CSRRegs.from_top_module(m)
-            assert expected_regs == actual_regs
-
-        for curr_r, curr_m, curr_c in zip(regs, mem, csrs):
-            # Wait for insn.
-            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
-                       (yield m.cpu.control.insn_fetch)):
-                yield
-
-            # Wait for memory to respond.
-            while not (yield m.cpu.bus.ack):
-                yield
-
-            # When ACK is asserted, we should always be going to uinsn
-            # "check_int".
-            assert (yield m.cpu.control.sequencer.adr) == 2 or \
-                (yield m.cpu.control.sequencer.adr) == 1
-            yield
-
-            # Check results as new insn begins (i.e. prev results).
-            yield from check_regs(curr_r)
-            yield from check_mem(curr_m)
-            yield from check_csrs(curr_c)
 
     m.rom = """
         csrrwi x0, 31, 0x340   # mscratch

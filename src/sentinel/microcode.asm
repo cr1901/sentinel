@@ -176,7 +176,7 @@ csrrci_1: NOT_IMPLEMENTED;
 origin 0x30;
 misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
 
-csrro0: alu_op => and, pc_action => inc, target => fetch;
+csrro0: alu_op => and, pc_action => inc, JUMP_TO_OP_END(fast_epilog);
 csrwi: alu_op => add, pc_action => inc, JUMP_TO_OP_END(fast_epilog_csr);
 
 origin 0x40;
