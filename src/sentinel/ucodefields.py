@@ -21,6 +21,7 @@ class OpType(enum.Enum):
     SRL = 6
     SRA = 7
     CMP_LTU = 8
+    BIC = 9
 
 
 class CondTest(enum.Enum):

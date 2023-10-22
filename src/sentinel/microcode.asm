@@ -40,7 +40,7 @@ fields block_ram: {
   b_src: enum { gp = 0; pc; imm; one; dat_r; csr_imm; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
-  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_ltu; }, default add;
+  alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_ltu; bic }, default add;
   // In addition to writing ALU o, write C or D. Valid next cycle.
   // Modify inputs and outputs to ALU.
   alu_i_mod: enum { none = 0; inv_msb_a_b; }, default none;
@@ -160,27 +160,33 @@ origin 0x24;
 // CSR ops take two cycles to decode. This is effectively a no-op in case
 // there's an illegal CSR access or something.
 csr_trampoline: jmp_type => map, cond_test => exception, target => save_pc;
-csrro0_1: a_src => zero, b_src => one, latch_a => 1, latch_b => 1, jmp_type => direct, \
-             target => csrro0;
+csrro0_1: a_src => zero, b_src => one, latch_a => 1, latch_b => 1, pc_action => inc, \
+            jmp_type => direct, target => csrro0;
 csrw_1: NOT_IMPLEMENTED;  // reg_read => 1, reg_r_sel => insn_csr, 
 csrrw_1: NOT_IMPLEMENTED;
 csrr_1: NOT_IMPLEMENTED;
 csrrs_1: NOT_IMPLEMENTED;
 csrrc_1: NOT_IMPLEMENTED;
-csrwi_1: a_src => zero, b_src => csr_imm, latch_a => 1, latch_b => 1, jmp_type => direct, \
-             target => csrwi;
+csrwi_1: a_src => zero, b_src => csr_imm, latch_a => 1, latch_b => 1, pc_action => inc, \
+            jmp_type => direct, target => csrwi;
 csrrwi_1: reg_read => 1, reg_r_sel => insn_csr, a_src => zero, b_src => csr_imm, \
-             latch_a => 1, latch_b => 1, jmp_type => direct, target => csrrwi;
+            latch_a => 1, latch_b => 1, pc_action => inc, jmp_type => direct, \
+            target => csrrwi;
 csrrsi_1: NOT_IMPLEMENTED;
-csrrci_1: NOT_IMPLEMENTED;
+csrrci_1: reg_read => 1, reg_r_sel => insn_csr, a_src => zero, latch_a => 1, \
+            pc_action => inc, jmp_type => direct, target => csrrci;
 
 origin 0x30;
 misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
 
-csrro0: alu_op => and, pc_action => inc, JUMP_TO_OP_END(fast_epilog);
-csrwi: alu_op => add, pc_action => inc, JUMP_TO_OP_END(fast_epilog_csr);
-csrrwi: alu_op => add, pc_action => inc, latch_b => 1, b_src => gp; // Latch old CSR value, pass thru new.
-        WRITE_RD_CSR, alu_op => add, JUMP_TO_OP_END(fast_epilog);    
+csrro0: alu_op => and, JUMP_TO_OP_END(fast_epilog);
+csrwi: alu_op => add, JUMP_TO_OP_END(fast_epilog_csr);
+csrrwi: alu_op => add, latch_b => 1, b_src => gp; // Latch old CSR value, pass thru new.
+        WRITE_RD_CSR, alu_op => add, JUMP_TO_OP_END(fast_epilog);  
+csrrci: b_src => gp, latch_b => 1;
+        alu_op => add, a_src => gp, b_src => csr_imm, latch_a => 1, latch_b => 1; 
+        WRITE_RD, alu_op => bic, JUMP_TO_OP_END(fast_epilog_csr);
+        
 
 origin 0x40;
 addi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
