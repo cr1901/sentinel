@@ -513,21 +513,25 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux):
 
     m.rom = """
         csrrwi x0, 31, 0x340   # mscratch
+        csrrwi x1, 16, 0x340   # mscratch
 """
 
     regs = [
         RV32Regs(),
         RV32Regs(PC=4 >> 2),
+        RV32Regs(R1=31, PC=8 >> 2),
     ]
 
     ram = [
         None,  # 0x0
         None,
+        None
     ]
 
     csrs = [
         CSRRegs(),
-        CSRRegs(MSCRATCH=31)
+        CSRRegs(MSCRATCH=31),
+        CSRRegs(MSCRATCH=16),
     ]
 
     def cpu_proc():
