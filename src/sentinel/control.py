@@ -120,8 +120,6 @@ class Control(Component):
         with m.Switch(self.cond_test):
             with m.Case(CondTest.EXCEPTION):
                 m.d.comb += self.raw_test.eq(self.exception)
-            with m.Case(CondTest.CMP_ALU_O_5_LSBS_ZERO):
-                m.d.comb += self.raw_test.eq(self.alu.lsbs_5_zero)
             with m.Case(CondTest.CMP_ALU_O_ZERO):
                 m.d.comb += self.raw_test.eq(self.alu.zero)
             with m.Case(CondTest.MEM_VALID):

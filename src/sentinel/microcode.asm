@@ -25,7 +25,7 @@ fields block_ram: {
   // exception: Illegal insn, EBRAK, ECALL, misaligned insn, misaligned ld/st?
   // mem_valid: Is current dat_r valid? Did write finish?
   // true: Unconditionally succeed
-  cond_test: enum { exception; cmp_alu_o_5_lsbs_zero; cmp_alu_o_zero; mem_valid; true}, default true;
+  cond_test: enum { exception; cmp_alu_o_zero; mem_valid; true}, default true;
 
   // Invert the results of the test above. Valid current cycle.
   invert_test: bool, default 0;
@@ -36,7 +36,7 @@ fields block_ram: {
   // ALU src latch/selection.
   latch_a: bool, default 0;
   latch_b: bool, default 0;
-  a_src: enum { gp = 0; imm; alu_o; zero; four; neg_one; }, default gp;
+  a_src: enum { gp = 0; imm; alu_o; zero; four; neg_one; thirty_one; }, default gp;
   b_src: enum { gp = 0; pc; imm; one; dat_r; csr_imm; }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
@@ -93,8 +93,8 @@ fields block_ram: {
 #define CMP_GE  alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b, alu_o_mod => inv_lsb_o
 // The LT[U]/GE[U] tests will either return zero or one; this makes it fine
 // to reuse the conditional meant for shift ops.
-#define CONDTEST_ALU_CMP_FAILED cond_test => cmp_alu_o_5_lsbs_zero
-#define CONDTEST_ALU_O_5_LSBS_NONZERO invert_test => 1, cond_test => cmp_alu_o_5_lsbs_zero
+#define CONDTEST_ALU_CMP_FAILED cond_test => cmp_alu_o_zero
+#define CONDTEST_ALU_NONZERO invert_test => 1, cond_test => cmp_alu_o_zero
 
 fetch:
 wait_for_ack: INSN_FETCH_EAGER_READ_RS1, invert_test => 1, cond_test => mem_valid, \
@@ -234,7 +234,7 @@ slli:
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, latch_a => 1, latch_b => 1, alu_op => add;
               READ_RS1, a_src => imm, b_src => one, latch_a => 1, latch_b => 1, alu_op => sll, \
-                  jmp_type => direct, cond_test => cmp_alu_o_5_lsbs_zero, target => shift_zero;
+                  jmp_type => direct, cond_test => cmp_alu_o_zero, target => shift_zero;
 sll_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -244,7 +244,7 @@ sll_loop:
               alu_op => sub, a_src => alu_o, latch_a => 1, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
               alu_op => sll, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
-                  jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sll_loop;
+                  jmp_type => direct_zero, CONDTEST_ALU_NONZERO, target => sll_loop;
 
 srli:
               // Re: READ_RS1... reg addresses aren't latched, so if we need
@@ -253,7 +253,7 @@ srli:
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, latch_a => 1, latch_b => 1, alu_op => add;
               READ_RS1, a_src => imm, b_src => one, latch_a => 1, latch_b => 1, alu_op => srl,
-                  jmp_type => direct, cond_test => cmp_alu_o_5_lsbs_zero, target => shift_zero;
+                  jmp_type => direct, cond_test => cmp_alu_o_zero, target => shift_zero;
 srl_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -263,16 +263,18 @@ srl_loop:
               alu_op => sub, a_src => alu_o, latch_a => 1, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
               alu_op => srl, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
-                  jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => srl_loop;
+                  jmp_type => direct_zero, CONDTEST_ALU_NONZERO, target => srl_loop;
 
 srai:
               // Re: READ_RS1... reg addresses aren't latched, so if we need
               // reg values again, we need to latch them again.
-              READ_RS1, a_src => zero, latch_a => 1;
+              // We AND here because imm12 will have a hardcoded "1" outside
+              // the 5 LSBs.
+              READ_RS1, a_src => thirty_one, latch_a => 1;
               // Bail if shift count was initially zero.
-              a_src => gp, b_src => imm, latch_a => 1, latch_b => 1, alu_op => add;
-              READ_RS1, a_src => imm, b_src => one, latch_a => 1, latch_b => 1, alu_op => sra,
-                  jmp_type => direct, cond_test => cmp_alu_o_5_lsbs_zero, target => shift_zero;
+              a_src => gp, latch_a => 1, alu_op => and;
+              READ_RS1, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, alu_op => sra,
+                  jmp_type => direct, cond_test => cmp_alu_o_zero, target => shift_zero;
 sra_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -282,7 +284,7 @@ sra_loop:
               alu_op => sub, a_src => alu_o, latch_a => 1, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
               alu_op => sra, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
-                  jmp_type => direct_zero, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sra_loop;
+                  jmp_type => direct_zero, CONDTEST_ALU_NONZERO, target => sra_loop;
 
 shift_zero:   a_src => zero, b_src => gp, latch_a => 1, latch_b => 1;
               alu_op => add, JUMP_TO_OP_END(fast_epilog);
@@ -413,25 +415,25 @@ sub:          alu_op => sub, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
              // Re: add; pass through RS2 unmodified, and check whether 5 LSBs
              // were zero. The shift loops above can be reused once we do
              // the initial zero check.
-sll:  
-             READ_RS1, a_src => zero, latch_a => 1;
-             READ_RS2, a_src => gp, latch_a => 1, alu_op => add;
-             a_src => gp, b_src => one, latch_a => 1, latch_b => 1, alu_op => sll,
-                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sll_loop;
+sll:
+             READ_RS1, a_src => thirty_one, latch_a => 1;
+             READ_RS2, a_src => gp, latch_a => 1, alu_op => and;
+             a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, alu_op => sll,
+                  jmp_type => direct, CONDTEST_ALU_NONZERO, target => sll_loop;
              READ_RS1, jmp_type => direct, target => shift_zero;
 
 srl:  
-             READ_RS1, a_src => zero, latch_a => 1;
-             READ_RS2, a_src => gp, latch_a => 1, alu_op => add;
-             a_src => gp, b_src => one, latch_a => 1, latch_b => 1, alu_op => srl,
-                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => srl_loop;
+             READ_RS1, a_src => thirty_one, latch_a => 1;
+             READ_RS2, a_src => gp, latch_a => 1, alu_op => and;
+             a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, alu_op => srl,
+                  jmp_type => direct, CONDTEST_ALU_NONZERO, target => srl_loop;
              READ_RS1, jmp_type => direct, target => shift_zero;
 
 sra:  
-             READ_RS1, a_src => zero, latch_a => 1;
-             READ_RS2, a_src => gp, latch_a => 1, alu_op => add;
-             a_src => gp, b_src => one, latch_a => 1, latch_b => 1, alu_op => sra,
-                  jmp_type => direct, CONDTEST_ALU_O_5_LSBS_NONZERO, target => sra_loop;
+             READ_RS1, a_src => thirty_one, latch_a => 1;
+             READ_RS2, a_src => gp, latch_a => 1, alu_op => and;
+             a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, alu_op => sra,
+                  jmp_type => direct, CONDTEST_ALU_NONZERO, target => sra_loop;
              READ_RS1, jmp_type => direct, target => shift_zero;
 
 // Interrupt handler.

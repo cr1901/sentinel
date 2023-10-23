@@ -25,10 +25,9 @@ class OpType(enum.Enum):
 
 class CondTest(enum.Enum):
     EXCEPTION = 0
-    CMP_ALU_O_5_LSBS_ZERO = 1
-    CMP_ALU_O_ZERO = 2
-    MEM_VALID = 3
-    TRUE = 4
+    CMP_ALU_O_ZERO = 1
+    MEM_VALID = 2
+    TRUE = 3
 
 
 class PcAction(enum.Enum):
@@ -44,6 +43,7 @@ class ASrc(enum.Enum):
     ZERO = 3
     FOUR = 4
     NEG_ONE = 5
+    THIRTY_ONE = 6
 
 
 class BSrc(enum.Enum):

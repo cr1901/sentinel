@@ -36,22 +36,29 @@ class SimulatorFixture:
 
     @property
     def ports(self):
-        # Back-compat
-        if hasattr(self.mod, "ports"):
-            return self.mod.ports()
-        # Stolen from Amaranth 33c2246- intended to be "new" way to populate
-        # GTKW files.
-        elif hasattr(self.mod, "signature") and isinstance(self.mod.signature,
-                                                           Signature):
-            ports = []
-            for path, member, value in self.mod.signature.flatten(self.mod):
-                if isinstance(value, ValueCastable):
-                    value = value.as_value()
-                if isinstance(value, Value):
-                    ports.append(value)
-            return ports
+        if hasattr(self, "_ports"):
+            return self._ports
         else:
-            return ()
+            # Back-compat
+            if hasattr(self.mod, "ports"):
+                return self.mod.ports()
+            # Stolen from Amaranth 33c2246- intended to be "new" way to
+            # populate GTKW files.
+            elif hasattr(self.mod, "signature") and \
+                    isinstance(self.mod.signature, Signature):
+                ports = []
+                for path, member, value in self.mod.signature.flatten(self.mod):  # noqa: E501
+                    if isinstance(value, ValueCastable):
+                        value = value.as_value()
+                    if isinstance(value, Value):
+                        ports.append(value)
+                return ports
+            else:
+                return ()
+
+    @ports.setter
+    def ports(self, ports):
+        self._ports = ports
 
     def run(self, sync_processes, processes=[]):
         # Don't elaborate until we're ready to sim. This causes weird

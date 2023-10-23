@@ -2,6 +2,7 @@ import pytest
 
 from dataclasses import dataclass
 from itertools import repeat, chain
+from amaranth import ClockDomain
 from amaranth.sim import Passive
 
 from sentinel.soc import AttoSoC
@@ -138,11 +139,26 @@ def cpu_proc_aux(sim_mod):
     return cpu_proc_aux
 
 
+@pytest.fixture
+def basic_ports(sim_mod):
+    _, m = sim_mod
+
+    return [m.cpu.bus.cyc,
+            m.cpu.bus.stb, m.cpu.bus.ack, m.cpu.bus.we, m.cpu.bus.sel,
+            m.cpu.bus.dat_r, m.cpu.bus.dat_w, m.cpu.bus.adr,
+
+            m.cpu.control.ucoderom.addr,
+            m.cpu.control.ucoderom.fields.as_value(),
+
+            m.cpu.alu.ctrl.op, m.cpu.alu.data.a, m.cpu.alu.data.b,
+            m.cpu.alu.data.o]
+
+
 # This test is a handwritten exercise of going through all RV32I insns. If
 # this test fails, than surely all other, more thorough tests will fail.
 @pytest.mark.module(AttoSoC(sim=True))
 @pytest.mark.clks((1.0 / 12e6,))
-def test_seq(sim_mod, ucode_panic, cpu_proc_aux):
+def test_seq(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
     sim, m = sim_mod
 
     def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
@@ -364,6 +380,7 @@ bgeu_dst2:
     def cpu_proc():
         yield from cpu_proc_aux(regs, ram, csrs)
 
+    sim.ports = basic_ports
     sim.run(sync_processes=[cpu_proc, ucode_panic])
 
 
