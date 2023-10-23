@@ -37,7 +37,7 @@ fields block_ram: {
   latch_a: bool, default 0;
   latch_b: bool, default 0;
   a_src: enum { gp = 0; imm; alu_o; zero; four; neg_one; thirty_one; }, default gp;
-  b_src: enum { gp = 0; pc; imm; one; dat_r; csr_imm; }, default gp;
+  b_src: enum { gp = 0; pc; imm; one; dat_r; csr_imm; csr }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
   alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_ltu; }, default add;
@@ -54,8 +54,13 @@ fields block_ram: {
   // Reads are transparent.
   reg_read: bool, default 0;
   reg_write: bool, default 0;
-  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; insn_csr; trg_csr; }, default insn_rs1;
-  reg_w_sel: enum { insn_rd = 0; zero = 1; insn_csr; trg_csr; }, default insn_rd;
+  reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; }, default insn_rs1;
+  reg_w_sel: enum { insn_rd = 0; zero = 1; }, default insn_rd;
+
+  // CSR regs can either be read or written in a given cycle, but not both.
+  // CSR ops override reg_ops. This is technically a union.
+  csr_op: enum { none = 0; read_csr; write_csr }, default none;
+  csr_sel: enum { insn_csr; trg_csr }, default insn_csr;
 
   // Start or continue a memory request. For convenience, an ack will
   // automatically stop a memory request for the cycle after ack, even if
@@ -86,7 +91,7 @@ fields block_ram: {
 #define READ_RS1 reg_read => 1, reg_r_sel => insn_rs1
 #define READ_RS2 reg_read => 1, reg_r_sel => insn_rs2
 #define WRITE_RD reg_write => 1
-#define WRITE_RD_CSR reg_write => 1, reg_w_sel => insn_csr
+#define WRITE_RD_CSR csr_op => write_csr
 #define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
 #define CMP_LT alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b
 #define CMP_GEU alu_op => cmp_ltu, alu_o_mod => inv_lsb_o
@@ -169,11 +174,11 @@ csrrs_1: NOT_IMPLEMENTED;
 csrrc_1: NOT_IMPLEMENTED;
 csrwi_1: a_src => zero, b_src => csr_imm, latch_a => 1, latch_b => 1, pc_action => inc, \
             jmp_type => direct, target => csrwi;
-csrrwi_1: reg_read => 1, reg_r_sel => insn_csr, a_src => zero, b_src => csr_imm, \
+csrrwi_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, b_src => csr_imm, \
             latch_a => 1, latch_b => 1, pc_action => inc, jmp_type => direct, \
             target => csrrwi;
 csrrsi_1: NOT_IMPLEMENTED;
-csrrci_1: reg_read => 1, reg_r_sel => insn_csr, a_src => zero, latch_a => 1, \
+csrrci_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
             pc_action => inc, jmp_type => direct, target => csrrci;
 
 origin 0x30;
@@ -181,9 +186,9 @@ misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
 
 csrro0: alu_op => and, JUMP_TO_OP_END(fast_epilog);
 csrwi: alu_op => add, JUMP_TO_OP_END(fast_epilog_csr);
-csrrwi: alu_op => add, latch_b => 1, b_src => gp; // Latch old CSR value, pass thru new.
+csrrwi: alu_op => add, latch_b => 1, b_src => csr; // Latch old CSR value, pass thru new.
         WRITE_RD_CSR, alu_op => add, JUMP_TO_OP_END(fast_epilog);  
-csrrci: b_src => gp, latch_b => 1;
+csrrci: latch_b => 1, b_src => csr;
         alu_op => add, a_src => neg_one, b_src => csr_imm, latch_a => 1, latch_b => 1; 
         WRITE_RD, b_src => gp, latch_b => 1, alu_op => xor; // Bit Clear = A & ~B
         a_src => alu_o, latch_a => 1;

@@ -10,7 +10,8 @@ from m5pre import M5Pre
 from m5meta import M5Meta
 
 from .ucodefields import OpType, CondTest, JmpType, PcAction, ASrc, BSrc, \
-    ALUIMod, ALUOMod, RegRSel, RegWSel, MemSel, MemExtend, ExceptCtl
+    ALUIMod, ALUOMod, RegRSel, RegWSel, MemSel, MemExtend, ExceptCtl, \
+    CSROp, CSRSel
 
 
 def ucoderom_signature(ucoderom):
@@ -32,6 +33,8 @@ class UCodeROM(Component):
         "b_src": BSrc,
         "reg_r_sel": RegRSel,
         "reg_w_sel": RegWSel,
+        "csr_op": CSROp,
+        "csr_sel": CSRSel,
         "mem_sel": MemSel,
         "mem_extend": MemExtend,
         "except_ctl": ExceptCtl

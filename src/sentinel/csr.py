@@ -13,7 +13,7 @@ class MStatus(Struct):
     mpie: unsigned(1)
     _padding2: unsigned(3)
     mpp: unsigned(2)
-    _padding3: unsigned(9)
+    _padding3: unsigned(19)
 
 
 class MTVec(Struct):
@@ -37,11 +37,11 @@ class MIP(Struct):
 
 class MIE(Struct):
     _padding0: unsigned(3)
-    msip: unsigned(1)  # Not implemented
+    msie: unsigned(1)  # Not implemented
     _padding1: unsigned(3)
-    mtip: unsigned(1)  # Not implemented
+    mtie: unsigned(1)  # Not implemented
     _padding2: unsigned(3)
-    meip: unsigned(1)
+    meie: unsigned(1)
     _padding3: unsigned(20)
 
 

@@ -1,7 +1,8 @@
 from amaranth import Cat, C, Module, Signal, Memory, Mux
+from amaranth.lib.data import View
 from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 
-from .ucodefields import PcAction
+from .ucodefields import PcAction, CSROp
 
 from .csr import MStatus, MTVec, MIP, MIE, MCause
 
@@ -26,17 +27,27 @@ GPSignature = Signature({
 })
 
 
+CSRControlSignature = Signature({
+    "op": Out(CSROp)
+})
+
+
 CSRSignature = Signature({
-    # Some CSRs (mepc, mcause, mscratch, mtvec) are stored in the
-    # unused portion of the block RAM used for GP registers. However, some
-    # CSRs must be implemented as FFs so the rest of the core can use
-    # them.
-    #
-    # Read/write CSRs via block RAM, and shadow the bits that must
-    # exposed to the core at all times via FFs.
-    "status_r": In(MIP),
+    "adr_r": Out(5),
+    "adr_w": Out(5),
+    "dat_r": In(32),
+    "dat_w": Out(32),
+    "ctrl": Out(CSRControlSignature),
+
+    "mstatus_r": In(MIP),
+    "mip_w": Out(MIP),
     "mip_r": In(MIP),
     "mie_r": In(MIE),
+    # These 4 are mainly for peeking in simulation.
+    "mscratch_r": In(32),
+    "mepc_r": In(30),
+    "mtvec_r": In(MTVec),
+    "mcause_r": In(MCause)
 })
 
 
@@ -105,8 +116,70 @@ class RegFile(Component):
         ]
 
         m.d.comb += self.dat_r.eq(rdport.data)
+        # "BUG": self.adr_w != 0 prevents mstatus from being shadowed inside
+        # block RAM, but this is probably not an actual problem.
         m.d.comb += wrport.en.eq(self.ctrl.reg_write &
                                  (self.adr_w != 0 | self.ctrl.allow_zero_wr))
+
+        return m
+
+
+class CSRFile(Component):
+    MSTATUS = 0
+    MIE = 0x4
+    MTVEC = 0x5
+    MSCRATCH = 0x8
+    MEPC = 0x9
+    MCAUSE = 0xA
+    MIP = 0xC
+
+    signature = CSRSignature.flip()
+
+    def elaborate(self, platform):
+        m = Module()
+
+        mstatus = Signal(MStatus)
+        mip = Signal(MIP)
+        mie = Signal(MIE)
+
+        read_buf = Signal(32)
+
+        m.d.comb += [
+            self.mstatus_r.eq(mstatus),
+            self.mip_r.eq(mip),
+            self.mie_r.eq(mie),
+            self.dat_r.eq(read_buf),
+        ]
+
+        with m.If(self.ctrl.op == CSROp.WRITE_CSR):
+            with m.If(self.adr_w == self.MSTATUS):
+                mstatus_in = View(MStatus, self.dat_w)
+                m.d.sync += [
+                    mstatus.mie.eq(mstatus_in.mie),
+                    mstatus.mpie.eq(mstatus_in.mpie),
+                    mstatus.mpp.eq(mstatus_in.mpp),
+                ]
+            with m.If(self.adr_w == self.MIE):
+                mie_in = View(MIE, self.dat_w)
+                m.d.sync += mie.meie.eq(mie_in.meie)
+            with m.If(self.adr_w == self.MIP):
+                mip_in = View(MIP, self.dat_w)
+                m.d.sync += mip.meip.eq(mip_in.meip)
+
+        with m.If(self.ctrl.op == CSROp.READ_CSR):
+            with m.If(self.adr_r == self.MSTATUS):
+                mstatus_buf = View(MStatus, read_buf)
+                m.d.sync += [
+                    mstatus_buf.mie.eq(mstatus.mie),
+                    mstatus_buf.mpie.eq(mstatus.mpie),
+                    mstatus_buf.mpp.eq(mstatus.mpp),
+                ]
+            with m.If(self.adr_r == self.MIE):
+                mie_buf = View(MIE, read_buf)
+                m.d.sync += mie_buf.meie.eq(mie.meie)
+            with m.If(self.adr_r == self.MIP):
+                mip_buf = View(MIP, read_buf)
+                m.d.sync += mip_buf.meip.eq(mip.meip)
 
         return m
 
@@ -121,33 +194,28 @@ class DataPath(Component):
 
         self.pc_mod = ProgramCounter()
         self.regfile = RegFile(formal=formal)
+        self.csrfile = CSRFile()
 
     def elaborate(self, platform):
         m = Module()
 
-        # CSR shadows
-        mstatus = Signal(MStatus)
-        mip = Signal(MIP)
-        mie = Signal(MIE)
-
         m.submodules.pc_mod = self.pc_mod
         m.submodules.regfile = self.regfile
+        m.submodules.csrfile = self.csrfile
 
         connect(m, self.regfile, flipped(self.gp))
         connect(m, self.pc_mod, flipped(self.pc))
+        connect(m, self.csrfile, flipped(self.csr))
 
-        m.d.comb += [
-            self.csr.status_r.eq(mstatus),
-            self.csr.mip_r.eq(mip),
-            self.csr.mie_r.eq(mie)
-        ]
+        prev_csr_adr = Signal.like(self.csr.adr_r)
 
-        with m.If(self.gp.ctrl.csr_access & self.gp.ctrl.reg_write):
-            with m.If(self.gp.adr_w == 0):
-                m.d.sync += mstatus.eq(self.gp.dat_w)
-            with m.If(self.gp.adr_w == 4):
-                m.d.sync += mie.eq(self.gp.dat_w)
-            with m.If(self.gp.adr_w == 0xC):
-                m.d.sync += mip.eq(self.gp.dat_w)
+        m.d.sync += prev_csr_adr.eq(self.csr.adr_r)
+
+        # Some CSRs are stored in block RAM. Always write to the block RAM,
+        # but preempt reads from CSRs which can't be block RAM.
+        with m.If(~((prev_csr_adr == CSRFile.MSTATUS) |
+                  (prev_csr_adr == CSRFile.MIP) |
+                  (prev_csr_adr == CSRFile.MIE))):
+            m.d.comb += self.csr.dat_r.eq(self.regfile.dat_r)
 
         return m

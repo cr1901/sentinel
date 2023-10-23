@@ -4,9 +4,10 @@ from amaranth.lib.wiring import Component, Signature, In, Out
 from .decode import OpcodeType
 from .alu import AluCtrlSignature
 from .ucoderom import UCodeROM
-from .datapath import GPControlSignature, PCControlSignature
+from .datapath import GPControlSignature, PCControlSignature, \
+    CSRControlSignature
 
-from .ucodefields import JmpType, CondTest
+from .ucodefields import JmpType, CondTest, CSROp
 
 
 ControlSignature = Signature({
@@ -14,6 +15,7 @@ ControlSignature = Signature({
     "decode": In(1),
     "gp": Out(GPControlSignature),
     "pc": Out(PCControlSignature),
+    "csr": Out(CSRControlSignature)
 })
 
 
@@ -65,6 +67,7 @@ class Control(Component):
         self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
         self.reg_r_sel = Signal.like(self.ucoderom.fields.reg_r_sel)
         self.reg_w_sel = Signal.like(self.ucoderom.fields.reg_w_sel)
+        self.csr_sel = Signal.like(self.ucoderom.fields.csr_sel)
         self.mem_extend = Signal.like(self.ucoderom.fields.mem_extend)
 
         super().__init__()
@@ -84,8 +87,10 @@ class Control(Component):
             self.pc.action.eq(self.ucoderom.fields.pc_action),
             self.gp.reg_read.eq(self.ucoderom.fields.reg_read),
             self.gp.reg_write.eq(self.ucoderom.fields.reg_write),
+            self.csr.op.eq(self.ucoderom.fields.csr_op),
             self.reg_r_sel.eq(self.ucoderom.fields.reg_r_sel),
             self.reg_w_sel.eq(self.ucoderom.fields.reg_w_sel),
+            self.csr_sel.eq(self.ucoderom.fields.csr_sel),
             self.a_src.eq(self.ucoderom.fields.a_src),
             self.b_src.eq(self.ucoderom.fields.b_src),
             self.latch_a.eq(self.ucoderom.fields.latch_a),

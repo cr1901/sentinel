@@ -60,10 +60,12 @@ class CSRRegs:
         csrregs = {}
 
         csrregs["MSCRATCH"] = (yield m.cpu.datapath.regfile.mem[0x28])
+        csrregs["MSTATUS"] = (yield m.cpu.datapath.csrfile.mstatus_r.as_value())
 
         return cls(**csrregs)
 
     MSCRATCH: int = 0
+    MSTATUS: int = 0
 
 
 @pytest.fixture
@@ -507,7 +509,7 @@ def test_csr_ro0(sim_mod, ucode_panic, cpu_proc_aux):
 
 @pytest.mark.module(AttoSoC(sim=True))
 @pytest.mark.clks((1.0 / 12e6,))
-def test_csrw(sim_mod, ucode_panic, cpu_proc_aux):
+def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
     sim, m = sim_mod
 
     def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
@@ -532,6 +534,8 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux):
         csrrwi x0, 31, 0x340   # mscratch
         csrrwi x1, 17, 0x340   # mscratch
         csrrci x2,  1, 0x340   # mscratch
+        csrrwi x0,  8, 0x300   # mstatus
+        csrrwi x3,  9, 0x300   # mscratch
 """
 
     regs = [
@@ -539,12 +543,16 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux):
         RV32Regs(PC=4 >> 2),
         RV32Regs(R1=31, PC=8 >> 2),
         RV32Regs(R2=17, R1=31, PC=0xC >> 2),
+        RV32Regs(R2=17, R1=31, PC=0x10 >> 2),
+        RV32Regs(R3=8, R2=17, R1=31, PC=0x14 >> 2),
     ]
 
     ram = [
         None,  # 0x0
         None,
         None,
+        None,
+        None,   # 0x10
         None
     ]
 
@@ -553,9 +561,12 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux):
         CSRRegs(MSCRATCH=31),
         CSRRegs(MSCRATCH=17),
         CSRRegs(MSCRATCH=16),
+        CSRRegs(MSCRATCH=16, MSTATUS=8),
+        CSRRegs(MSCRATCH=16, MSTATUS=8),
     ]
 
     def cpu_proc():
         yield from cpu_proc_aux(regs, ram, csrs)
 
+    sim.ports = basic_ports
     sim.run(sync_processes=[cpu_proc, ucode_panic])

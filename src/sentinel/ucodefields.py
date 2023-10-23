@@ -53,6 +53,7 @@ class BSrc(enum.Enum):
     ONE = 3
     DAT_R = 4
     CSR_IMM = 5
+    CSR = 6
 
 
 class ALUIMod(enum.Enum):
@@ -69,15 +70,22 @@ class ALUOMod(enum.Enum):
 class RegRSel(enum.Enum):
     INSN_RS1 = 0
     INSN_RS2 = 1
-    INSN_CSR = 2
-    TRG_CSR = 3
 
 
 class RegWSel(enum.Enum):
     INSN_RD = 0
     ZERO = 1
-    INSN_CSR = 2
-    TRG_CSR = 3
+
+
+class CSROp(enum.Enum):
+    NONE = 0
+    READ_CSR = 1
+    WRITE_CSR = 2
+
+
+class CSRSel(enum.Enum):
+    INSN_CSR = 0
+    TRG_CSR = 1
 
 
 class MemSel(enum.Enum):
