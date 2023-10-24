@@ -138,16 +138,11 @@ class Decode(Component):
             self.funct12.eq(self.insn[20:32])
         ]
 
-        self.mmode_csr_map = Memory(width=2, depth=2048,
-                                    init=self.mmode_csr_quadrant_init())
-        m.submodules.csr_map = rdport = self.mmode_csr_map.read_port()
-
-        # It's possible to decode this manually, but
-        # my experience is that it destroys timing.
-        # So use a 2048x2-bit block RAM. This causes
-        # CSRs to require (up to) two cycles to decode.
-        m.d.comb += rdport.addr.eq(Cat(self.funct12[0:8],
-                                       self.funct12[10:12]))  # noqa: E501
+        csr_map = Signal(2)
+        with m.Switch(Cat(self.funct12[0:8], self.funct12[10:12])):
+            for i, v in enumerate(self.mmode_csr_quadrant_init()):
+                with m.Case(i):
+                    m.d.sync += csr_map.eq(v)
 
         forward_csr = Signal()
         csr_quadrant = Signal(2)
@@ -328,8 +323,8 @@ class Decode(Component):
             ro0 = Signal()
             illegal = Signal()
 
-            m.d.comb += illegal.eq(rdport.data[0])
-            m.d.comb += ro0.eq(rdport.data[1])
+            m.d.comb += illegal.eq(csr_map[0])
+            m.d.comb += ro0.eq(csr_map[1])
 
             with m.Switch(csr_quadrant):
                 # Machine Mode CSRs.
@@ -425,7 +420,7 @@ class Decode(Component):
         # zero: bit 1 set
         # mstatus, mie, mtvec, mscratch, mepc, mcause, mip: both bits clear
         # ^These registers are actually implemented.
-        init = [1]*2048  # By default, access is illegal.
+        init = [1]*1024  # By default, access is illegal.
 
         init[idx(0xF11)] = 2  # mvendorid
         init[idx(0xF12)] = 2  # marchid
