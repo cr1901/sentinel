@@ -20,3 +20,6 @@ __pycache__/
 
 # Doit
 .doit.db.*
+
+# logluts
+/LUTs.csv

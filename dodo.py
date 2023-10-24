@@ -5,12 +5,16 @@ from shutil import copy2
 
 # https://groups.google.com/g/python-doit/c/GFtEuBp82xc/m/j7jFkvAGH1QJ
 from doit.action import CmdAction
-from doit.tools import run_once, create_folder
+from doit.tools import run_once, create_folder, result_dep
 
 
 DOIT_CONFIG = {
     "default_tasks": [],
 }
+
+
+def task__git():
+    return {'actions': ["git rev-parse HEAD"]}
 
 
 def task__demo():
@@ -42,6 +46,7 @@ def task_bench_luts():
                     ],
         "targets": [luts_csv],
         "file_dep": [yosys_log, nextpnr_log],
+        "uptodate": [result_dep("_git")]
     }
 
 
