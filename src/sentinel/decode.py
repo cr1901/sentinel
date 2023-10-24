@@ -193,35 +193,33 @@ class Decode(Component):
                     with m.If(self.funct3 != 0):
                         m.d.sync += self.exception.eq(1)
                 with m.Case(OpcodeType.SYSTEM):
+                    m.d.sync += self.exception.eq(1)
                     with m.Switch(self.funct3):
+                        zeroes = (self.rs1 == 0) & (self.rd == 0)
                         with m.Case(0):
-                            with m.If(self.funct12 == 0):
+                            with m.If((self.funct12 == 0) & zeroes):
                                 # ecall
-                                m.d.sync += [
-                                    self.e_type.eq(MCause.Cause.BREAKPOINT),
-                                    self.exception.eq(1)
-                                ]
-
-                            with m.Elif(self.funct12 == 1):
+                                m.d.sync += self.e_type.eq(MCause.Cause.ECALL_MMODE)  # noqa: E501
+                            with m.Elif((self.funct12 == 1) & zeroes):
                                 # ebreak
-                                m.d.sync += [
-                                    self.e_type.eq(MCause.Cause.ECALL_MMODE),
-                                    self.exception.eq(1)
-                                ]
-                            with m.Elif(self.funct12 == 0b001100000010):
+                                m.d.sync += self.e_type.eq(MCause.Cause.BREAKPOINT)  # noqa: E501
+                            with m.Elif((self.funct12 == 0b001100000010) &
+                                        zeroes):
                                 # mret
-                                m.d.sync += self.requested_op.eq(240)
-                            with m.Elif(self.funct12 == 0b000100000101):
+                                m.d.sync += [
+                                    self.requested_op.eq(240),
+                                    self.exception.eq(0)
+                                ]
+                            with m.Elif((self.funct12 == 0b000100000101) &
+                                        zeroes):
                                 # wfi
-                                m.d.sync += self.requested_op.eq(0x30)
-                            with m.Else():
-                                m.d.sync += self.exception.eq(1)
+                                m.d.sync += [
+                                    self.requested_op.eq(0x30),
+                                    self.exception.eq(0)
+                                ]
 
-                            with m.If((self.rs1 != 0) |
-                                      (self.rd != 0) | (self.funct3 != 0)):
-                                m.d.sync += self.exception.eq(1)
                         with m.Case(4):
-                            m.d.sync += self.exception.eq(1)
+                            pass
                         with m.Default():
                             # CSR ops take two cycles to decode. Rather than
                             # penalize the rest of the core, have the microcode
@@ -230,7 +228,8 @@ class Decode(Component):
                             # routine.
                             m.d.sync += [
                                 self.requested_op.eq(0x24),
-                                forward_csr.eq(1)
+                                forward_csr.eq(1),
+                                self.exception.eq(0)
                             ]
 
                 with m.Default():
