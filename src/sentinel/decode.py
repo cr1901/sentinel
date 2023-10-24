@@ -194,21 +194,28 @@ class Decode(Component):
                         m.d.sync += self.exception.eq(1)
                 with m.Case(OpcodeType.SYSTEM):
                     with m.Switch(self.funct3):
-                        # ECALL/EBREAK- Handled specially as it always traps.
                         with m.Case(0):
                             with m.If(self.funct12 == 0):
+                                # ecall
                                 m.d.sync += [
                                     self.e_type.eq(MCause.Cause.BREAKPOINT),
                                     self.exception.eq(1)
                                 ]
 
                             with m.Elif(self.funct12 == 1):
+                                # ebreak
                                 m.d.sync += [
                                     self.e_type.eq(MCause.Cause.ECALL_MMODE),
                                     self.exception.eq(1)
                                 ]
                             with m.Elif(self.funct12 == 0b001100000010):
-                                pass  # mret
+                                # mret
+                                m.d.sync += self.requested_op.eq(240)
+                            with m.Elif(self.funct12 == 0b000100000101):
+                                # wfi
+                                m.d.sync += self.requested_op.eq(0x30)
+                            with m.Else():
+                                m.d.sync += self.exception.eq(1)
 
                             with m.If((self.rs1 != 0) |
                                       (self.rd != 0) | (self.funct3 != 0)):
