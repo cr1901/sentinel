@@ -14,49 +14,6 @@ class InsnImmFormat(enum.Enum):
     J = 5  # Accepted in place of U.
 
 
-ImmediateGeneratorSignature = Signature({
-    "insn": Out(32),
-    "imm_type": Out(InsnImmFormat),
-    "imm": In(32)
-})
-
-
-class ImmediateGenerator(Component):
-    signature = ImmediateGeneratorSignature.flip()
-
-    def __init__(self):
-        super().__init__()
-        self.sign = Signal()
-
-    def elaborate(self, platform):
-        m = Module()
-
-        m.d.comb += [self.sign.eq(self.insn[31])]
-
-        with m.Switch(self.imm_type):
-            with m.Case(InsnImmFormat.I):
-                m.d.comb += self.imm.eq(Cat(self.insn[20:31],
-                                        Value.replicate(self.sign, 21)))
-            with m.Case(InsnImmFormat.S):
-                m.d.comb += self.imm.eq(Cat(self.insn[7], self.insn[8:12],
-                                        self.insn[25:31],
-                                        Value.replicate(self.sign, 21)))
-            with m.Case(InsnImmFormat.B):
-                m.d.comb += self.imm.eq(Cat(C(0), self.insn[8:12],
-                                        self.insn[25:31], self.insn[7],
-                                        Value.replicate(self.sign, 20)))
-            with m.Case(InsnImmFormat.U):
-                m.d.comb += self.imm.eq(Cat(C(0, 12), self.insn[12:20],
-                                        self.insn[20:31], self.sign))
-            with m.Case(InsnImmFormat.J):
-                m.d.comb += self.imm.eq(Cat(C(0), self.insn[21:25],
-                                        self.insn[25:31], self.insn[20],
-                                        self.insn[12:20],
-                                        Value.replicate(self.sign, 12)))
-
-        return m
-
-
 class OpcodeType(enum.Enum):
     OP_IMM = 0b00100
     LUI = 0b01101
@@ -119,16 +76,10 @@ class Decode(Component):
         self.funct7 = Signal(7)
         self.funct12 = Signal(12)
 
-        self.immgen = ImmediateGenerator()
-
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.immgen = self.immgen
-
         m.d.comb += [
-            self.immgen.insn.eq(self.insn),
-            # Helpers
             self.opcode.eq(self.insn[2:7]),
             self.rd.eq(self.insn[7:12]),
             self.funct3.eq(self.insn[12:15]),
@@ -151,24 +102,24 @@ class Decode(Component):
         m.d.sync += [
             forward_csr.eq(0),
             self.e_type.eq(MCause.Cause.ILLEGAL_INSN),
+            self.exception.eq(0),
+            csr_quadrant.eq(self.funct12[8:10]),
+            csr_op.eq(self.funct3),
         ]
 
         with m.If(self.do_decode):
             m.d.sync += [
-                self.imm.eq(self.immgen.imm),
-
                 # For now, unconditionally propogate these and rely on
                 # microcode program to ignore when necessary.
                 self.src_a.eq(self.rs1),
                 self.src_b.eq(self.rs2),
                 self.dst.eq(self.rd),
-                self.exception.eq(0)
             ]
 
             # TODO: Might be worth hoisting comb statements out of m.If?
             with m.Switch(self.opcode):
                 with m.Case(OpcodeType.OP_IMM):
-                    m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
+                    m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.I))
 
                     with m.If((self.funct3 == 1) | (self.funct3 == 5)):
                         with m.If(self.funct3 == 1):
@@ -185,10 +136,10 @@ class Decode(Component):
                         m.d.sync += self.requested_op.eq(Cat(self.funct3,
                                                              C(8)))
                 with m.Case(OpcodeType.LUI):
-                    m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
+                    m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.U))
                     m.d.sync += self.requested_op.eq(0xD0)
                 with m.Case(OpcodeType.AUIPC):
-                    m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.U)
+                    m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.U))
                     m.d.sync += self.requested_op.eq(0x50)
                 with m.Case(OpcodeType.OP):
                     with m.If((self.funct3 == 0) | (self.funct3 == 5)):
@@ -205,29 +156,29 @@ class Decode(Component):
                                                              self.funct7[-2],
                                                              C(0xC)))
                 with m.Case(OpcodeType.JAL):
-                    m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.J)
+                    m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.J))
                     m.d.sync += self.requested_op.eq(0xB0)
                 with m.Case(OpcodeType.JALR):
-                    m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
+                    m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.I))
                     m.d.sync += self.requested_op.eq(0x98)
 
                     with m.If(self.funct3 != 0):
                         m.d.sync += self.exception.eq(1)
                 with m.Case(OpcodeType.BRANCH):
-                    m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.B)
+                    m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.B))
                     m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x11)))
 
                     with m.If((self.funct3 == 2) | (self.funct3 == 3)):
                         m.d.sync += self.exception.eq(1)
                 with m.Case(OpcodeType.LOAD):
-                    m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.I)
+                    m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.I))
                     m.d.sync += self.requested_op.eq(Cat(self.funct3, C(1)))
 
                     with m.If((self.funct3 == 3) | (self.funct3 == 6) |
                               (self.funct3 == 7)):
                         m.d.sync += self.exception.eq(1)
                 with m.Case(OpcodeType.STORE):
-                    m.d.comb += self.immgen.imm_type.eq(InsnImmFormat.S)
+                    m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.S))
                     m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x10)))
 
                     with m.If(self.funct3 >= 3):
@@ -272,8 +223,6 @@ class Decode(Component):
                             # routine.
                             m.d.sync += [
                                 self.requested_op.eq(0x24),
-                                csr_quadrant.eq(self.funct12[8:10]),
-                                csr_op.eq(self.funct3),
                                 forward_csr.eq(1)
                             ]
 
@@ -355,7 +304,7 @@ class Decode(Component):
                         with m.Else():
                             # TODO: cover via rvformal.
                             # This might be reachable, but not while
-                            # csr_req_op has a meaningful value in it.
+                            # requested_op has a meaningful value in it.
                             # Make sure this is actually the case.
                             pass
 
@@ -364,6 +313,25 @@ class Decode(Component):
                     m.d.sync += self.exception.eq(1)
 
         return m
+
+    def imm_bits(self, imm_type):
+        sign = self.insn[31]
+
+        match imm_type:
+            case InsnImmFormat.I:
+                return Cat(self.insn[20:31], Value.replicate(sign, 21))
+            case InsnImmFormat.S:
+                return Cat(self.insn[7], self.insn[8:12], self.insn[25:31],
+                           Value.replicate(sign, 21))
+            case InsnImmFormat.B:
+                return Cat(C(0), self.insn[8:12], self.insn[25:31],
+                           self.insn[7], Value.replicate(sign, 20))
+            case InsnImmFormat.U:
+                return Cat(C(0, 12), self.insn[12:20], self.insn[20:31], sign)
+            case InsnImmFormat.J:
+                return Cat(C(0), self.insn[21:25], self.insn[25:31],
+                           self.insn[20], self.insn[12:20],
+                           Value.replicate(sign, 12))
 
     def mmode_csr_quadrant_init(self):
         def idx(csr_addr):
