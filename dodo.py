@@ -13,22 +13,52 @@ DOIT_CONFIG = {
 }
 
 
-def task_demo_luts():
+def task__demo():
     build_dir = Path("./build")
     yosys_log = build_dir / "top.rpt"
-    nextpnr_log = build_dir / "top.rpt"
-    luts_csv = Path("./LUTs.csv")
+    nextpnr_log = build_dir / "top.tim"
     pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
 
     return {
-        "actions": [
-                    "pdm demo",
-                    f"pdm run python -m logLUTs --yosys-log {yosys_log}"
-                    f"--nextpnr-log {nextpnr_log} --git . --target ice40"
+        "actions": ["pdm demo"],
+        "targets": [yosys_log, nextpnr_log],
+        "file_dep": pyfiles,
+    }
+
+
+# These two tasks do not require "pdm run" because I had trouble installing
+# matplotlib into the venv. Intended usage in cases like mine is
+# "doit bench_luts" or "doit plot_luts".
+def task_bench_luts():
+    build_dir = Path("./build")
+    yosys_log = build_dir / "top.rpt"
+    nextpnr_log = build_dir / "top.tim"
+    luts_csv = Path("./LUTs.csv")
+
+    return {
+        "actions": [f"python -m logluts --yosys-log {yosys_log} "
+                    f"--nextpnr-log {nextpnr_log} --git . --target ice40 "
                     f"--add-commit --csvfile {luts_csv}"
                     ],
-        "targets": [yosys_log, nextpnr_log, luts_csv],
-        "file_dep": [pyfiles],
+        "targets": [luts_csv],
+        "file_dep": [yosys_log, nextpnr_log],
+    }
+
+
+def task_plot_luts():
+    build_dir = Path("./build")
+    yosys_log = build_dir / "top.rpt"
+    nextpnr_log = build_dir / "top.tim"
+    luts_csv = Path("./LUTs.csv")
+
+    return {
+        "actions": [f"python -m logluts --yosys-log {yosys_log} "
+                    f"--nextpnr-log {nextpnr_log} --git . --target ice40 "
+                    f"--plot --csvfile {luts_csv}"
+                    ],
+        "targets": [],
+        "file_dep": [yosys_log, nextpnr_log],
+        "uptodate": [False]
     }
 
 

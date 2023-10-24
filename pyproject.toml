@@ -38,8 +38,7 @@ dev = [
     "pytest>=7.4.2",
     "doit>=0.36.0",
     "Verilog-VCD>=1.11",
-    "logLUTs @ git+https://github.com/mattvenn/logLUTs",
-    "gitpython>=3.1.40",
+    "logLUTs @ git+https://github.com/mattvenn/logLUTs@a7fa902",
 ]
 
 [tool.pdm.scripts]
@@ -49,7 +48,8 @@ gen = { call = "sentinel.gen:generate" }
 demo = { call = "sentinel.gen:demo" }
 ucode = { call = "m5meta:main" }
 bench = { call = "sentinel.bench:main"}
-demo-luts = { cmd = "doit demo_luts"}
+bench-luts = { cmd = "doit bench_luts"}
+plot-luts = { cmd = "doit plot_luts"}
 compile-upstream = { cmd = "doit _dump_tests"}
 rvformal-gen = { cmd = "doit formal_gen_files"}
 rvformal = { cmd = "doit run_sby:{args}_vcds"}
