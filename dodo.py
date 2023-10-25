@@ -27,7 +27,7 @@ def task__demo():
     return {
         "actions": ["pdm demo"],
         "targets": [yosys_log, nextpnr_log],
-        "file_dep": pyfiles,
+        "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")],
     }
 
 

@@ -93,9 +93,6 @@ fields block_ram: {
 #define WRITE_RD_CSR csr_op => write_csr
 #define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
 #define CMP_LT alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b
-// The LT[U]/GE[U] tests will either return zero or one; this makes it fine
-// to reuse the conditional meant for shift ops.
-#define CONDTEST_ALU_CMP_FAILED cond_test => cmp_alu_o_zero
 #define CONDTEST_ALU_NONZERO invert_test => 1, cond_test => cmp_alu_o_zero
 
 fetch:
@@ -305,7 +302,7 @@ beq_1: latch_b => 1, b_src => gp, jmp_type => direct, target => beq;
                 
 bne_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bne;
 
-branch_epilog: alu_op => add, CONDTEST_ALU_CMP_FAILED, pc_action => inc, \
+branch_lt_epilog: alu_op => add, cond_test => cmp_alu_o_zero, pc_action => inc, \
                   jmp_type => direct, target => fetch;
         jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
@@ -314,18 +311,22 @@ bge_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bge;
 bltu_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bltu;
 bgeu_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bgeu;
 
+beq: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub, \
+        jmp_type => direct, target => branch_gte_epilog;
+bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub, \
+        jmp_type => direct, target => branch_lt_epilog;
 blt: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_LT, \
-        jmp_type => direct, target => branch_epilog;
-bge: alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b;
-     a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1;
-     a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => xor, \
-        jmp_type => direct, target => branch_epilog;
+        jmp_type => direct, target => branch_lt_epilog;
+bge: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_LT, \
+        jmp_type => direct, target => branch_gte_epilog;
 bltu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => cmp_ltu, \
-        jmp_type => direct, target => branch_epilog;
-bgeu: alu_op => cmp_ltu;
-      a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1;
-      a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => xor, \
-        jmp_type => direct, target => branch_epilog;
+        jmp_type => direct, target => branch_lt_epilog;
+bgeu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => cmp_ltu, \
+        jmp_type => direct, target => branch_gte_epilog;
+
+branch_gte_epilog: alu_op => add, invert_test => true, cond_test => cmp_alu_o_zero, \
+                     pc_action => inc, jmp_type => direct, target => fetch;
+        jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
 origin 0x98;
 jalr: b_src => imm, latch_b => 1; 
@@ -357,16 +358,6 @@ sw: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
 // between data access and insn fetch)
 sw_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => word, write_mem => 1, jmp_type => direct_zero, target => sw_wait;
-
-beq: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
-     alu_op => add, invert_test => 1, cond_test => cmp_alu_o_zero, pc_action => inc, \
-                  jmp_type => direct, target => fetch;
-     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
-
-bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
-     alu_op => add, cond_test => cmp_alu_o_zero, pc_action => inc, \
-                  jmp_type => direct, target => fetch;
-     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
 origin 0xB0;
 jal: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1;
