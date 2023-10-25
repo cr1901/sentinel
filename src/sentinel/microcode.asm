@@ -44,7 +44,6 @@ fields block_ram: {
   // In addition to writing ALU o, write C or D. Valid next cycle.
   // Modify inputs and outputs to ALU.
   alu_i_mod: enum { none = 0; inv_msb_a_b; }, default none;
-  alu_o_mod: enum { none = 0; inv_lsb_o; clear_lsb_o }, default none;
 
   // Either read or write a register in the register file. _Which_ register
   // to read/write comes from the decoded insn.
@@ -94,8 +93,6 @@ fields block_ram: {
 #define WRITE_RD_CSR csr_op => write_csr
 #define READ_RS1_WRITE_RD READ_RS1, reg_write => 1, reg_w_sel => insn_rd
 #define CMP_LT alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b
-#define CMP_GEU alu_op => cmp_ltu, alu_o_mod => inv_lsb_o
-#define CMP_GE  alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b, alu_o_mod => inv_lsb_o
 // The LT[U]/GE[U] tests will either return zero or one; this makes it fine
 // to reuse the conditional meant for shift ops.
 #define CONDTEST_ALU_CMP_FAILED cond_test => cmp_alu_o_zero
@@ -307,8 +304,11 @@ branch_ops:
 beq_1: latch_b => 1, b_src => gp, jmp_type => direct, target => beq;
                 
 bne_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bne;
-                NOT_IMPLEMENTED;
-                NOT_IMPLEMENTED;
+
+branch_epilog: alu_op => add, CONDTEST_ALU_CMP_FAILED, pc_action => inc, \
+                  jmp_type => direct, target => fetch;
+        jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
+
 blt_1: latch_b => 1, b_src => gp, jmp_type => direct, target => blt;
 bge_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bge;
 bltu_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bltu;
@@ -316,23 +316,22 @@ bgeu_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bgeu;
 
 blt: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_LT, \
         jmp_type => direct, target => branch_epilog;
-bge: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_GE, \
+bge: alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b;
+     a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1;
+     a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => xor, \
         jmp_type => direct, target => branch_epilog;
 bltu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => cmp_ltu, \
         jmp_type => direct, target => branch_epilog;
-bgeu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_GEU, \
+bgeu: alu_op => cmp_ltu;
+      a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1;
+      a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => xor, \
         jmp_type => direct, target => branch_epilog;
 
-branch_epilog: alu_op => add, CONDTEST_ALU_CMP_FAILED, pc_action => inc, \
-                  jmp_type => direct, target => fetch;
-        jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
-
-
 origin 0x98;
-jalr: latch_a => 1, latch_b => 1, a_src => four, b_src => pc;  // 8
-      alu_op => add, reg_read => 1, reg_r_sel => insn_rs_1; // 9
-      WRITE_RD, a_src => imm, b_src => gp, latch_a => 1, latch_b => 1; // A
-      alu_op => add, alu_o_mod => clear_lsb_o;
+jalr: b_src => imm, latch_b => 1; 
+      alu_op => add, latch_a => 1, latch_b => 1, a_src => four, b_src => pc; // TODO: latch exception.
+      alu_op => add, latch_a => 1, latch_b => 1, a_src => alu_o, b_src => one; // TODO: cond_test => exception, jmp_type => direct
+      WRITE_RD, alu_op => xor;  // Bit Clear = A & ~B
       jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
 sb: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
@@ -370,10 +369,11 @@ bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
 origin 0xB0;
-jal: latch_a => 1, latch_b => 1, a_src => four, b_src => pc;
-     alu_op => add, a_src => imm, b_src => pc, latch_a => 1, latch_b => 1;
-     WRITE_RD, alu_op => add;
-     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
+jal: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1;
+     alu_op => add; // TODO: latch exception.
+     NOP; // TODO: cond_test => exception, jmp_type => direct
+     pc_action => load_alu_o, latch_a => 1, latch_b => 1, a_src => four, b_src => pc;
+     INSN_FETCH, alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 fast_epilog: INSN_FETCH_EAGER_READ_RS1, WRITE_RD, SKIP_WAIT_IF_ACK;
 fast_epilog_csr: INSN_FETCH_EAGER_READ_RS1, WRITE_RD_CSR, SKIP_WAIT_IF_ACK;

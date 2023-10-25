@@ -1,4 +1,4 @@
-from .ucodefields import OpType, ALUIMod, ALUOMod
+from .ucodefields import OpType, ALUIMod
 
 from amaranth import Elaboratable, Signal, Module
 from amaranth.lib.wiring import Component, Signature, In, Out
@@ -60,7 +60,6 @@ class ShiftArithmeticRight(Unit):
 AluCtrlSignature = Signature({
     "op": Out(OpType),
     "imod": Out(ALUIMod),
-    "omod": Out(ALUOMod),
     "lsbs_5_zero": In(1),
     "zero": In(1)
 })
@@ -157,10 +156,6 @@ class ALU(Component):
                 m.d.comb += self.o_mux.eq(self.sub.o[32])
 
         m.d.sync += self.data.o.eq(self.o_mux)
-        with m.If(self.ctrl.omod == ALUOMod.INV_LSB_O):
-            m.d.sync += self.data.o[0].eq(~self.o_mux[0])
-        with m.Elif(self.ctrl.omod == ALUOMod.CLEAR_LSB_O):
-            m.d.sync += self.data.o[0].eq(0)
 
         # TODO: LSBS_2_ZERO for JALR/JAL misaligned exceptions?
         m.d.comb += self.ctrl.zero.eq(self.data.o == 0)

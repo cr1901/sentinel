@@ -47,7 +47,8 @@ def task_bench_luts():
                     ],
         "targets": [luts_csv],
         "file_dep": [yosys_log, nextpnr_log],
-        "uptodate": [result_dep("_git")]
+        "uptodate": [result_dep("_git")],
+        "verbosity": 2
     }
 
 
@@ -64,7 +65,8 @@ def task_plot_luts():
                     ],
         "targets": [],
         "file_dep": [yosys_log, nextpnr_log],
-        "uptodate": [False]
+        "uptodate": [False],
+        "verbosity": 2
     }
 
 
