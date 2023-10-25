@@ -9,6 +9,8 @@ from .datapath import GPControlSignature, PCControlSignature, \
 
 from .ucodefields import JmpType, CondTest, CSROp
 
+from typing import TextIO, Optional
+
 
 ControlSignature = Signature({
     "alu": Out(AluCtrlSignature),
@@ -22,7 +24,7 @@ ControlSignature = Signature({
 class Control(Component):
     signature = ControlSignature
 
-    def __init__(self, ucode: str = ""):
+    def __init__(self, ucode: Optional[TextIO] = None):
         self.ucoderom = UCodeROM(main_file=ucode)
         # Enums from microcode ROM.
         self.sequencer = Sequencer(self.ucoderom)

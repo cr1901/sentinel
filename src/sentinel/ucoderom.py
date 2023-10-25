@@ -48,13 +48,17 @@ class UCodeROM(Component):
     def main_microcode_file():
         return (Path(__file__).parent / "microcode.asm").resolve()
 
-    def __init__(self, *, main_file=None, field_defs=None, hex=None):
+    def __init__(self, *, main_file=None, field_defs=None, hex=None,
+                 enum_map=None):
         if not main_file:
             self.main_file = UCodeROM.main_microcode_file()
         else:
             self.main_file = main_file
         self.field_defs = field_defs
         self.hex = hex
+
+        if enum_map:
+            self.enum_map = enum_map
 
         self.assemble()
         super().__init__()

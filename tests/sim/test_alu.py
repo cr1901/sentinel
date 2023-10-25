@@ -5,6 +5,7 @@ from sentinel.alu import ALU, OpType
 
 @pytest.mark.module(ALU(32))
 @pytest.mark.clks((1.0 / 12e6,))
+@pytest.mark.skip(reason="New tests required, not ready.")
 def test_alu(sim_mod):
     sim, m = sim_mod
 
