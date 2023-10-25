@@ -1,7 +1,7 @@
 from pathlib import Path
 import os
 import subprocess
-from shutil import copy2
+from shutil import copy2, move
 
 # https://groups.google.com/g/python-doit/c/GFtEuBp82xc/m/j7jFkvAGH1QJ
 from doit.action import CmdAction
@@ -10,6 +10,7 @@ from doit.tools import run_once, create_folder, result_dep
 
 DOIT_CONFIG = {
     "default_tasks": [],
+    "action_string_formatting": "new"
 }
 
 
@@ -64,6 +65,28 @@ def task_plot_luts():
         "targets": [],
         "file_dep": [yosys_log, nextpnr_log],
         "uptodate": [False]
+    }
+
+
+def task_ucode():
+    ucode = Path("./src/sentinel/microcode.asm")
+    hex_ = ucode.with_suffix(".asm_block_ram.hex")
+    fdef = ucode.with_suffix(".asm_block_ram.fdef")
+
+    def move_(src, dst):
+        move(src, dst)
+
+    return {
+        "actions": ["python -m m5meta {ucodefile}",
+                    (move_, (hex_, Path(".") / hex_.name)),
+                    (move_, (fdef, Path(".") / fdef.name))
+                    ],
+        "params": [{
+                    "name": "ucodefile",
+                    "default": str(ucode)
+                    }],
+        "targets": [Path(".") / hex_.name, Path(".") / fdef.name],
+        "file_dep": [ucode],
     }
 
 
@@ -244,7 +267,7 @@ def task__create_raw():
         yield {
             "name": bin_file.name,
             "actions": ["riscv64-unknown-elf-objcopy -O binary \
-                        %(dependencies)s %(targets)s"],
+                        {dependencies} {targets}"],
             "file_dep": [elf_file],
             "targets": [bin_file],
         }
@@ -265,7 +288,7 @@ def task__dump_tests():
             "actions": [f"riscv64-unknown-elf-objdump --disassemble-all \
                         --disassemble-zeroes --section=.text \
                         --section=.text.startup --section=.text.init \
-                        --section=.data {elf_file} > %(targets)s"],
+                        --section=.data {elf_file} > {{targets}}"],
             "file_dep": [elf_file, bin_file],
             "targets": [dump_file],
         }

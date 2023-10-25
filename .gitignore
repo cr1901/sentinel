@@ -23,3 +23,13 @@ __pycache__/
 
 # logluts
 /LUTs.csv
+
+# m5meta
+*.asm*.fdef
+*.asm*.hex
+
+# Yosys
+/abc.history
+
+# RVFormal disassembled counterexamples
+*.s

@@ -46,7 +46,7 @@ test = { cmd = "pytest" }
 test-quick = { cmd = "pytest -k \"test_top or test_upstream\"" }
 gen = { call = "sentinel.gen:generate" }
 demo = { call = "sentinel.gen:demo" }
-ucode = { call = "m5meta:main" }
+ucode = { cmd = "doit ucode" }
 bench = { call = "sentinel.bench:main"}
 bench-luts = { cmd = "doit bench_luts"}
 plot-luts = { cmd = "doit plot_luts"}
