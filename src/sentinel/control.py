@@ -99,6 +99,7 @@ class Control(Component):
             self.latch_b.eq(self.ucoderom.fields.latch_b),
             self.alu.op.eq(self.ucoderom.fields.alu_op),
             self.alu.imod.eq(self.ucoderom.fields.alu_i_mod),
+            self.alu.omod.eq(self.ucoderom.fields.alu_o_mod),
             self.mem_req.eq(self.ucoderom.fields.mem_req),
             self.mem_sel.eq(self.ucoderom.fields.mem_sel),
             self.latch_adr.eq(self.ucoderom.fields.latch_adr),

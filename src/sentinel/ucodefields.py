@@ -61,6 +61,12 @@ class ALUIMod(enum.Enum):
     INV_MSB_A_B = 1
 
 
+class ALUOMod(enum.Enum):
+    NONE = 0
+    INV_LSB_O = 1
+    CLEAR_LSB_O = 2
+
+
 class RegRSel(enum.Enum):
     INSN_RS1 = 0
     INSN_RS2 = 1

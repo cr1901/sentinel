@@ -10,7 +10,7 @@ from m5pre import M5Pre
 from m5meta import M5Meta
 
 from .ucodefields import OpType, CondTest, JmpType, PcAction, ASrc, BSrc, \
-    ALUIMod, RegRSel, RegWSel, MemSel, MemExtend, ExceptCtl, \
+    ALUIMod, ALUOMod, RegRSel, RegWSel, MemSel, MemExtend, ExceptCtl, \
     CSROp, CSRSel
 
 
@@ -28,6 +28,7 @@ class UCodeROM(Component):
         "jmp_type": JmpType,
         "pc_action": PcAction,
         "alu_i_mod": ALUIMod,
+        "alu_o_mod": ALUOMod,
         "a_src": ASrc,
         "b_src": BSrc,
         "reg_r_sel": RegRSel,
