@@ -54,6 +54,7 @@ class BSrc(enum.Enum):
     DAT_R = 4
     CSR_IMM = 5
     CSR = 6
+    MCAUSE_LATCH = 7
 
 
 class ALUIMod(enum.Enum):
@@ -104,6 +105,7 @@ class ExceptCtl(enum.Enum):
     NONE = 0
     LATCH_DECODER = 1
     LATCH_JAL = 2
-    LATCH_ADR = 3
-    ENTER_INT = 4
-    LEAVE_INT = 5
+    LATCH_STORE_ADR = 3
+    LATCH_LOAD_ADR = 4
+    ENTER_INT = 5
+    LEAVE_INT = 6

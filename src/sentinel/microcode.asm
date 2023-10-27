@@ -37,7 +37,7 @@ fields block_ram: {
   latch_a: bool, default 0;
   latch_b: bool, default 0;
   a_src: enum { gp = 0; imm; alu_o; zero; four; neg_one; thirty_one; }, default gp;
-  b_src: enum { gp = 0; pc; imm; one; dat_r; csr_imm; csr }, default gp;
+  b_src: enum { gp = 0; pc; imm; one; dat_r; csr_imm; csr; mcause_latch }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
   alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_ltu; }, default add;
@@ -78,8 +78,8 @@ fields block_ram: {
   // mem_req, mem_sel ignored/calculated automatically.
   insn_fetch: bool, default 0;
 
-  except_ctl: enum { none; latch_decoder; latch_jal; latch_adr; enter_int; \
-                     leave_int }, default none;
+  except_ctl: enum { none; latch_decoder; latch_jal; latch_store_adr; \
+                     latch_load_adr; enter_int; leave_int; }, default none;
 };
 
 #define INSN_FETCH insn_fetch => 1, mem_req => 1
@@ -106,7 +106,8 @@ wait_for_ack: INSN_FETCH_EAGER_READ_RS1, invert_test => 1, cond_test => mem_vali
                   jmp_type => direct, target => wait_for_ack;
               // Illegal insn or insn misaligned exception possible
 check_int:    jmp_type => map, a_src => gp, latch_a => 1, READ_RS2, \
-                  cond_test => exception, target => save_pc;
+                  except_ctl => latch_decoder, cond_test => exception, \
+                  target => save_pc;
 origin 2;
        // Make sure x0 is initialized with 0.
 reset: latch_a => 1, latch_b => 1, b_src => one, a_src => zero;

@@ -1,13 +1,14 @@
 from amaranth import Signal, Module, Cat, C
-from amaranth.lib.wiring import Component, Signature, Out, connect
+from amaranth.lib.wiring import Component, Signature, Out, In, connect
 from amaranth_soc import wishbone
 
 from .alu import ALU
 from .control import Control
+from .csr import MCause
 from .datapath import DataPath
 from .decode import Decode
 from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
-    PcAction, MemExtend, CSRSel, CSROp
+    PcAction, MemExtend, CSRSel, CSROp, ExceptCtl
 
 
 RVFISignature = Signature({
@@ -42,12 +43,14 @@ class Top(Component):
             return Signature({
                 "bus": Out(wishbone.Signature(addr_width=30, data_width=32,
                                               granularity=8)),
-                "rvfi": Out(RVFISignature)
+                "rvfi": Out(RVFISignature),
+                "irq": In(1)
             })
         else:
             return Signature({
                 "bus": Out(wishbone.Signature(addr_width=30, data_width=32,
                                               granularity=8)),
+                "irq": In(1)
             })
 
     def __init__(self, *, formal=False):
@@ -81,7 +84,50 @@ class Top(Component):
         m.submodules.datapath = self.datapath
         m.submodules.decode = self.decode
 
+        # Exception handling.
+        mcause_latch = Signal(MCause)
+        exception = Signal(1)
         data_adr = Signal.like(self.alu.data.o)
+
+        m.d.comb += [
+            self.datapath.csr.mip_w.meip.eq(self.irq),
+            self.datapath.csr.ctrl.exception.eq(self.control.except_ctl)
+        ]
+
+        with m.If(self.control.except_ctl == ExceptCtl.LATCH_DECODER):
+            with m.If(self.decode.exception):
+                m.d.comb += exception.eq(1)
+                m.d.sync += mcause_latch.cause.eq(self.decode.e_type)
+
+            with m.If(self.datapath.csr.mstatus_r.mie &
+                      self.datapath.csr.mip_r.meip &
+                      self.datapath.csr.mie_r.meie):
+                m.d.comb += exception.eq(1)
+                m.d.sync += [
+                    mcause_latch.cause.eq(11),
+                    mcause_latch.interrupt.eq(1)
+                ]
+        with m.Elif(self.control.except_ctl == ExceptCtl.LATCH_STORE_ADR):
+            with m.If((((self.control.mem_sel == MemSel.HWORD) &
+                        self.alu.data.o[0] == 1)) |
+                      ((self.control.mem_sel == MemSel.WORD) &
+                       ((self.alu.data.o[0] == 1) |
+                        (self.alu.data.o[1] == 1)))):
+                m.d.comb += exception.eq(1)
+                m.d.sync += mcause_latch.cause.eq(
+                    MCause.Cause.STORE_MISALIGNED)
+        with m.Elif(self.control.except_ctl == ExceptCtl.LATCH_LOAD_ADR):
+            with m.If((((self.control.mem_sel == MemSel.HWORD) &
+                        self.alu.data.o[0] == 1)) |
+                      ((self.control.mem_sel == MemSel.WORD) &
+                       ((self.alu.data.o[0] == 1) |
+                        (self.alu.data.o[1] == 1)))):
+                m.d.comb += exception.eq(1)
+                m.d.sync += mcause_latch.eq(MCause.Cause.LOAD_MISALIGNED)
+        with m.Elif(self.control.except_ctl == ExceptCtl.LATCH_JAL):
+            with m.If(self.alu.data.o[1] == 1):
+                m.d.comb += exception.eq(1)
+                m.d.sync += mcause_latch.cause.eq(MCause.Cause.INSN_MISALIGNED)
 
         # ALU conns
         connect(m, self.alu.ctrl, self.control.alu)
@@ -154,6 +200,8 @@ class Top(Component):
                     m.d.sync += self.b_input.eq(self.decode.rs1)
                 with m.Case(BSrc.CSR):
                     m.d.sync += self.b_input.eq(self.datapath.csr.dat_r)
+                with m.Case(BSrc.MCAUSE_LATCH):
+                    m.d.sync += self.b_input.eq(mcause_latch)
 
         # Control conns
         m.d.comb += [
@@ -165,7 +213,7 @@ class Top(Component):
             self.control.mem_valid.eq(self.bus.ack),
 
             # TODO: Spin out into a register of exception sources.
-            self.control.exception.eq(self.decode.exception)
+            self.control.exception.eq(self.decode.exception | exception)
         ]
 
         # An ACK stops the request b/c the microcode's to avoid a 1-cycle delay

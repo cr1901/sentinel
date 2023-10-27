@@ -2,7 +2,7 @@ from amaranth import Cat, C, Module, Signal, Memory, Mux
 from amaranth.lib.data import View
 from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 
-from .ucodefields import PcAction, CSROp
+from .ucodefields import PcAction, CSROp, ExceptCtl
 
 from .csr import MStatus, MTVec, MIP, MIE, MCause
 
@@ -28,7 +28,8 @@ GPSignature = Signature({
 
 
 CSRControlSignature = Signature({
-    "op": Out(CSROp)
+    "op": Out(CSROp),
+    "exception": Out(ExceptCtl)
 })
 
 
@@ -39,7 +40,7 @@ CSRSignature = Signature({
     "dat_w": Out(32),
     "ctrl": Out(CSRControlSignature),
 
-    "mstatus_r": In(MIP),
+    "mstatus_r": In(MStatus),
     "mip_w": Out(MIP),
     "mip_r": In(MIP),
     "mie_r": In(MIE),
@@ -180,6 +181,24 @@ class CSRFile(Component):
             with m.If(self.adr_r == self.MIP):
                 mip_buf = View(MIP, read_buf)
                 m.d.sync += mip_buf.meip.eq(mip.meip)
+
+        # Make sure we don't lose interrupts.
+        with m.If(self.mip_w.meip):
+            m.d.sync += mip.meip.eq(1)
+
+        # This stack is probably rather difficult to orchestrate in
+        # microcode for little gain.
+        with m.If(self.ctrl.exception == ExceptCtl.ENTER_INT):
+            m.d.sync += [
+                mstatus.mpie.eq(mstatus.mie),
+                mstatus.mie.eq(0)
+            ]
+        with m.Elif(self.ctrl.exception == ExceptCtl.LEAVE_INT):
+            m.d.sync += [
+                mstatus.mie.eq(mstatus.mpie),
+                mstatus.mpie.eq(1)
+            ]
+
 
         return m
 
