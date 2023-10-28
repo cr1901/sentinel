@@ -139,7 +139,7 @@ class CSRFile(Component):
     def elaborate(self, platform):
         m = Module()
 
-        mstatus = Signal(MStatus)
+        mstatus = Signal(MStatus, reset={"mpp": 0b11})
         mip = Signal(MIP)
         mie = Signal(MIE)
 

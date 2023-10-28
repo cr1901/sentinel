@@ -450,11 +450,31 @@ sra:
              READ_RS1, jmp_type => direct, target => shift_zero;
 
 // Interrupt handler.
-origin 0xf0;
-save_pc: NOT_IMPLEMENTED;
-// Send PC through ALU
-// save_pc: a_src => pc, b_src => target, jmp_type => nop, target => 0;
+#define MSTATUS 0
+#define MIE 0x4
+#define MTVEC 0x5
+#define MSCRATCH 0x8
+#define MEPC 0x9
+#define MCAUSE 0xA
+#define MIP 0xC
 
-// Misc?
+origin 0xf0;
+save_pc: except_ctl => enter_int, csr_op => read_csr, csr_sel => trg_csr, \
+            a_src => zero, b_src => pc, latch_a => 1, latch_b => 1, target => MTVEC;
+         // Latch MTVEC, pass thru PC.
+         alu_op => add, b_src => csr, latch_b => 1;
+         // Read mcause_latch, write MEPC, pass thru MTVEC.
+         alu_op => add, b_src => mcause_latch, latch_b => 1, csr_op => write_csr, \
+            csr_sel => trg_csr, target => MEPC;
+         // Write PC, pass thru mcause_latch
+         alu_op => add, pc_action => load_alu_o;
+         // Write MCAUSE, and start exception handler.
+         INSN_FETCH, jmp_type => direct_zero, invert_test => 1, cond_test => true, \
+            csr_op => write_csr, csr_sel => trg_csr, target => MCAUSE;
+
+
 origin 248;
-panic: jmp_type => direct, target => panic
+origin 254;
+halt: jmp_type => direct, target => halt;
+origin 255;
+panic: jmp_type => direct, target => panic;

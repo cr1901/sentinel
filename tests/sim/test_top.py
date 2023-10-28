@@ -61,11 +61,21 @@ class CSRRegs:
 
         csrregs["MSCRATCH"] = (yield m.cpu.datapath.regfile.mem[0x28])
         csrregs["MSTATUS"] = (yield m.cpu.datapath.csrfile.mstatus_r.as_value())
+        csrregs["MTVEC"] = (yield m.cpu.datapath.regfile.mem[0x25])
+        csrregs["MIE"] = (yield m.cpu.datapath.csrfile.mie_r.as_value())
+        csrregs["MIP"] = (yield m.cpu.datapath.csrfile.mip_r.as_value())
+        csrregs["MEPC"] = (yield m.cpu.datapath.regfile.mem[0x29])
+        csrregs["MCAUSE"] = (yield m.cpu.datapath.regfile.mem[0x2A])
 
         return cls(**csrregs)
 
     MSCRATCH: int = 0
-    MSTATUS: int = 0
+    MSTATUS: int = 0b11000_0000_0000
+    MTVEC: int = 0
+    MEPC: int = 0
+    MCAUSE: int = 0
+    MIP: int = 0
+    MIE: int = 0
 
 
 @pytest.fixture
@@ -624,6 +634,63 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
         CSRRegs(MSCRATCH=0xffffffef, MSTATUS=8),
         CSRRegs(MSCRATCH=0xffffffef, MSTATUS=8),
         CSRRegs(MSCRATCH=0xffffffff, MSTATUS=8),
+    ]
+
+    def cpu_proc():
+        yield from cpu_proc_aux(regs, ram, csrs)
+
+    sim.ports = basic_ports
+    sim.run(sync_processes=[cpu_proc, ucode_panic])
+
+
+@pytest.mark.module(AttoSoC(sim=True))
+@pytest.mark.clks((1.0 / 12e6,))
+def test_exception(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
+    sim, m = sim_mod
+
+    def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
+        yield Passive()
+
+        for ws, irq in zip(wait_states, irqs):
+            # Wait for memory
+            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
+                       (yield m.cpu.control.insn_fetch)):
+                yield
+
+            # Wait state
+            # FIXME: Need add_comb_process to force wait_state to start at
+            # right time. Wait states probably work fine
+            # anyway.
+            for _ in range(ws):
+                yield
+
+            yield
+
+    m.rom = """
+         csrrwi x0, 16, 0x305  # mtvec
+         ecall
+         nop
+         nop
+handler:
+         jal x0, handler
+"""
+
+    regs = [
+        RV32Regs(),
+        RV32Regs(PC=4 >> 2),
+        RV32Regs(PC=0x10 >> 2),
+    ]
+
+    ram = [
+        None,  # 0x0
+        None,
+        None,
+    ]
+
+    csrs = [
+        CSRRegs(),  # 0x0
+        CSRRegs(MTVEC=0x10),
+        CSRRegs(MTVEC=0x10, MCAUSE=11, MEPC=0x4),
     ]
 
     def cpu_proc():
