@@ -41,7 +41,6 @@ fields block_ram: {
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
   alu_op: enum { add = 0; sub; and; or; xor; sll; srl; sra; cmp_ltu; }, default add;
-  // In addition to writing ALU o, write C or D. Valid next cycle.
   // Modify inputs and outputs to ALU.
   alu_i_mod: enum { none = 0; inv_msb_a_b; }, default none;
   alu_o_mod: enum { none = 0; inv_lsb_o; clear_lsb_o }, default none;
@@ -190,8 +189,10 @@ csrwi: alu_op => add, JUMP_TO_OP_END(fast_epilog_csr);
 csrrwi: alu_op => add, latch_b => 1, b_src => csr; // Latch old CSR value, pass thru new.
         WRITE_RD_CSR, alu_op => add, JUMP_TO_OP_END(fast_epilog);  
 csrrci: latch_b => 1, b_src => csr;
-        alu_op => add, a_src => neg_one, b_src => csr_imm, latch_a => 1, latch_b => 1; 
-        WRITE_RD, b_src => gp, latch_b => 1, alu_op => xor; // Bit Clear = A & ~B
+        // TODO: Unlike GP reads, csr_ops are not sticky. Maybe they should be?
+        csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => neg_one, \
+            b_src => csr_imm, latch_a => 1, latch_b => 1;
+        WRITE_RD, b_src => csr, latch_b => 1, alu_op => xor; // Bit Clear = A & ~B
         a_src => alu_o, latch_a => 1;
         alu_op => and, JUMP_TO_OP_END(fast_epilog_csr);
 
@@ -234,8 +235,11 @@ andi:         alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
               // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
 slli:
-              // Re: READ_RS1... reg addresses aren't latched, so if we need
-              // reg values again, we need to latch them again.
+              // Re: READ_RS1... the reg values read out of the GP file are
+              // sticky, but as part of pipelining, we read out RS2's value
+              // during dispatch/check_int.
+              // This was a bad assumption, so we need to latch RS1 from the
+              // file again.
               READ_RS1, a_src => zero, latch_a => 1;
               // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, latch_a => 1, latch_b => 1, alu_op => add;
@@ -253,40 +257,25 @@ sll_loop:
                   jmp_type => direct_zero, CONDTEST_ALU_NONZERO, target => sll_loop;
 
 srli:
-              // Re: READ_RS1... reg addresses aren't latched, so if we need
-              // reg values again, we need to latch them again.
+              // Same comments as slli apply here.
               READ_RS1, a_src => zero, latch_a => 1;
-              // Bail if shift count was initially zero.
               a_src => gp, b_src => imm, latch_a => 1, latch_b => 1, alu_op => add;
               READ_RS1, a_src => imm, b_src => one, latch_a => 1, latch_b => 1, alu_op => srl,
                   jmp_type => direct, cond_test => cmp_alu_o_zero, target => shift_zero;
 srl_loop:
-              // Subtract 1 from shift cnt, preliminarily save shift results
-              // in case we bail (microcode cannot be interrupted, so user
-              // will never see this intermediate result).
-              // Also write the previous shift, either from prolog or last
-              // loop iteration.
               alu_op => sub, a_src => alu_o, latch_a => 1, WRITE_RD;
-              // Then, do the shift, and bail if the shift cnt reached zero.
               alu_op => srl, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
                   jmp_type => direct_zero, CONDTEST_ALU_NONZERO, target => srl_loop;
 
 srai:
-              // Re: READ_RS1... reg addresses aren't latched, so if we need
-              // reg values again, we need to latch them again.
+              // Same comments as slli apply here.
               // We AND here because imm12 will have a hardcoded "1" outside
               // the 5 LSBs.
               READ_RS1, a_src => thirty_one, latch_a => 1;
-              // Bail if shift count was initially zero.
               a_src => gp, latch_a => 1, alu_op => and;
               READ_RS1, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, alu_op => sra,
                   jmp_type => direct, cond_test => cmp_alu_o_zero, target => shift_zero;
 sra_loop:
-              // Subtract 1 from shift cnt, preliminarily save shift results
-              // in case we bail (microcode cannot be interrupted, so user
-              // will never see this intermediate result).
-              // Also write the previous shift, either from prolog or last
-              // loop iteration.
               alu_op => sub, a_src => alu_o, latch_a => 1, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
               alu_op => sra, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
