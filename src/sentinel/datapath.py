@@ -158,7 +158,6 @@ class CSRFile(Component):
                 m.d.sync += [
                     mstatus.mie.eq(mstatus_in.mie),
                     mstatus.mpie.eq(mstatus_in.mpie),
-                    mstatus.mpp.eq(mstatus_in.mpp),
                 ]
             with m.If(self.adr_w == self.MIE):
                 mie_in = View(MIE, self.dat_w)

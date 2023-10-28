@@ -474,8 +474,7 @@ save_pc: except_ctl => enter_int, csr_op => read_csr, csr_sel => trg_csr, \
 
 
 origin 248;
-mret:  except_ctl => enter_int, csr_op => read_csr, csr_sel => trg_csr, \
-            a_src => zero, latch_a => 1, target => MEPC;
+mret:    csr_op => read_csr, csr_sel => trg_csr, a_src => zero, latch_a => 1, target => MEPC;
          // Latch MEPC
          b_src => csr, latch_b => 1;
          // Pass thru MEPC
