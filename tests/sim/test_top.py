@@ -91,7 +91,7 @@ def ucode_panic(sim_mod):
         while True:
             yield
 
-            if (yield m.cpu.control.ucoderom.addr == 248):
+            if (yield m.cpu.control.ucoderom.addr == 255):
                 raise AssertionError("microcode panic (not implemented)")
 
             prev_addr = addr
@@ -666,31 +666,35 @@ def test_exception(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
 
             yield
 
+    # ECALL sets xEPC to the ECALL insn, not the following one!
     m.rom = """
          csrrwi x0, 16, 0x305  # mtvec
          ecall
          nop
          nop
 handler:
-         jal x0, handler
+         dw 0b00110000001000000000000001110011  # mret
 """
 
     regs = [
         RV32Regs(),
         RV32Regs(PC=4 >> 2),
         RV32Regs(PC=0x10 >> 2),
+        RV32Regs(PC=4 >> 2),
     ]
 
     ram = [
         None,  # 0x0
         None,
         None,
+        None
     ]
 
     csrs = [
         CSRRegs(),  # 0x0
         CSRRegs(MTVEC=0x10),
         CSRRegs(MTVEC=0x10, MCAUSE=11, MEPC=0x4),
+        CSRRegs(MSTATUS=0b11000_1000_0000, MTVEC=0x10, MCAUSE=11, MEPC=0x4),
     ]
 
     def cpu_proc():

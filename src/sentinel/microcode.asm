@@ -474,6 +474,17 @@ save_pc: except_ctl => enter_int, csr_op => read_csr, csr_sel => trg_csr, \
 
 
 origin 248;
+mret:  except_ctl => enter_int, csr_op => read_csr, csr_sel => trg_csr, \
+            a_src => zero, latch_a => 1, target => MEPC;
+         // Latch MEPC
+         b_src => csr, latch_b => 1;
+         // Pass thru MEPC
+         alu_op => add;
+         // Write PC
+         pc_action => load_alu_o;
+         except_ctl => leave_int, INSN_FETCH, jmp_type => direct, target => fetch;
+
+
 origin 254;
 halt: jmp_type => direct, target => halt;
 origin 255;

@@ -207,7 +207,7 @@ class Decode(Component):
                                         zeroes):
                                 # mret
                                 m.d.sync += [
-                                    self.requested_op.eq(240),
+                                    self.requested_op.eq(248),
                                     self.exception.eq(0)
                                 ]
                             with m.Elif((self.funct12 == 0b000100000101) &
