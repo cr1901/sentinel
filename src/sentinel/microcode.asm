@@ -164,14 +164,21 @@ lhu_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req =>
 origin 0x24;
 // CSR ops take two cycles to decode. This is effectively a no-op in case
 // there's an illegal CSR access or something.
-csr_trampoline: jmp_type => map, cond_test => exception, target => save_pc;
+csr_trampoline: READ_RS1, jmp_type => map, except_ctl => latch_decoder, \
+                     cond_test => exception, target => save_pc;
 csrro0_1: a_src => zero, b_src => one, latch_a => 1, latch_b => 1, pc_action => inc, \
             jmp_type => direct, target => csrro0;
-csrw_1: NOT_IMPLEMENTED;  // reg_read => 1, reg_r_sel => insn_csr, 
-csrrw_1: NOT_IMPLEMENTED;
-csrr_1: NOT_IMPLEMENTED;
-csrrs_1: NOT_IMPLEMENTED;
-csrrc_1: NOT_IMPLEMENTED;
+csrw_1: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, pc_action => inc, \
+            jmp_type => direct, target => csrwi;
+csrrw_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
+            b_src => gp, latch_b => 1, pc_action => inc, jmp_type => direct, \
+            target => csrrwi;  
+csrr_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
+            pc_action => inc, jmp_type => direct, target => csrr;   
+csrrs_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
+            pc_action => inc, jmp_type => direct, target => csrrs;
+csrrc_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
+            pc_action => inc, jmp_type => direct, target => csrrc;
 csrwi_1: a_src => zero, b_src => csr_imm, latch_a => 1, latch_b => 1, pc_action => inc, \
             jmp_type => direct, target => csrwi;
 csrrwi_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, b_src => csr_imm, \
@@ -186,20 +193,24 @@ origin 0x30;
 misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
 
 csrro0: alu_op => and, JUMP_TO_OP_END(fast_epilog);
+csrr:  latch_b => 1, b_src => csr;
+       alu_op => add, JUMP_TO_OP_END(fast_epilog);
 csrwi: alu_op => add, JUMP_TO_OP_END(fast_epilog_csr);
 csrrwi: alu_op => add, latch_b => 1, b_src => csr; // Latch old CSR value, pass thru new.
         WRITE_RD_CSR, alu_op => add, JUMP_TO_OP_END(fast_epilog);
+
 csrrsi: latch_b => 1, b_src => csr;
         alu_op => add, b_src => csr_imm, latch_b => 1;
-        WRITE_RD, a_src => alu_o, latch_a => 1; // Feed back old CSR value.
-        alu_op => or, JUMP_TO_OP_END(fast_epilog_csr);
+csrrs_2: WRITE_RD, a_src => alu_o, latch_a => 1; // Feed back old CSR value.
+         alu_op => or, JUMP_TO_OP_END(fast_epilog_csr);
+
 csrrci: latch_b => 1, b_src => csr;
         // TODO: Unlike GP reads, csr_ops are not sticky. Maybe they should be?
         csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => neg_one, \
             b_src => csr_imm, latch_a => 1, latch_b => 1;
-        WRITE_RD, b_src => csr, latch_b => 1, alu_op => xor; // Bit Clear = A & ~B
-        a_src => alu_o, latch_a => 1;
-        alu_op => and, JUMP_TO_OP_END(fast_epilog_csr);
+csrrc_2: WRITE_RD, b_src => csr, latch_b => 1, alu_op => xor; // Bit Clear = A & ~B
+         a_src => alu_o, latch_a => 1;
+         alu_op => and, JUMP_TO_OP_END(fast_epilog_csr);
 
 origin 0x40;
 addi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
@@ -219,10 +230,12 @@ ori_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
 andi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => andi;
               NOT_IMPLEMENTED;  // 0b1000  subi?
-              NOT_IMPLEMENTED;  // 0b1001
-              NOT_IMPLEMENTED;  // 0b1010
-              NOT_IMPLEMENTED;  // 0b1011
-              NOT_IMPLEMENTED;  // 0b1100
+csrrs: READ_RS1, latch_b => 1, b_src => csr;
+        alu_op => add, b_src => gp, latch_b => 1, jmp_type => direct, \
+            target => csrrs_2;
+csrrc:  READ_RS1, latch_b => 1, b_src => csr;
+        csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => neg_one, \
+            b_src => gp, latch_a => 1, latch_b => 1, jmp_type => direct, target => csrrc_2;
 srai_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => srai;
 

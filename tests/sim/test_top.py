@@ -531,14 +531,25 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
             yield
 
     m.rom = """
-        csrrwi x0, 31, 0x340   # mscratch
+        csrrwi x0, 31, 0x340   # mscratch  # 0x00
         csrrwi x1, 17, 0x340   # mscratch
         csrrci x2,  1, 0x340   # mscratch
         csrrwi x0,  8, 0x300   # mstatus
-        csrrwi x3,  9, 0x300   # mstatus
+        csrrwi x3,  9, 0x300   # mstatus  # 0x10
         csrrsi x4,  1, 0x340   # mscratch
         csrrsi x0,  2, 0x340   # mscratch
         csrrci x0,  2, 0x340   # mscratch
+        csrrci x5,  0, 0x340   # mscratch  # 0x20
+        csrrsi x1,  0, 0x300   # mstatus
+        csrrw x0,  x3, 0x340   # mscratch
+        csrrw x2,  x4, 0x340   # mscratch
+        xori  x2, x0, -1  # 0x30
+        csrrw x0, x2, 0x340  # mscratch
+        csrrc x4, x4, 0x340  # mscratch
+        csrrc x2, x0, 0x340  # mscratch
+        csrrs x2, x0, 0x300   # mstatus  # 0x40
+        slli  x2, x2, 1
+        csrrs x3, x2, 0x340 # mscratch
 """
 
     regs = [
@@ -551,6 +562,22 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
         RV32Regs(R4=16, R3=8, R2=17, R1=31, PC=0x18 >> 2),
         RV32Regs(R4=16, R3=8, R2=17, R1=31, PC=0x1C >> 2),
         RV32Regs(R4=16, R3=8, R2=17, R1=31, PC=0x20 >> 2),
+        RV32Regs(R5=17, R4=16, R3=8, R2=17, R1=31, PC=0x24 >> 2),
+        RV32Regs(R5=17, R4=16, R3=8, R2=17, R1=8, PC=0x28 >> 2),
+        RV32Regs(R5=17, R4=16, R3=8, R2=17, R1=8, PC=0x2C >> 2),
+        RV32Regs(R5=17, R4=16, R3=8, R2=8, R1=8, PC=0x30 >> 2),
+        RV32Regs(R5=17, R4=16, R3=8, R2=0xffffffff, R1=8, PC=0x34 >> 2),
+        RV32Regs(R5=17, R4=16, R3=8, R2=0xffffffff, R1=8, PC=0x38 >> 2),
+        RV32Regs(R5=17, R4=0xffffffff, R3=8, R2=0xffffffff, R1=8,
+                 PC=0x3C >> 2),
+        RV32Regs(R5=17, R4=0xffffffff, R3=8, R2=0xffffffef, R1=8,
+                 PC=0x40 >> 2),
+        RV32Regs(R5=17, R4=0xffffffff, R3=8, R2=8, R1=8,
+                 PC=0x44 >> 2),
+        RV32Regs(R5=17, R4=0xffffffff, R3=8, R2=16, R1=8,
+                 PC=0x48 >> 2),
+        RV32Regs(R5=17, R4=0xffffffff, R3=0xffffffef, R2=16, R1=8,
+                 PC=0x4C >> 2),
     ]
 
     ram = [
@@ -558,11 +585,22 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
         None,
         None,
         None,
-        None,   # 0x10
+        None,  # 0x10
         None,
         None,
         None,
-        None,   # 0x20
+        None,  # 0x20
+        None,
+        None,
+        None,
+        None,  # 0x30
+        None,
+        None,
+        None,
+        None,  # 0x40
+        None,
+        None,
+        None,
     ]
 
     csrs = [
@@ -575,6 +613,17 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
         CSRRegs(MSCRATCH=17, MSTATUS=8),
         CSRRegs(MSCRATCH=19, MSTATUS=8),
         CSRRegs(MSCRATCH=17, MSTATUS=8),  # 0x20
+        CSRRegs(MSCRATCH=17, MSTATUS=8),
+        CSRRegs(MSCRATCH=17, MSTATUS=8),
+        CSRRegs(MSCRATCH=8, MSTATUS=8),
+        CSRRegs(MSCRATCH=16, MSTATUS=8),  # 0x30
+        CSRRegs(MSCRATCH=16, MSTATUS=8),
+        CSRRegs(MSCRATCH=0xffffffff, MSTATUS=8),
+        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=8),
+        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=8),  # 0x40
+        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=8),
+        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=8),
+        CSRRegs(MSCRATCH=0xffffffff, MSTATUS=8),
     ]
 
     def cpu_proc():
