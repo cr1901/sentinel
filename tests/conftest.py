@@ -103,7 +103,7 @@ def ucode_panic(sim_mod):
         while True:
             yield
 
-            if (yield m.cpu.control.ucoderom.addr == 248):
+            if (yield m.cpu.control.ucoderom.addr == 255):
                 raise AssertionError("microcode panic (not implemented)")
 
             prev_addr = addr

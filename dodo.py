@@ -239,6 +239,7 @@ def task__compile_upstream():
     submod = upstream_tests / "riscv-tests" / ".git"
     isa_dir = upstream_tests / "riscv-tests/isa/rv32ui"
     macros_dir = upstream_tests / "riscv-tests/isa/macros/scalar"
+    env_dir = upstream_tests / "riscv-tests/env"
 
     yield {
         "name": "mkdir",
@@ -250,7 +251,7 @@ def task__compile_upstream():
         yield {
             "name": elf_file.name,
             "actions": [["riscv64-unknown-elf-gcc", source_file, *flags,
-                         "-I", upstream_tests, "-I", macros_dir,
+                         "-I", upstream_tests, "-I", macros_dir, "-I", env_dir,
                          "-T", link_file, "-o", elf_file]],
             "file_dep": [source_file, cfg, link_file, submod],
             "targets": [elf_file],
