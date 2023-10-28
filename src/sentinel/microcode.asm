@@ -177,7 +177,8 @@ csrwi_1: a_src => zero, b_src => csr_imm, latch_a => 1, latch_b => 1, pc_action 
 csrrwi_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, b_src => csr_imm, \
             latch_a => 1, latch_b => 1, pc_action => inc, jmp_type => direct, \
             target => csrrwi;
-csrrsi_1: NOT_IMPLEMENTED;
+csrrsi_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
+            pc_action => inc, jmp_type => direct, target => csrrsi;
 csrrci_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
             pc_action => inc, jmp_type => direct, target => csrrci;
 
@@ -187,7 +188,11 @@ misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
 csrro0: alu_op => and, JUMP_TO_OP_END(fast_epilog);
 csrwi: alu_op => add, JUMP_TO_OP_END(fast_epilog_csr);
 csrrwi: alu_op => add, latch_b => 1, b_src => csr; // Latch old CSR value, pass thru new.
-        WRITE_RD_CSR, alu_op => add, JUMP_TO_OP_END(fast_epilog);  
+        WRITE_RD_CSR, alu_op => add, JUMP_TO_OP_END(fast_epilog);
+csrrsi: latch_b => 1, b_src => csr;
+        alu_op => add, b_src => csr_imm, latch_b => 1;
+        WRITE_RD, a_src => alu_o, latch_a => 1; // Feed back old CSR value.
+        alu_op => or, JUMP_TO_OP_END(fast_epilog_csr);
 csrrci: latch_b => 1, b_src => csr;
         // TODO: Unlike GP reads, csr_ops are not sticky. Maybe they should be?
         csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => neg_one, \

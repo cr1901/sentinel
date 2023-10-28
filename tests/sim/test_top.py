@@ -535,7 +535,10 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
         csrrwi x1, 17, 0x340   # mscratch
         csrrci x2,  1, 0x340   # mscratch
         csrrwi x0,  8, 0x300   # mstatus
-        csrrwi x3,  9, 0x300   # mscratch
+        csrrwi x3,  9, 0x300   # mstatus
+        csrrsi x4,  1, 0x340   # mscratch
+        csrrsi x0,  2, 0x340   # mscratch
+        csrrci x0,  2, 0x340   # mscratch
 """
 
     regs = [
@@ -545,6 +548,9 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
         RV32Regs(R2=17, R1=31, PC=0xC >> 2),
         RV32Regs(R2=17, R1=31, PC=0x10 >> 2),
         RV32Regs(R3=8, R2=17, R1=31, PC=0x14 >> 2),
+        RV32Regs(R4=16, R3=8, R2=17, R1=31, PC=0x18 >> 2),
+        RV32Regs(R4=16, R3=8, R2=17, R1=31, PC=0x1C >> 2),
+        RV32Regs(R4=16, R3=8, R2=17, R1=31, PC=0x20 >> 2),
     ]
 
     ram = [
@@ -553,16 +559,22 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
         None,
         None,
         None,   # 0x10
-        None
+        None,
+        None,
+        None,
+        None,   # 0x20
     ]
 
     csrs = [
-        CSRRegs(),
+        CSRRegs(),  # 0x0
         CSRRegs(MSCRATCH=31),
         CSRRegs(MSCRATCH=17),
         CSRRegs(MSCRATCH=16),
+        CSRRegs(MSCRATCH=16, MSTATUS=8),  # 0x10
         CSRRegs(MSCRATCH=16, MSTATUS=8),
-        CSRRegs(MSCRATCH=16, MSTATUS=8),
+        CSRRegs(MSCRATCH=17, MSTATUS=8),
+        CSRRegs(MSCRATCH=19, MSTATUS=8),
+        CSRRegs(MSCRATCH=17, MSTATUS=8),  # 0x20
     ]
 
     def cpu_proc():
