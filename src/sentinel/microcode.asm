@@ -329,14 +329,16 @@ bltu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => cmp_ltu, 
 bgeu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_GEU, \
         jmp_type => direct, target => branch_epilog;
 
-branch_epilog: alu_op => add, CONDTEST_ALU_CMP_FAILED, pc_action => inc, \
-                  jmp_type => direct, target => fetch;
+branch_epilog: alu_op => add, CONDTEST_ALU_CMP_FAILED, jmp_type => direct, target => not_taken;
+taken:  except_ctl => latch_jal, jmp_type => direct, cond_test => exception, target => save_pc;
         jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
+not_taken: pc_action => inc, jmp_type => direct, target => fetch;
 
 origin 0x98;
 jalr: b_src => imm, latch_b => 1; 
-      alu_op => add, alu_o_mod => clear_lsb_o; // TODO: latch exception.
-      latch_a => 1, latch_b => 1, a_src => four, b_src => pc; // TODO: cond_test => exception, jmp_type => direct
+      alu_op => add, alu_o_mod => clear_lsb_o;
+      latch_a => 1, latch_b => 1, a_src => four, b_src => pc, except_ctl => latch_jal, \
+        jmp_type => direct, cond_test => exception, target => save_pc;
       pc_action => load_alu_o;
       INSN_FETCH, alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
@@ -367,19 +369,18 @@ sw_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => word, write_mem => 1, jmp_type => direct_zero, target => sw_wait;
 
 beq: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
-     alu_op => add, invert_test => 1, cond_test => cmp_alu_o_zero, pc_action => inc, \
-                  jmp_type => direct, target => fetch;
+     alu_op => add, invert_test => 1, cond_test => cmp_alu_o_zero, jmp_type => direct, \
+         target => not_taken;
+     except_ctl => latch_jal, jmp_type => direct, cond_test => exception, target => save_pc;
      jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 
-bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
-     alu_op => add, cond_test => cmp_alu_o_zero, pc_action => inc, \
-                  jmp_type => direct, target => fetch;
-     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
+bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub, \
+        jmp_type => direct, target => branch_epilog;
 
 origin 0xB0;
 jal: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1;
-     alu_op => add; // TODO: latch exception.
-     NOP; // TODO: cond_test => exception, jmp_type => direct
+     alu_op => add;
+     except_ctl => latch_jal, jmp_type => direct, cond_test => exception, target => save_pc;
      pc_action => load_alu_o, latch_a => 1, latch_b => 1, a_src => four, b_src => pc;
      INSN_FETCH, alu_op => add, JUMP_TO_OP_END(fast_epilog);
 

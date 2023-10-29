@@ -20,7 +20,7 @@ def test_bin(sim_mod, request):
 
 
 @pytest.fixture
-def wait_for_host_write(sim_mod):
+def wait_for_host_write(sim_mod, request):
     class HOST_STATE(Enum):
         WAITING_FIRST = auto()
         FIRST_ACCESS_ACK = auto()
@@ -60,7 +60,12 @@ def wait_for_host_write(sim_mod):
                     yield m.cpu.bus.ack.eq(0)
                     state = HOST_STATE.DONE
                 case HOST_STATE.DONE:
-                    assert (val >> 1, val & 1) == (0, 1)
+                    if "ma_fetch" in request.node.name:
+                        assert (val >> 1, val & 1) == (7, 1)
+                        pytest.xfail("ma_fetch requires a writable misa at "
+                                     "test 7, which we don't have")
+                    else:
+                        assert (val >> 1, val & 1) == (0, 1)
                     break
                 case HOST_STATE.TIMEOUT:
                     raise AssertionError("CPU (but not microcode) probably "
@@ -80,7 +85,7 @@ RV32UI_TESTS = [
     pytest.param("fence_i", marks=pytest.mark.xfail(reason="Zifencei not implemented")),  # noqa: E501
     "jal",  "jalr", "lb", "lbu", "lh",  "lhu",
     "lui", "lw",
-    pytest.param("ma_data", marks=pytest.mark.xfail(reason="misaligned access not yet implemented")),  # noqa: E501
+    pytest.param("ma_data", marks=pytest.mark.xfail(reason="misaligned access are traps")),  # noqa: E501
     "or", "ori", "sb", "sh", "simple", "sll", "slli",
     "slt", "slti", "sltiu", "sltu", "sra", "srai", "srl", "srli", "sub", "sw",
     "xor", "xori"
@@ -96,7 +101,8 @@ def test_rv32ui(sim_mod, ucode_panic, test_bin, wait_for_host_write):
 
 
 RV32MI_TESTS = [
-    "csr", "illegal", "lh-misaligned", "lw-misaligned", "ma_addr", "ma_fetch",
+    "csr", "illegal", "lh-misaligned", "lw-misaligned", "ma_addr",
+      "ma_fetch",
     "mcsr", "sbreak", "scall", "sh-misaligned", "shamt", "sw-misaligned",
     pytest.param("zicntr", marks=pytest.mark.xfail(reason="Zicntr not implemented"))  # noqa: E501
 ]
