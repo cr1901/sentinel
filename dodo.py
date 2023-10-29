@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import subprocess
 from shutil import copy2, move
+from itertools import chain
 
 # https://groups.google.com/g/python-doit/c/GFtEuBp82xc/m/j7jFkvAGH1QJ
 from doit.action import CmdAction
@@ -224,6 +225,9 @@ def task__upstream_init():
     }
 
 
+UNSUPPORTED_UPSTREAM = ("breakpoint",)
+
+
 # I figured out the correct invocations for compiling and objdump by running
 # the autoconf script, compiling normally, and seeing which flags the compiler
 # and objdump are invoked with. It might not be perfect (but seems to work
@@ -238,6 +242,7 @@ def task__compile_upstream():
     link_file = upstream_tests / "link.ld"
     submod = upstream_tests / "riscv-tests" / ".git"
     isa_dir = upstream_tests / "riscv-tests/isa/rv32ui"
+    mmode_dir = upstream_tests / "riscv-tests/isa/rv32mi"
     macros_dir = upstream_tests / "riscv-tests/isa/macros/scalar"
     env_dir = upstream_tests / "riscv-tests/env"
 
@@ -246,7 +251,10 @@ def task__compile_upstream():
         "actions": [(create_folder, [outdir])],
     }
 
-    for source_file in isa_dir.glob('*.S'):
+    for source_file in chain(isa_dir.glob('*.S'), mmode_dir.glob('*.S')):
+        if source_file.stem in UNSUPPORTED_UPSTREAM:
+            continue
+
         elf_file = outdir / source_file.with_suffix(".elf").name
         yield {
             "name": elf_file.name,
@@ -263,8 +271,12 @@ def task__create_raw():
     outdir = upstream_tests / "binaries"
 
     isa_dir = upstream_tests / "riscv-tests/isa/rv32ui"
+    mmode_dir = upstream_tests / "riscv-tests/isa/rv32mi"
 
-    for source_file in isa_dir.glob('*.S'):
+    for source_file in chain(isa_dir.glob('*.S'), mmode_dir.glob('*.S')):
+        if source_file.stem in UNSUPPORTED_UPSTREAM:
+            continue
+
         elf_file = outdir / source_file.with_suffix(".elf").name
         bin_file = outdir / source_file.with_suffix("").name
         yield {
@@ -281,9 +293,13 @@ def task__dump_tests():
     outdir = upstream_tests / "binaries"
 
     isa_dir = upstream_tests / "riscv-tests/isa/rv32ui"
+    mmode_dir = upstream_tests / "riscv-tests/isa/rv32mi"
 
     for elf_file in map(lambda s: outdir / s.with_suffix(".elf").name,
-                        isa_dir.glob('*.S')):
+                        chain(isa_dir.glob('*.S'), mmode_dir.glob('*.S'))):
+        if elf_file.stem in UNSUPPORTED_UPSTREAM:
+            continue
+
         dump_file = elf_file.with_suffix(".dump")
         bin_file = elf_file.with_suffix("")
         yield {

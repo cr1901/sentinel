@@ -7,51 +7,6 @@ from enum import Enum, auto
 from sentinel.soc import AttoSoC
 
 
-@dataclass
-class RV32Regs:
-    @classmethod
-    def from_top_module(cls, m):
-        gpregs = []
-        for r_id in range(32):
-            gpregs.append((yield m.cpu.datapath.regfile.mem[r_id]))
-
-        return cls(*gpregs, PC=(yield m.cpu.datapath.pc.dat_r))
-
-    R0: int = 0
-    R1: int = 0
-    R2: int = 0
-    R3: int = 0
-    R4: int = 0
-    R5: int = 0
-    R6: int = 0
-    R7: int = 0
-    R8: int = 0
-    R9: int = 0
-    R10: int = 0
-    R11: int = 0
-    R12: int = 0
-    R13: int = 0
-    R14: int = 0
-    R15: int = 0
-    R16: int = 0
-    R17: int = 0
-    R18: int = 0
-    R19: int = 0
-    R20: int = 0
-    R21: int = 0
-    R22: int = 0
-    R23: int = 0
-    R24: int = 0
-    R25: int = 0
-    R26: int = 0
-    R27: int = 0
-    R28: int = 0
-    R29: int = 0
-    R30: int = 0
-    R31: int = 0
-    PC: int = 0
-
-
 @pytest.fixture
 def test_bin(sim_mod, request):
     _, m = sim_mod
@@ -64,33 +19,17 @@ def test_bin(sim_mod, request):
     m.rom = bytebin
 
 
-RV32UI_TESTS = [
-    "add", "addi", "and",  "andi", "auipc", "beq",  "bge",  "bgeu", "blt",
-    "bltu", "bne",
-    pytest.param("fence_i", marks=pytest.mark.xfail(reason="Zifencei not implemented")),  # noqa: E501
-    "jal",  "jalr", "lb", "lbu", "lh",  "lhu",
-    "lui", "lw",
-    pytest.param("ma_data", marks=pytest.mark.xfail(reason="misaligned access not yet implemented")),  # noqa: E501
-    "or", "ori", "sb", "sh", "simple", "sll", "slli",
-    "slt", "slti", "sltiu", "sltu", "sra", "srai", "srl", "srli", "sub", "sw",
-    "xor", "xori"
-]
+@pytest.fixture
+def wait_for_host_write(sim_mod):
+    class HOST_STATE(Enum):
+        WAITING_FIRST = auto()
+        FIRST_ACCESS_ACK = auto()
+        WAITING_SECOND = auto()
+        SECOND_ACCESS_ACK = auto()
+        DONE = auto()
+        TIMEOUT = auto()
 
-
-class HOST_STATE(Enum):
-    WAITING_FIRST = auto()
-    FIRST_ACCESS_ACK = auto()
-    WAITING_SECOND = auto()
-    SECOND_ACCESS_ACK = auto()
-    DONE = auto()
-    TIMEOUT = auto()
-
-
-@pytest.mark.module(AttoSoC(sim=True, depth=4096))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.parametrize("test_bin", RV32UI_TESTS, indirect=True)
-def test_rv32ui(sim_mod, ucode_panic, test_bin):
-    sim, m = sim_mod
+    _, m = sim_mod
 
     # TODO: Convert into SoC module (use wishbone.Decoder and friends)?
     def wait_for_host_write():
@@ -132,4 +71,40 @@ def test_rv32ui(sim_mod, ucode_panic, test_bin):
             if i > 65535:
                 state = HOST_STATE.TIMEOUT
 
+    return wait_for_host_write
+
+
+RV32UI_TESTS = [
+    "add", "addi", "and",  "andi", "auipc", "beq",  "bge",  "bgeu", "blt",
+    "bltu", "bne",
+    pytest.param("fence_i", marks=pytest.mark.xfail(reason="Zifencei not implemented")),  # noqa: E501
+    "jal",  "jalr", "lb", "lbu", "lh",  "lhu",
+    "lui", "lw",
+    pytest.param("ma_data", marks=pytest.mark.xfail(reason="misaligned access not yet implemented")),  # noqa: E501
+    "or", "ori", "sb", "sh", "simple", "sll", "slli",
+    "slt", "slti", "sltiu", "sltu", "sra", "srai", "srl", "srli", "sub", "sw",
+    "xor", "xori"
+]
+
+
+@pytest.mark.module(AttoSoC(sim=True, depth=4096))
+@pytest.mark.clks((1.0 / 12e6,))
+@pytest.mark.parametrize("test_bin", RV32UI_TESTS, indirect=True)
+def test_rv32ui(sim_mod, ucode_panic, test_bin, wait_for_host_write):
+    sim, m = sim_mod
+    sim.run(sync_processes=[wait_for_host_write, ucode_panic])
+
+
+RV32MI_TESTS = [
+    "csr", "illegal", "lh-misaligned", "lw-misaligned", "ma_addr", "ma_fetch",
+    "mcsr", "sbreak", "scall", "sh-misaligned", "shamt", "sw-misaligned",
+    "zicntr"
+]
+
+
+@pytest.mark.module(AttoSoC(sim=True, depth=4096))
+@pytest.mark.clks((1.0 / 12e6,))
+@pytest.mark.parametrize("test_bin", RV32MI_TESTS, indirect=True)
+def test_rv32mi(sim_mod, ucode_panic, test_bin, wait_for_host_write):
+    sim, m = sim_mod
     sim.run(sync_processes=[wait_for_host_write, ucode_panic])

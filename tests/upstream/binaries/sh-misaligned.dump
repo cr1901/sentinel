@@ -1,0 +1,178 @@
+
+tests/upstream/binaries/sh-misaligned.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text.init:
+
+00000000 <_start>:
+   0:	0400006f          	j	40 <reset_vector>
+
+00000004 <trap_vector>:
+   4:	34202f73          	csrr	t5,mcause
+   8:	00b00f93          	li	t6,11
+   c:	03ff0263          	beq	t5,t6,30 <write_tohost>
+  10:	00000f17          	auipc	t5,0x0
+  14:	19cf0f13          	addi	t5,t5,412 # 1ac <mtvec_handler>
+  18:	000f0463          	beqz	t5,20 <trap_vector+0x1c>
+  1c:	000f0067          	jr	t5
+  20:	34202f73          	csrr	t5,mcause
+  24:	000f5463          	bgez	t5,2c <handle_exception>
+  28:	0040006f          	j	2c <handle_exception>
+
+0000002c <handle_exception>:
+  2c:	5391e193          	ori	gp,gp,1337
+
+00000030 <write_tohost>:
+  30:	04000f37          	lui	t5,0x4000
+  34:	003f2023          	sw	gp,0(t5) # 4000000 <_end+0x3fffda0>
+  38:	000f2223          	sw	zero,4(t5)
+  3c:	ff5ff06f          	j	30 <write_tohost>
+
+00000040 <reset_vector>:
+  40:	00000093          	li	ra,0
+  44:	00000113          	li	sp,0
+  48:	00000193          	li	gp,0
+  4c:	00000213          	li	tp,0
+  50:	00000293          	li	t0,0
+  54:	00000313          	li	t1,0
+  58:	00000393          	li	t2,0
+  5c:	00000413          	li	s0,0
+  60:	00000493          	li	s1,0
+  64:	00000513          	li	a0,0
+  68:	00000593          	li	a1,0
+  6c:	00000613          	li	a2,0
+  70:	00000693          	li	a3,0
+  74:	00000713          	li	a4,0
+  78:	00000793          	li	a5,0
+  7c:	00000813          	li	a6,0
+  80:	00000893          	li	a7,0
+  84:	00000913          	li	s2,0
+  88:	00000993          	li	s3,0
+  8c:	00000a13          	li	s4,0
+  90:	00000a93          	li	s5,0
+  94:	00000b13          	li	s6,0
+  98:	00000b93          	li	s7,0
+  9c:	00000c13          	li	s8,0
+  a0:	00000c93          	li	s9,0
+  a4:	00000d13          	li	s10,0
+  a8:	00000d93          	li	s11,0
+  ac:	00000e13          	li	t3,0
+  b0:	00000e93          	li	t4,0
+  b4:	00000f13          	li	t5,0
+  b8:	00000f93          	li	t6,0
+  bc:	00000193          	li	gp,0
+  c0:	00000297          	auipc	t0,0x0
+  c4:	f4428293          	addi	t0,t0,-188 # 4 <trap_vector>
+  c8:	30529073          	csrw	mtvec,t0
+  cc:	00100513          	li	a0,1
+  d0:	01f51513          	slli	a0,a0,0x1f
+  d4:	00054c63          	bltz	a0,ec <reset_vector+0xac>
+  d8:	0ff0000f          	fence
+  dc:	00100193          	li	gp,1
+  e0:	05d00893          	li	a7,93
+  e4:	00000513          	li	a0,0
+  e8:	00000073          	ecall
+  ec:	30005073          	csrwi	mstatus,0
+  f0:	00002537          	lui	a0,0x2
+  f4:	80050513          	addi	a0,a0,-2048 # 1800 <_end+0x15a0>
+  f8:	30052073          	csrs	mstatus,a0
+  fc:	00000297          	auipc	t0,0x0
+ 100:	01428293          	addi	t0,t0,20 # 110 <test_2>
+ 104:	34129073          	csrw	mepc,t0
+ 108:	f1402573          	csrr	a0,mhartid
+ 10c:	30200073          	mret
+
+00000110 <test_2>:
+ 110:	00200193          	li	gp,2
+ 114:	25000093          	li	ra,592
+ 118:	00001137          	lui	sp,0x1
+ 11c:	23410113          	addi	sp,sp,564 # 1234 <_end+0xfd4>
+ 120:	00000797          	auipc	a5,0x0
+ 124:	01478793          	addi	a5,a5,20 # 134 <test_2+0x24>
+ 128:	00209023          	sh	sp,0(ra)
+ 12c:	00009703          	lh	a4,0(ra)
+ 130:	0080006f          	j	138 <test_2+0x28>
+ 134:	00010713          	mv	a4,sp
+ 138:	000013b7          	lui	t2,0x1
+ 13c:	23438393          	addi	t2,t2,564 # 1234 <_end+0xfd4>
+ 140:	02771e63          	bne	a4,t2,17c <fail>
+
+00000144 <test_3>:
+ 144:	00300193          	li	gp,3
+ 148:	25000093          	li	ra,592
+ 14c:	00005137          	lui	sp,0x5
+ 150:	67810113          	addi	sp,sp,1656 # 5678 <_end+0x5418>
+ 154:	00000797          	auipc	a5,0x0
+ 158:	01478793          	addi	a5,a5,20 # 168 <test_3+0x24>
+ 15c:	002090a3          	sh	sp,1(ra)
+ 160:	00109703          	lh	a4,1(ra)
+ 164:	0080006f          	j	16c <test_3+0x28>
+ 168:	00010713          	mv	a4,sp
+ 16c:	000053b7          	lui	t2,0x5
+ 170:	67838393          	addi	t2,t2,1656 # 5678 <_end+0x5418>
+ 174:	00771463          	bne	a4,t2,17c <fail>
+ 178:	02301063          	bne	zero,gp,198 <pass>
+
+0000017c <fail>:
+ 17c:	0ff0000f          	fence
+ 180:	00018063          	beqz	gp,180 <fail+0x4>
+ 184:	00119193          	slli	gp,gp,0x1
+ 188:	0011e193          	ori	gp,gp,1
+ 18c:	05d00893          	li	a7,93
+ 190:	00018513          	mv	a0,gp
+ 194:	00000073          	ecall
+
+00000198 <pass>:
+ 198:	0ff0000f          	fence
+ 19c:	00100193          	li	gp,1
+ 1a0:	05d00893          	li	a7,93
+ 1a4:	00000513          	li	a0,0
+ 1a8:	00000073          	ecall
+
+000001ac <mtvec_handler>:
+ 1ac:	00600293          	li	t0,6
+ 1b0:	34202373          	csrr	t1,mcause
+ 1b4:	fc6294e3          	bne	t0,t1,17c <fail>
+ 1b8:	34179073          	csrw	mepc,a5
+ 1bc:	30200073          	mret
+ 1c0:	c0001073          	unimp
+ 1c4:	0000                	unimp
+ 1c6:	0000                	unimp
+ 1c8:	0000                	unimp
+ 1ca:	0000                	unimp
+ 1cc:	0000                	unimp
+ 1ce:	0000                	unimp
+ 1d0:	0000                	unimp
+ 1d2:	0000                	unimp
+ 1d4:	0000                	unimp
+ 1d6:	0000                	unimp
+ 1d8:	0000                	unimp
+ 1da:	0000                	unimp
+ 1dc:	0000                	unimp
+ 1de:	0000                	unimp
+ 1e0:	0000                	unimp
+ 1e2:	0000                	unimp
+ 1e4:	0000                	unimp
+ 1e6:	0000                	unimp
+ 1e8:	0000                	unimp
+ 1ea:	0000                	unimp
+ 1ec:	0000                	unimp
+ 1ee:	0000                	unimp
+ 1f0:	0000                	unimp
+ 1f2:	0000                	unimp
+ 1f4:	0000                	unimp
+ 1f6:	0000                	unimp
+ 1f8:	0000                	unimp
+ 1fa:	0000                	unimp
+
+Disassembly of section .data:
+
+00000250 <begin_signature>:
+ 250:	0000                	unimp
+ 252:	0000                	unimp
+ 254:	0000                	unimp
+ 256:	0000                	unimp
+ 258:	0000                	unimp
+ 25a:	0000                	unimp
+ 25c:	0000                	unimp
+ 25e:	0000                	unimp
