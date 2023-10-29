@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from amaranth.back import verilog
 from amaranth_boards import icestick, ice40_hx8k_b_evn
 
+from .formal import FormalTop
 from .top import Top
 from .soc import AttoSoC
 
@@ -34,7 +35,10 @@ def generate_args(parser):
 def generate(args=None):
     def do_gen(*, n, o, f):
         with file_or_stdout(o) as fp:
-            m = Top(formal=f)
+            if f:
+                m = FormalTop()
+            else:
+                m = Top()
             v = verilog.convert(m, name=n or "sentinel")  # noqa: E501
             fp.write(v)
 
