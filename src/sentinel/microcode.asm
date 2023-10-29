@@ -305,10 +305,8 @@ shift_zero:   a_src => zero, b_src => gp, latch_a => 1, latch_b => 1;
 origin 0x80;
 sb_1: READ_RS2, latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => sb;
-sh_1: READ_RS2, latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
-                target => sh;
-sw_1: READ_RS2, latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
-                target => sw;
+sh_1: READ_RS2, latch_b => 1, b_src => imm, jmp_type => direct, target => sh;
+sw_1: READ_RS2, latch_b => 1, b_src => imm, jmp_type => direct, target => sw;
 
 origin 0x88;
 branch_ops:
@@ -351,16 +349,18 @@ sb_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => byte, write_mem => 1, jmp_type => direct_zero, target => sb_wait;
 
 sh: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
-    alu_op => add, latch_adr => 1;
-    mem_sel => hword, latch_data => 1;
+    alu_op => add, latch_adr => 1, except_ctl => latch_store_adr, mem_sel => hword, \
+        jmp_type => direct, cond_test => exception, target => save_pc;
+    mem_sel => hword, latch_data => 1, pc_action => inc;
 // For stores/loads, we use a wishbone block cycle (don't deassert cyc in
 // between data access and insn fetch)
 sh_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
               mem_sel => hword, write_mem => 1, jmp_type => direct_zero, target => sh_wait;
 
 sw: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
-    alu_op => add, latch_adr => 1;
-    mem_sel => word, latch_data => 1;
+    alu_op => add, latch_adr => 1, except_ctl => latch_store_adr, mem_sel => word, \
+        jmp_type => direct, cond_test => exception, target => save_pc;
+    mem_sel => word, latch_data => 1, pc_action => inc;
 // For stores/loads, we use a wishbone block cycle (don't deassert cyc in
 // between data access and insn fetch)
 sw_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \

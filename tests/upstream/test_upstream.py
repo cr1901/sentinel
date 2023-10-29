@@ -98,7 +98,7 @@ def test_rv32ui(sim_mod, ucode_panic, test_bin, wait_for_host_write):
 RV32MI_TESTS = [
     "csr", "illegal", "lh-misaligned", "lw-misaligned", "ma_addr", "ma_fetch",
     "mcsr", "sbreak", "scall", "sh-misaligned", "shamt", "sw-misaligned",
-    "zicntr"
+    pytest.param("zicntr", marks=pytest.mark.xfail(reason="Zicntr not implemented"))  # noqa: E501
 ]
 
 
