@@ -116,15 +116,12 @@ reset: latch_a => 1, latch_b => 1, b_src => one, a_src => zero;
 origin 8;
 lb_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => lb;
-lh_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
-                target => lh;
-lw_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
-                target => lw;
+lh_1: latch_b => 1, b_src => imm, jmp_type => direct, target => lh;
+lw_1: latch_b => 1, b_src => imm, jmp_type => direct, target => lw;
                NOT_IMPLEMENTED;
 lbu_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => lbu;
-lhu_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
-                target => lhu;
+lhu_1: latch_b => 1, b_src => imm, jmp_type => direct, target => lhu;
 
 lb: alu_op => add;
     latch_adr => 1;
@@ -134,18 +131,20 @@ lb_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req => 
           alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 lh: alu_op => add;
-    latch_adr => 1;
+    latch_adr => 1, except_ctl => latch_load_adr, mem_sel => hword, \
+            jmp_type => direct, cond_test => exception, target => save_pc;
 lh_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => hword, mem_extend => sign, jmp_type => direct, \
               target => lh_wait;
-          alu_op => add, JUMP_TO_OP_END(fast_epilog);
+          alu_op => add, pc_action => inc, JUMP_TO_OP_END(fast_epilog);
 
 lw: alu_op => add;
-    latch_adr => 1;
+    latch_adr => 1, except_ctl => latch_load_adr, mem_sel => word, \
+            jmp_type => direct, cond_test => exception, target => save_pc;
 lw_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => word, jmp_type => direct, \
               target => lw_wait;
-          alu_op => add, JUMP_TO_OP_END(fast_epilog);
+          alu_op => add, pc_action => inc, JUMP_TO_OP_END(fast_epilog);
 
 lbu: alu_op => add;
      latch_adr => 1;
@@ -155,11 +154,12 @@ lbu_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req =>
            alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 lhu: alu_op => add;
-     latch_adr => 1;
+     latch_adr => 1, except_ctl => latch_load_adr, mem_sel => hword, \
+            jmp_type => direct, cond_test => exception, target => save_pc;
 lhu_wait:  a_src => zero, b_src => dat_r, latch_a => 1, latch_b => 1, mem_req => 1, invert_test => 1, \
               cond_test => mem_valid, mem_sel => hword, jmp_type => direct, \
               target => lhu_wait;
-           alu_op => add, JUMP_TO_OP_END(fast_epilog);
+           alu_op => add, pc_action => inc, JUMP_TO_OP_END(fast_epilog);
 
 origin 0x24;
 // CSR ops take two cycles to decode. This is effectively a no-op in case
