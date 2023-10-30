@@ -145,6 +145,11 @@ class FormalTop(Component):
                 self.rvfi.pc_wdata.eq(self.cpu.datapath.pc.dat_r << 2)
             ]
 
+            # https://github.com/YosysHQ/riscv-formal/blob/a5443540f965cc948c5cf63321c405474f34ced3/docs/rvfi.md#integer-register-readwrite  # noqa: E501
+            # "This output must be zero when rd is zero."
+            with m.If(self.rvfi.rd_addr == 0):
+                m.d.comb += self.rvfi.rd_wdata.eq(0)
+
             # Prepare to latch read data for the incoming insn.
             m.d.comb += [
                 rs1_port.en.eq(1),

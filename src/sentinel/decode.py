@@ -40,7 +40,7 @@ DecodeSignature = Signature({
     "custom": In(1),
     "opcode": In(OpcodeType),
     "exception": In(1),
-    "e_type": In(MCause.Cause)
+    "e_type": In(MCause.Cause),
 })
 
 
@@ -240,7 +240,10 @@ class Decode(Component):
             with m.If(self.insn[0:2] != 0b11):
                 m.d.sync += self.exception.eq(1)
 
-        with m.If(forward_csr):
+        # Forbid CSR decoding if do_decode is asserted for two consecutive
+        # cycles. This shouldn't happen on well-behaving WB devices, but
+        # let's try to make the core tolerant of asynchronous memories.
+        with m.If(forward_csr & ~self.do_decode):
             ro0 = Signal()
             illegal = Signal()
 
