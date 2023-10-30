@@ -177,16 +177,19 @@ def task_run_sby():
 
     def maybe_disasm_move_vcd(path):
         sby_dir = sentinel_dir / "checks" / path.stem
-        if (sby_dir / "engine_0" / "trace.vcd").exists():
-            copy2(sby_dir / "engine_0" / "trace.vcd", get_trace_dst(path))
+        for trace_name in ("trace.vcd", "trace0.vcd"):
+            if (sby_dir / "engine_0" / trace_name).exists():
+                copy2(sby_dir / "engine_0" / trace_name, get_trace_dst(path))
 
-            rc = subprocess.Popen(["python3", "disasm.py",
-                                   Path("checks") / path.stem / "engine_0" /
-                                   "trace.vcd"],
-                                  cwd=sentinel_dir).wait()
+                rc = subprocess.Popen(["python3", "disasm.py",
+                                       Path("checks") / path.stem /
+                                       "engine_0" / trace_name],
+                                      cwd=sentinel_dir).wait()
 
-            if not rc:
-                copy2(sentinel_dir / "disasm.s", get_disasm_dst(path))
+                if not rc:
+                    copy2(sentinel_dir / "disasm.s", get_disasm_dst(path))
+                # Assume only one trace w/ various possible names exists.
+                break
 
     for c in Path(sentinel_dir / "checks").glob("*.sby"):
         yield {
