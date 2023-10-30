@@ -49,18 +49,23 @@ module rvfi_wrapper (
                  .rvfi__mem_wdata (rvfi_mem_wdata)
     );
 
-// Prevent peripherals from hogging the bus with exorbitant wait states.
-// That way, if progress is never made, it's Sentinel's fault.
-`ifdef MEMIO_FAIRNESS
-	reg [3:0] timeout_bus = 0;
+reg [3:0] timeout_bus = 0;
 
-	always @(posedge clock) begin
-		timeout_bus <= 0;
+always @(posedge clock) begin
+    timeout_bus <= 0;
 
-		if (bus__cyc && !bus__ack)
-			timeout_bus <= timeout_bus + 1;
+    if (bus__cyc && !bus__ack)
+        timeout_bus <= timeout_bus + 1;
 
-		assume (!timeout_bus[3]);
-	end
-`endif
+    // Prevent peripherals from hogging the bus with exorbitant wait states.
+    // That way, if progress is never made, it's Sentinel's fault.
+    `ifdef MEMIO_FAIRNESS
+        assume (!timeout_bus[3]);
+    `endif
+
+    // Assume peripherals are well-behaved and take at least one cycle to
+    // respond.
+    if(~|timeout_bus && bus__cyc)
+        assume(!bus__ack);
+end
 endmodule

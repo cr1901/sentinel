@@ -240,10 +240,7 @@ class Decode(Component):
             with m.If(self.insn[0:2] != 0b11):
                 m.d.sync += self.exception.eq(1)
 
-        # Forbid CSR decoding if do_decode is asserted for two consecutive
-        # cycles. This shouldn't happen on well-behaving WB devices, but
-        # let's try to make the core tolerant of asynchronous memories.
-        with m.If(forward_csr & ~self.do_decode):
+        with m.If(forward_csr):
             ro0 = Signal()
             illegal = Signal()
 
