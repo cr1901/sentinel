@@ -1,4 +1,4 @@
-from amaranth import Signal, Module, Cat, C
+from amaranth import Signal, Module, Cat, C, Mux
 from amaranth.lib.wiring import Component, Signature, Out, In, connect, \
     flipped
 from amaranth_soc import wishbone
@@ -63,143 +63,145 @@ class FormalTop(Component):
         connect(m, self.cpu.bus, flipped(self.bus))
         m.d.comb += self.irq.eq(self.cpu.irq)
 
-        # rvfi_valid
-        curr_upc = Signal.like(self.cpu.control.ucoderom.addr)
-        prev_upc = Signal.like(curr_upc)
-
-        # In general, if there's an insn_fetch and ACK, by the next cycle,
-        # the insn has been retired. Handle exceptions to this rule on a
-        # case-by-case basis.
-        m.d.sync += [
-            curr_upc.eq(self.cpu.control.ucoderom.addr),
-            prev_upc.eq(curr_upc),
-        ]
-
-        # rvfi_insn/trap/rs1_addr/rs2_addr/rd_addr/rd_wdata/pc_rdata/
-        # valid/order/rs1_data/rs2_data/pc_wdata/mem_addr/mem_rmask/
-        # mem_wmask/mem_rdata/mem_wdata
+        # rs1/rs2_data helpers.
         m.submodules.rvfi_rs1 = rs1_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
         m.submodules.rvfi_rs2 = rs2_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
 
-        first_insn = Signal(1, reset=1)
-        insn_temp = Signal.like(self.cpu.decode.insn)
-        rd_temp = Signal.like(self.cpu.decode.dst)
+        # By default, don't output new data on the ports.
+        m.d.comb += [
+            rs1_port.en.eq(0),
+            rs2_port.en.eq(0),
+        ]
 
-        m.d.sync += self.rvfi.trap.eq(self.cpu.rvfi.exception)
+        # Insn retirement helpers.
+        in_init = Signal(1, reset=1)
+        committed_to_insn = Signal()
+        just_committed_to_insn = Signal()
+        # If we fetched an insn and the bus just ACK'ed, the next cycle the
+        # microcode will check for interrupts and start processing the
+        # insn. Therefore this cycle can be considered retirement.
+        m.d.comb += committed_to_insn.eq(self.cpu.control.insn_fetch &
+                                         self.cpu.bus.ack &
+                                         (self.cpu.control.ucoderom.addr ==
+                                          self.CHECK_INT_ADDR))
+        m.d.sync += just_committed_to_insn.eq(committed_to_insn)
 
-        with m.FSM():
-            # There is nothing to pipeline/interleave, so wait for first
-            # insn to be fetched.
-            # The CHECK_INT_ADDR line is meant to only latch the last insn
-            # that is ACK'd before moving to upc == 1, since the solver
-            # will happily ignore wishbone timing.
-            with m.State("FIRST_INSN"):
-                with m.If(self.cpu.control.insn_fetch & self.cpu.bus.ack &
-                          (self.cpu.control.ucoderom.addr ==
-                           self.CHECK_INT_ADDR)):
-                    m.d.sync += self.rvfi.trap.eq(0)
-                    m.next = "VALID_LATCH_DECODER"
+        # RVFI RD_DATAW helpers.
+        dat_w_mux = Signal.like(self.cpu.datapath.regfile.dat_w)
+        dat_w_reg = Signal.like(self.cpu.datapath.regfile.dat_w)
+        m.d.comb += dat_w_mux.eq(Mux(self.cpu.datapath.gp.ctrl.reg_write,
+                                     self.cpu.datapath.regfile.dat_w,
+                                     dat_w_reg))
+        with m.If(self.cpu.datapath.gp.ctrl.reg_write):
+            m.d.sync += dat_w_reg.eq(self.cpu.datapath.regfile.dat_w)
 
-            with m.State("VALID_LATCH_DECODER"):
-                m.d.comb += [
-                    self.rvfi.valid.eq(1),
-                ]
+        # RVFI_INTR helpers
+        exception_taken = Signal()
+
+        with m.If(committed_to_insn):
+            with m.If(in_init):
+                # There is nothing to pipeline/interleave, so wait for first
+                # insn to be fetched, and then process it before declaring
+                # valid.
+                m.d.sync += in_init.eq(0)
+            with m.Elif(exception_taken):
+                # If an exception was taken, we didn't retire an insn. Do
+                # not set valid. Do not increment order. But process all
+                # other signals as normal.
                 m.d.sync += [
-                    self.rvfi.insn.eq(insn_temp),
+                    exception_taken.eq(0),
+                    self.rvfi.intr.eq(1),
+                ]
+            with m.Else():
+                m.d.comb += self.rvfi.valid.eq(1)
+                m.d.sync += [
                     self.rvfi.order.eq(self.rvfi.order + 1),
-                    self.rvfi.rs1_addr.eq(self.cpu.decode.src_a),
-                    self.rvfi.rs2_addr.eq(self.cpu.decode.src_b),
-                    # We have access to RD now, but RVFI mandates zero if
-                    # no write. So wait until we know for sure.
-                    self.rvfi.rd_addr.eq(0),
-                    # Ditto.
-                    self.rvfi.rd_wdata.eq(0),
-                    self.rvfi.pc_rdata.eq(self.cpu.datapath.pc.dat_r << 2),
+                    self.rvfi.intr.eq(0),
                 ]
 
-                with m.If(first_insn):
-                    m.d.comb += self.rvfi.valid.eq(0)
-                    m.d.sync += [
-                        self.rvfi.order.eq(0),
-                        first_insn.eq(0),
-                    ]
+            # RVFI is valid for only a single cycle; prepare to latch new
+            # insn data.
+            m.d.sync += [
+                self.rvfi.trap.eq(0),
+                self.rvfi.insn.eq(self.cpu.decode.insn),
+                self.rvfi.rs1_addr.eq(self.cpu.decode.rs1),
+                self.rvfi.rs2_addr.eq(self.cpu.decode.rs2),
+                self.rvfi.rd_addr.eq(self.cpu.decode.rd),
+                # The just-retired insn's PC. Overwrite with the fetched PC,
+                # the nominal PC_WDATA.
+                self.rvfi.pc_rdata.eq(self.cpu.datapath.pc.dat_r << 2),
+            ]
 
-                # Prepare to read register file.
-                m.d.comb += [
-                    rs1_port.addr.eq(self.cpu.decode.rs1),
-                    rs2_port.addr.eq(self.cpu.decode.rs2)
-                ]
+            # If write of prev insn is happening while we've committed to a
+            # new insn, make sure we present the correct data to RVFI.
+            m.d.comb += [
+                self.rvfi.rd_wdata.eq(dat_w_mux),
 
-                m.next = "WAIT_FOR_ACK"
+                # Nominally, PC_WDATA of the retired insn becomes PC_RDATA
+                # of the current insn when it retires. But in the case of
+                # exceptions, this isn't necessarily true. So expose what insn
+                # was actually fetched according to the PC while everything's
+                # valid.
+                self.rvfi.pc_wdata.eq(self.cpu.datapath.pc.dat_r << 2)
+            ]
 
-            with m.State("WAIT_FOR_ACK"):
-                # Hold addresses in case we're here for a bit.
-                m.d.comb += [
-                    rs1_port.addr.eq(self.cpu.decode.rs1),
-                    rs2_port.addr.eq(self.cpu.decode.rs2)
-                ]
+            # Prepare to latch read data for the incoming insn.
+            m.d.comb += [
+                rs1_port.en.eq(1),
+                rs2_port.en.eq(1),
+                rs1_port.addr.eq(self.cpu.decode.rs1),
+                rs2_port.addr.eq(self.cpu.decode.rs2)
+            ]
 
+        with m.If(just_committed_to_insn):
+            # Get data from last cycle. If we ever get insns that retire in
+            # 2 cycles, then this will need to be muxed like RD_WDATA.
+            m.d.sync += [
+                self.rvfi.rs1_rdata.eq(rs1_port.data),
+                self.rvfi.rs2_rdata.eq(rs2_port.data)
+            ]
+
+        # Will be reset every time we commit to a new insn.
+        with m.If(self.cpu.rvfi.exception):
+            m.d.sync += self.rvfi.trap.eq(1)
+        with m.Elif(committed_to_insn):
+            m.d.sync += self.rvfi.trap.eq(0)
+
+        # We've decided to taken an exception. This may be replacable with
+        # RVFI_TRAP, but Idk for sure right now.
+        with m.If(self.cpu.control.ucoderom.addr ==
+                  self.EXCEPTION_HANDLER_ADDR):
+            m.d.sync += exception_taken.eq(1)
+
+        # Non-insn memory accesses.
+        with m.If(~self.cpu.control.insn_fetch & self.cpu.bus.ack):
+            m.d.sync += [
+                self.rvfi.mem_addr.eq(self.cpu.bus.adr << 2),
+                self.rvfi.mem_rdata.eq(self.cpu.bus.dat_r),
+                self.rvfi.mem_wdata.eq(self.cpu.bus.dat_w),
+            ]
+
+            with m.If(self.cpu.bus.we):
                 m.d.sync += [
-                    self.rvfi.rs1_rdata.eq(rs1_port.data),
-                    self.rvfi.rs2_rdata.eq(rs2_port.data),
-                    rd_temp.eq(self.cpu.decode.dst)
+                    self.rvfi.mem_rmask.eq(0),
+                    self.rvfi.mem_wmask.eq(self.cpu.bus.sel)
                 ]
-
-                # And latch write data if there's a write.
-                with m.If(self.cpu.datapath.gp.ctrl.reg_write):
-                    m.d.sync += self.rvfi.rd_addr.eq(rd_temp)
-                    with m.If(rd_temp != 0):
-                        m.d.sync += self.rvfi.rd_wdata.eq(
-                            self.cpu.datapath.gp.dat_w)
-
-                # FIXME: Turn into a "peek" action for the PC reg, rather
-                # than duplicating PC logic here.
-                with m.If(self.cpu.datapath.pc.ctrl.action == PcAction.INC):
-                    m.d.sync += self.rvfi.pc_wdata.eq(
-                        (self.cpu.datapath.pc.dat_r + 1) << 2)
-                with m.Elif(self.cpu.datapath.pc.ctrl.action ==
-                            PcAction.LOAD_ALU_O):
-                    m.d.sync += self.rvfi.pc_wdata.eq(
-                        self.cpu.datapath.pc.dat_w << 2)
-
-                with m.If(~self.cpu.control.insn_fetch & self.cpu.bus.ack):
-                    m.d.sync += [
-                        self.rvfi.mem_addr.eq(self.cpu.bus.adr << 2),
-                        self.rvfi.mem_rdata.eq(self.cpu.bus.dat_r),
-                        self.rvfi.mem_wdata.eq(self.cpu.bus.dat_w),
-                    ]
-
-                    with m.If(self.cpu.bus.we):
-                        m.d.sync += [
-                            self.rvfi.mem_rmask.eq(0),
-                            self.rvfi.mem_wmask.eq(self.cpu.bus.sel)
-                        ]
-                    with m.Else():
-                        m.d.sync += [
-                            self.rvfi.mem_rmask.eq(self.cpu.bus.sel),
-                            self.rvfi.mem_wmask.eq(0)
-                        ]
-
-                with m.If(self.cpu.control.insn_fetch & self.cpu.bus.ack &
-                          (self.cpu.control.ucoderom.addr ==
-                           self.CHECK_INT_ADDR)):
-                    m.d.sync += insn_temp.eq(self.cpu.decode.insn)
-                    m.d.sync += self.rvfi.trap.eq(0)
-                    m.next = "VALID_LATCH_DECODER"
-
-        # rvfi_intr
-        with m.If(self.rvfi.valid):
-            m.d.sync += self.rvfi.intr.eq(0)
-
-        # FIXME: Imprecise/needs work.
-        with m.If(curr_upc == self.EXCEPTION_HANDLER_ADDR):
-            m.d.sync += self.rvfi.intr.eq(1)
+            with m.Else():
+                m.d.sync += [
+                    self.rvfi.mem_rmask.eq(self.cpu.bus.sel),
+                    self.rvfi.mem_wmask.eq(0)
+                ]
+        with m.Else():
+            m.d.sync += [
+                self.rvfi.mem_rmask.eq(0),
+                self.rvfi.mem_wmask.eq(0)
+            ]
 
         # rvfi_halt
         m.d.comb += self.rvfi.halt.eq(0)
 
         # rvfi_mode
-        m.d.comb += self.rvfi.mode.eq(2)
+        m.d.comb += self.rvfi.mode.eq(3)
 
         # rvfi_ixl
         m.d.comb += self.rvfi.ixl.eq(1)
