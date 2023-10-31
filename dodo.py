@@ -1,20 +1,34 @@
 from pathlib import Path
-import os
 import subprocess
 from shutil import copy2, move
 from itertools import chain
 
 # https://groups.google.com/g/python-doit/c/GFtEuBp82xc/m/j7jFkvAGH1QJ
 from doit.action import CmdAction
-from doit.tools import run_once, create_folder, result_dep
+from doit.tools import run_once, create_folder, result_dep, \
+    check_timestamp_unchanged
+from doit.reporter import ConsoleReporter
+
+
+# Overrides
+# Customize the status task(s) to print all output on a single line.
+# Think like autoconf scripts "checking for foo... yes"!
+class MaybeSingleLineReporter(ConsoleReporter):
+    def execute_task(self, task):
+        if task.meta and task.meta.get("single_line", False):
+            self.outstream.write(f"{task.title()}")
+        else:
+            super().execute_task(task)
 
 
 DOIT_CONFIG = {
     "default_tasks": [],
-    "action_string_formatting": "new"
+    "action_string_formatting": "new",
+    "reporter": MaybeSingleLineReporter
 }
 
 
+# Basic tasks
 def task__git():
     return {'actions': ["git rev-parse HEAD"]}
 
@@ -93,6 +107,28 @@ def task_ucode():
     }
 
 
+# RISC-V Formal
+SBY_TESTS = [
+    "causal_ch0", "cover", "insn_addi_ch0", "insn_add_ch0", "insn_andi_ch0",
+    "insn_and_ch0", "insn_auipc_ch0", "insn_beq_ch0", "insn_bgeu_ch0",
+    "insn_bge_ch0", "insn_bltu_ch0", "insn_blt_ch0", "insn_bne_ch0",
+    "insn_jalr_ch0", "insn_jal_ch0", "insn_lbu_ch0", "insn_lb_ch0",
+    "insn_lhu_ch0", "insn_lh_ch0", "insn_lui_ch0", "insn_lw_ch0",
+    "insn_ori_ch0", "insn_or_ch0", "insn_sb_ch0", "insn_sh_ch0",
+    "insn_slli_ch0", "insn_sll_ch0", "insn_sltiu_ch0", "insn_slti_ch0",
+    "insn_sltu_ch0", "insn_slt_ch0", "insn_srai_ch0", "insn_sra_ch0",
+    "insn_srli_ch0", "insn_srl_ch0", "insn_sub_ch0", "insn_sw_ch0",
+    "insn_xori_ch0", "insn_xor_ch0", "pc_bwd_ch0", "pc_fwd_ch0", "reg_ch0",
+    "unique_ch0"
+]
+
+
+def sby_failed(checks_dir: Path, c: str):
+    with open(checks_dir / c / "status", "r") as fp:
+        res = fp.read()
+        return "FAIL" in res
+
+
 def task_formal_init():
     formal_tests = Path("./tests/formal/")
     submod = formal_tests / "riscv-formal" / ".git"
@@ -145,20 +181,16 @@ def task_formal_gen_files():
     sentinel_v = sentinel_dir / "sentinel.v"
     genchecks = formal_tests / "riscv-formal" / "checks" / "genchecks.py"
 
-    # https://groups.google.com/g/python-doit/c/UtdhdKk-ixs/m/jw3Eo31TAgAJ
-    def get_dep(mod):
-        paths = [os.fspath(c) for c in Path(mod).glob("*.sby")] + \
-            [os.fspath(sentinel_v)]
-        return {"file_dep": paths}
+    sby_files = [(sentinel_dir / "checks" / s).with_suffix(".sby")
+                 for s in SBY_TESTS]
 
     return {
         "title": lambda _: "Generating RISC-V Formal tests",
         "actions": [f"pdm gen -o {sentinel_v} -f",
                     CmdAction("python3 ../../checks/genchecks.py",
                               cwd=sentinel_dir),
-                    (get_dep, [sentinel_dir / "checks"])
                     ],
-        "targets": [sentinel_v],
+        "targets": sby_files + [sentinel_v],
         "file_dep": [disasm_py, checks_cfg, wrapper_sv, genchecks] + pyfiles,
     }
 
@@ -168,6 +200,10 @@ def task_run_sby():
     formal_tests = Path("./tests/formal/")
     cores_dir = formal_tests / "riscv-formal" / "cores"
     sentinel_dir = cores_dir / "sentinel"
+    sentinel_v = sentinel_dir / "sentinel.v"
+
+    sby_files = [(sentinel_dir / "checks" / s).with_suffix(".sby")
+                 for s in SBY_TESTS]
 
     def get_trace_dst(path):
         return root / path.with_suffix(".vcd").name
@@ -186,35 +222,80 @@ def task_run_sby():
                                        "engine_0" / trace_name],
                                       cwd=sentinel_dir).wait()
 
-                if not rc:
-                    copy2(sentinel_dir / "disasm.s", get_disasm_dst(path))
+                if rc:
+                    return False
+
+                # If successful, will produce a disasm.s
+                rc = subprocess.Popen("riscv64-unknown-elf-objdump -d "
+                                      "-M numeric,no-aliases disasm.o "
+                                      "> disasm.s",
+                                      cwd=sentinel_dir, shell=True).wait()
+
+                if rc:
+                    return False
+
+                # Which we then copy to the root.
+                copy2(sentinel_dir / "disasm.s", get_disasm_dst(path))
                 # Assume only one trace w/ various possible names exists.
                 break
 
-    for c in Path(sentinel_dir / "checks").glob("*.sby"):
+        return True
+
+    for c in sby_files:
         yield {
             "name": c.stem,
             "title": lambda _, c=c: f"Running RISC-V Formal Test {c.stem}",
             "actions": [CmdAction(f"sby -f {c.name}",
                                   cwd=sentinel_dir / "checks")],
-            "targets": [],
-            "calc_dep": ["formal_gen_files"],
+            "targets": [sentinel_dir / "checks" / c.stem / "status"],
+            "file_dep": [c, sentinel_v],
             "verbosity": 2,
-            # TODO: Replace with clean if I can figure out how to do
-            # dynamically-generated targets (might not be possible).
-            "uptodate": [False]
         }
 
         yield {
             "name": f"{c.stem}_vcds",
-            "title": lambda _, c=c: f"Generating VCD and disasm for RISC-V Formal Test {c.stem} (if failed)",  # noqa: E501
-            "actions": [(maybe_disasm_move_vcd, [c])],
-            "file_dep": [],
-            "targets": [get_trace_dst(c), get_disasm_dst(c)],
+            "title": lambda _, c=c: f"Generating VCD and disasm for RISC-V Formal Test {c.stem} (if exists)",  # noqa: E501
+            "actions": [
+                (maybe_disasm_move_vcd, [c])
+            ],
+            "file_dep": [sentinel_dir / "checks" / c.stem / "status"],
+            "targets": [],
             "task_dep": [f"run_sby:{c.stem}"],
             "verbosity": 2,
-            "uptodate": [False]
+            "uptodate": [check_timestamp_unchanged(str(sentinel_dir /
+                                                       "checks" /
+                                                       c.stem / "status"))]
         }
+
+
+def task_list_sby_status():
+    formal_tests = Path("./tests/formal/")
+    cores_dir = formal_tests / "riscv-formal" / "cores"
+    sentinel_dir = cores_dir / "sentinel"
+    checks_dir = sentinel_dir / "checks"
+
+    def maybe_echo_sby_failure(checks_dir, c):
+        if sby_failed(checks_dir, c):
+            print("FAIL")
+        else:
+            print("PASS")
+
+    for c in SBY_TESTS:
+        yield {
+            "name": c,
+            "title": lambda _, c=c: f"{c} status... ",
+            "actions": [(maybe_echo_sby_failure, (checks_dir, c))],
+            "file_dep": [sentinel_dir / "checks" / c / "status"],
+            "verbosity": 2,
+            "uptodate": [False],
+            "meta": {
+                "single_line": True
+            }
+        }
+
+
+# Upstream
+UNSUPPORTED_UPSTREAM = ("breakpoint",)
 
 
 def task__upstream_init():
@@ -226,9 +307,6 @@ def task__upstream_init():
         "targets": [submod],
         "uptodate": [run_once],
     }
-
-
-UNSUPPORTED_UPSTREAM = ("breakpoint",)
 
 
 # I figured out the correct invocations for compiling and objdump by running

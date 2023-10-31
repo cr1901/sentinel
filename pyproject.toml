@@ -54,3 +54,4 @@ compile-upstream = { cmd = "doit _dump_tests"}
 rvformal-gen = { cmd = "doit formal_gen_files"}
 rvformal = { cmd = "doit run_sby:{args}_vcds"}
 rvformal-all = { cmd = "doit run_sby"}
+rvformal-status = { cmd = "doit list_sby_status"}
