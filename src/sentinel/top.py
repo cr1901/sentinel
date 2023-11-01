@@ -304,22 +304,17 @@ class Top(Component):
 
         with m.Switch(self.control.csr_sel):
             with m.Case(CSRSel.INSN_CSR):
-                # Squash CSR encoding down to only bits that vary between
-                # the 7 implemented CSRs.
-                csr_encoding = Cat(self.decode.funct12[0:3],
-                                   self.decode.funct12[6])
-
                 with m.If(self.control.csr.op != CSROp.NONE):
                     m.d.comb += [
                         self.datapath.gp.ctrl.reg_read.eq(self.control.csr.op
                                                           == CSROp.READ_CSR),
                         self.datapath.gp.ctrl.reg_write.eq(self.control.csr.op
                                                            == CSROp.WRITE_CSR),
-                        self.reg_r_adr.eq(csr_encoding),
-                        self.reg_w_adr.eq(csr_encoding),
+                        self.reg_r_adr.eq(self.decode.csr_encoding),
+                        self.reg_w_adr.eq(self.decode.csr_encoding),
                         self.datapath.gp.ctrl.csr_access.eq(1),
-                        self.datapath.csr.adr_r.eq(csr_encoding),
-                        self.datapath.csr.adr_w.eq(csr_encoding)
+                        self.datapath.csr.adr_r.eq(self.decode.csr_encoding),
+                        self.datapath.csr.adr_w.eq(self.decode.csr_encoding)
                     ]
 
             with m.Case(CSRSel.TRG_CSR):

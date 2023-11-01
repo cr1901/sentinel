@@ -66,6 +66,10 @@ class Decode(Component):
         # ID to index into ucode ROM. Chosen through trial and error.
         self.requested_op = Signal(8)
 
+        # Squash CSR encoding down to only bits that vary between
+        # the 7 implemented CSRs.
+        self.csr_encoding = Signal(4)
+
         ###
 
         self.opcode = Signal(OpcodeType, reset=0)
@@ -229,7 +233,9 @@ class Decode(Component):
                             m.d.sync += [
                                 self.requested_op.eq(0x24),
                                 forward_csr.eq(1),
-                                self.exception.eq(0)
+                                self.exception.eq(0),
+                                self.csr_encoding.eq(Cat(self.funct12[0:3],
+                                                         self.funct12[6]))
                             ]
 
                 with m.Default():
