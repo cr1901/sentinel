@@ -39,6 +39,9 @@ dev = [
     "doit>=0.36.0",
     "Verilog-VCD>=1.11",
     "logLUTs @ git+https://github.com/mattvenn/logLUTs@a7fa902",
+    "click>=8.1.7",  # Though I expect users to provide sby, sby requires
+                     # this module and doesn't opt-in to PEP 517. So provide
+                     # it here.
 ]
 
 [tool.pdm.scripts]
