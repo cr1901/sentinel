@@ -91,7 +91,7 @@ class FormalTop(Component):
         dat_w_reg = Signal.like(self.cpu.datapath.regfile.dat_w)
         m.d.comb += dat_w_mux.eq(Mux(self.cpu.datapath.gp.ctrl.reg_write &
                                      (self.cpu.control.csr.op !=
-                                     CSROp.WRITE_CSR),
+                                      CSROp.WRITE_CSR),
                                      self.cpu.datapath.regfile.dat_w,
                                      dat_w_reg))
         with m.If(self.cpu.datapath.gp.ctrl.reg_write &
@@ -160,12 +160,24 @@ class FormalTop(Component):
             with m.If(self.rvfi.rd_addr == 0):
                 m.d.comb += self.rvfi.rd_wdata.eq(0)
 
-            # Prepare to latch read data for the incoming insn.
+            # Prepare to latch read data for the incoming insn, since the read
+            # ports are synchronous (I don't know if it's safe to have
+            # simulated async read and sync read ports on the same memory).
             m.d.comb += [
                 rs1_port.en.eq(1),
                 rs2_port.en.eq(1),
                 rs1_port.addr.eq(self.cpu.decode.rs1),
                 rs2_port.addr.eq(self.cpu.decode.rs2)
+            ]
+
+            # If either mask is non-zero, and the insn is not a load or store,
+            # MEM_RDATA and MEM_WDATA need to match:
+            # https://github.com/YosysHQ/riscv-formal/blob/a5443540f965cc948c5cf63321c405474f34ced3/checks/rvfi_insn_check.sv#L188-L191
+            # I cannot promise this condition holds, so set the masks to 0
+            # by default.
+            m.d.sync += [
+                self.rvfi.mem_rmask.eq(0),
+                self.rvfi.mem_wmask.eq(0)
             ]
 
         with m.If(just_committed_to_insn):
@@ -189,7 +201,8 @@ class FormalTop(Component):
             m.d.sync += exception_taken.eq(1)
 
         # Non-insn memory accesses.
-        with m.If(~self.cpu.control.insn_fetch & self.cpu.bus.ack):
+        with m.If(~self.cpu.control.insn_fetch & self.cpu.control.mem_req &
+                  self.cpu.bus.ack):
             m.d.sync += [
                 self.rvfi.mem_addr.eq(self.cpu.bus.adr << 2),
                 self.rvfi.mem_rdata.eq(self.cpu.bus.dat_r),
@@ -206,11 +219,6 @@ class FormalTop(Component):
                     self.rvfi.mem_rmask.eq(self.cpu.bus.sel),
                     self.rvfi.mem_wmask.eq(0)
                 ]
-        with m.Else():
-            m.d.sync += [
-                self.rvfi.mem_rmask.eq(0),
-                self.rvfi.mem_wmask.eq(0)
-            ]
 
         # rvfi_halt
         m.d.comb += self.rvfi.halt.eq(0)
