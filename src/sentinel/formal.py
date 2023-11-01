@@ -89,10 +89,13 @@ class FormalTop(Component):
         # RVFI RD_DATAW helpers.
         dat_w_mux = Signal.like(self.cpu.datapath.regfile.dat_w)
         dat_w_reg = Signal.like(self.cpu.datapath.regfile.dat_w)
-        m.d.comb += dat_w_mux.eq(Mux(self.cpu.datapath.gp.ctrl.reg_write,
+        m.d.comb += dat_w_mux.eq(Mux(self.cpu.datapath.gp.ctrl.reg_write &
+                                     (self.cpu.control.csr.op !=
+                                     CSROp.WRITE_CSR),
                                      self.cpu.datapath.regfile.dat_w,
                                      dat_w_reg))
-        with m.If(self.cpu.datapath.gp.ctrl.reg_write):
+        with m.If(self.cpu.datapath.gp.ctrl.reg_write &
+                  (self.cpu.control.csr.op != CSROp.WRITE_CSR)):
             m.d.sync += dat_w_reg.eq(self.cpu.datapath.regfile.dat_w)
 
         # RVFI_INTR helpers
@@ -134,7 +137,9 @@ class FormalTop(Component):
 
             # For an instruction that writes no rd register, this output must
             # always be zero.
-            with m.If(self.cpu.decode.opcode == OpcodeType.BRANCH):
+            with m.If((self.cpu.decode.opcode == OpcodeType.BRANCH) |
+                      (self.cpu.decode.opcode == OpcodeType.MISC_MEM) |
+                      (self.cpu.decode.opcode == OpcodeType.STORE)):
                 m.d.sync += self.rvfi.rd_addr.eq(0)
 
             # If write of prev insn is happening while we've committed to a
