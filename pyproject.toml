@@ -47,7 +47,7 @@ dev = [
 [tool.pdm.scripts]
 # Most Tests
 test = { cmd = "pytest" }
-test-quick = { cmd = "pytest -k \"test_top or test_upstream\"" }
+test-quick = { cmd = "pytest -k \"test_top or test_upstream or test_witness\"" }
 # Generate
 gen = { call = "sentinel.gen:generate" }
 demo = { call = "sentinel.gen:demo" }
