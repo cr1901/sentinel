@@ -42,16 +42,28 @@ dev = [
 ]
 
 [tool.pdm.scripts]
+# Most Tests
 test = { cmd = "pytest" }
 test-quick = { cmd = "pytest -k \"test_top or test_upstream\"" }
+# Generate
 gen = { call = "sentinel.gen:generate" }
 demo = { call = "sentinel.gen:demo" }
-ucode = { cmd = "doit ucode" }
+# Obsolete?
 bench = { call = "sentinel.bench:main"}
+# DoIt wrappers. Prefer using these over running DoIt directly.
+doit = { cmd = "doit" }
+ucode = { cmd = "doit ucode" }
+# LUTs
 bench-luts = { cmd = "doit bench_luts"}
 plot-luts = { cmd = "doit plot_luts"}
+# Upstream
 compile-upstream = { cmd = "doit _dump_tests"}
-rvformal-gen = { cmd = "doit formal_gen_files"}
+# RISC-V Formal
 rvformal = { cmd = "doit run_sby:{args}_vcds"}
+rvformal-force = { composite = [
+    "doit forget run_sby:{args}",
+    "rvformal {args}"
+]}
+rvformal-gen = { cmd = "doit formal_gen_files"}
 rvformal-all = { cmd = "doit run_sby"}
 rvformal-status = { cmd = "doit list_sby_status"}

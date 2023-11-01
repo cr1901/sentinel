@@ -8,7 +8,7 @@ from .alu import ALU
 from .control import Control
 from .csr import MCause
 from .datapath import DataPath
-from .decode import Decode
+from .decode import OpcodeType
 from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
     PcAction, MemExtend, CSRSel, CSROp, ExceptCtl
 
@@ -131,6 +131,11 @@ class FormalTop(Component):
                 # the nominal PC_WDATA.
                 self.rvfi.pc_rdata.eq(self.cpu.datapath.pc.dat_r << 2),
             ]
+
+            # For an instruction that writes no rd register, this output must
+            # always be zero.
+            with m.If(self.cpu.decode.opcode == OpcodeType.BRANCH):
+                m.d.sync += self.rvfi.rd_addr.eq(0)
 
             # If write of prev insn is happening while we've committed to a
             # new insn, make sure we present the correct data to RVFI.
