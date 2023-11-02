@@ -68,5 +68,5 @@ rvformal-force = { composite = [
     "rvformal {args}"
 ]}
 rvformal-gen = { cmd = "doit formal_gen_files"}
-rvformal-all = { cmd = "doit run_sby"}
+rvformal-all = { cmd = "doit {args:-n 2} run_sby"}
 rvformal-status = { cmd = "doit list_sby_status"}

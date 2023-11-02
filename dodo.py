@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess
 from shutil import copy2, move
 from itertools import chain
+from functools import partial
 
 # https://groups.google.com/g/python-doit/c/GFtEuBp82xc/m/j7jFkvAGH1QJ
 from doit.action import CmdAction
@@ -13,10 +14,10 @@ from doit.reporter import ConsoleReporter
 # Overrides
 # Customize the status task(s) to print all output on a single line.
 # Think like autoconf scripts "checking for foo... yes"!
-class MaybeSingleLineReporter(ConsoleReporter):
+class MaybeSuppressReporter(ConsoleReporter):
     def execute_task(self, task):
-        if task.meta and task.meta.get("single_line", False):
-            self.outstream.write(f"{task.title()}")
+        if task.meta and task.meta.get("suppress_reporter", False):
+            pass
         else:
             super().execute_task(task)
 
@@ -24,8 +25,80 @@ class MaybeSingleLineReporter(ConsoleReporter):
 DOIT_CONFIG = {
     "default_tasks": [],
     "action_string_formatting": "new",
-    "reporter": MaybeSingleLineReporter
+    "reporter": MaybeSuppressReporter
 }
+
+
+# Helpers
+# doit actions must return certain types. None is one of these, but
+# paths are not (like in copy2).
+def copy_(src, dst):
+    copy2(src, dst)
+
+
+# Ditto.
+def move_(src, dst):
+    move(src, dst)
+
+
+# Lambdas are unpickleable on Windows (works on *nix?!), and some tasks can
+# be easily parallelized using multiprocessing if we don't use lambdas.
+# Custom titles were originally supplied using lambdas; work around the
+# multiprocessing limitation this by dispatching to a single print_title
+# function and using each tasks' "meta" field. Note this runs before
+# custom reporters (like MaybeSuppressReporter), and so can be combined.
+def print_title(task):
+    if task.meta:
+        return task.meta.get("title", "")
+    else:
+        return ""
+
+
+def with_root_and_suffix(path, root, suffix):
+    return root / path.with_suffix(suffix).name
+
+
+def maybe_disasm_move_vcd(sentinel_dir, root, path):
+    sby_dir = sentinel_dir / "checks" / path.stem
+    for trace_name in ("trace.vcd", "trace0.vcd"):
+        if (sby_dir / "engine_0" / trace_name).exists():
+            copy2(sby_dir / "engine_0" / trace_name,
+                  with_root_and_suffix(path, root, ".vcd"))
+
+            rc = subprocess.Popen(["python3", "disasm.py",
+                                   Path("checks") / path.stem /
+                                   "engine_0" / trace_name],
+                                  cwd=sentinel_dir).wait()
+
+            if rc:
+                return False
+
+            # If successful, will produce a disasm.s
+            rc = subprocess.Popen("riscv64-unknown-elf-objdump -d "
+                                  "-M numeric,no-aliases disasm.o "
+                                  "> disasm.s",
+                                  cwd=sentinel_dir, shell=True).wait()
+
+            if rc:
+                return False
+
+            # Which we then copy to the root.
+            copy2(sentinel_dir / "disasm.s",
+                  with_root_and_suffix(path, root, ".s"))
+            # Assume only one trace w/ various possible names exists.
+            break
+
+    return True
+
+
+def echo_sby_status(checks_dir, c):
+    with open(checks_dir / c / "status", "r") as fp:
+        res = fp.read()
+
+    if "FAIL" in res:
+        print(f"{c}... FAIL")
+    else:
+        print(f"{c}... PASS")
 
 
 # Basic tasks
@@ -90,9 +163,6 @@ def task_ucode():
     hex_ = ucode.with_suffix(".asm_block_ram.hex")
     fdef = ucode.with_suffix(".asm_block_ram.fdef")
 
-    def move_(src, dst):
-        move(src, dst)
-
     return {
         "actions": ["python -m m5meta {ucodefile}",
                     (move_, (hex_, Path(".") / hex_.name)),
@@ -119,25 +189,23 @@ SBY_TESTS = [
     "insn_sltu_ch0", "insn_slt_ch0", "insn_srai_ch0", "insn_sra_ch0",
     "insn_srli_ch0", "insn_srl_ch0", "insn_sub_ch0", "insn_sw_ch0",
     "insn_xori_ch0", "insn_xor_ch0", "pc_bwd_ch0", "pc_fwd_ch0", "reg_ch0",
-    "unique_ch0"
+    "unique_ch0",
+    # "liveness_ch0"
 ]
-
-
-def sby_failed(checks_dir: Path, c: str):
-    with open(checks_dir / c / "status", "r") as fp:
-        res = fp.read()
-        return "FAIL" in res
 
 
 def task_formal_init():
     formal_tests = Path("./tests/formal/")
     submod = formal_tests / "riscv-formal" / ".git"
     return {
-        "title": lambda _: "Initializing RISC-V Formal submodule",
+        "title": print_title,
         "actions": [CmdAction("git submodule update --init --recursive",
                               cwd=formal_tests)],
         "targets": [submod],
         "uptodate": [run_once],
+        "meta": {
+            "title": "Initializing RISC-V Formal submodule"
+        }
     }
 
 
@@ -151,21 +219,19 @@ def task_formal_mkdir_copy_files():
     checks_cfg = formal_tests / "checks.cfg"
     wrapper_sv = formal_tests / "wrapper.sv"
 
-    # doit actions must return certain types. None is one of these, but
-    # paths are not (like in copy2).
-    def copy(src, dst):
-        copy2(src, dst)
-
     return {
-        "title": lambda _: "Moving formal cfg into RISC-V Formal submodule",
+        "title": print_title,
         "actions": [(create_folder, [cores_dir / "sentinel"]),
-                    (copy, [disasm_py, sentinel_dir / disasm_py.name]),
-                    (copy, [checks_cfg, sentinel_dir / checks_cfg.name]),
-                    (copy, [wrapper_sv, sentinel_dir / wrapper_sv.name])],
+                    (copy_, [disasm_py, sentinel_dir / disasm_py.name]),
+                    (copy_, [checks_cfg, sentinel_dir / checks_cfg.name]),
+                    (copy_, [wrapper_sv, sentinel_dir / wrapper_sv.name])],
         "targets": [sentinel_dir / disasm_py.name,
                     sentinel_dir / checks_cfg.name,
                     sentinel_dir / wrapper_sv.name],
         "file_dep": [disasm_py, checks_cfg, wrapper_sv, submod],
+        "meta": {
+            "title": "Moving formal cfg into RISC-V Formal submodule"
+        }
     }
 
 
@@ -185,13 +251,16 @@ def task_formal_gen_files():
                  for s in SBY_TESTS]
 
     return {
-        "title": lambda _: "Generating RISC-V Formal tests",
+        "title": print_title,
         "actions": [f"pdm gen -o {sentinel_v} -f",
                     CmdAction("python3 ../../checks/genchecks.py",
                               cwd=sentinel_dir),
                     ],
         "targets": sby_files + [sentinel_v],
         "file_dep": [disasm_py, checks_cfg, wrapper_sv, genchecks] + pyfiles,
+        "meta": {
+            "title": "Generating RISC-V Formal tests"
+        }
     }
 
 
@@ -205,58 +274,25 @@ def task_run_sby():
     sby_files = [(sentinel_dir / "checks" / s).with_suffix(".sby")
                  for s in SBY_TESTS]
 
-    def get_trace_dst(path):
-        return root / path.with_suffix(".vcd").name
-
-    def get_disasm_dst(path):
-        return root / path.with_suffix(".s").name
-
-    def maybe_disasm_move_vcd(path):
-        sby_dir = sentinel_dir / "checks" / path.stem
-        for trace_name in ("trace.vcd", "trace0.vcd"):
-            if (sby_dir / "engine_0" / trace_name).exists():
-                copy2(sby_dir / "engine_0" / trace_name, get_trace_dst(path))
-
-                rc = subprocess.Popen(["python3", "disasm.py",
-                                       Path("checks") / path.stem /
-                                       "engine_0" / trace_name],
-                                      cwd=sentinel_dir).wait()
-
-                if rc:
-                    return False
-
-                # If successful, will produce a disasm.s
-                rc = subprocess.Popen("riscv64-unknown-elf-objdump -d "
-                                      "-M numeric,no-aliases disasm.o "
-                                      "> disasm.s",
-                                      cwd=sentinel_dir, shell=True).wait()
-
-                if rc:
-                    return False
-
-                # Which we then copy to the root.
-                copy2(sentinel_dir / "disasm.s", get_disasm_dst(path))
-                # Assume only one trace w/ various possible names exists.
-                break
-
-        return True
-
     for c in sby_files:
         yield {
             "name": c.stem,
-            "title": lambda _, c=c: f"Running RISC-V Formal Test {c.stem}",
+            "title": print_title,
             "actions": [CmdAction(f"sby -f {c.name}",
                                   cwd=sentinel_dir / "checks")],
             "targets": [sentinel_dir / "checks" / c.stem / "status"],
             "file_dep": [c, sentinel_v],
             "verbosity": 2,
+            "meta": {
+                "title": f"Running RISC-V Formal Test {c.stem}"
+            }
         }
 
         yield {
             "name": f"{c.stem}_vcds",
-            "title": lambda _, c=c: f"Generating VCD and disasm for RISC-V Formal Test {c.stem} (if exists)",  # noqa: E501
+            "title": print_title,
             "actions": [
-                (maybe_disasm_move_vcd, [c])
+                (maybe_disasm_move_vcd, (sentinel_dir, root, c))
             ],
             "file_dep": [sentinel_dir / "checks" / c.stem / "status"],
             "targets": [],
@@ -264,7 +300,10 @@ def task_run_sby():
             "verbosity": 2,
             "uptodate": [check_timestamp_unchanged(str(sentinel_dir /
                                                        "checks" /
-                                                       c.stem / "status"))]
+                                                       c.stem / "status"))],
+            "meta": {
+                "title": f"Generating VCD and disasm for RISC-V Formal Test {c.stem} (if exists)"  # noqa: E501
+            }
         }
 
 
@@ -274,22 +313,15 @@ def task_list_sby_status():
     sentinel_dir = cores_dir / "sentinel"
     checks_dir = sentinel_dir / "checks"
 
-    def maybe_echo_sby_failure(checks_dir, c):
-        if sby_failed(checks_dir, c):
-            print("FAIL")
-        else:
-            print("PASS")
-
     for c in SBY_TESTS:
         yield {
             "name": c,
-            "title": lambda _, c=c: f"{c} status... ",
-            "actions": [(maybe_echo_sby_failure, (checks_dir, c))],
+            "actions": [(echo_sby_status, (checks_dir, c))],
             "file_dep": [sentinel_dir / "checks" / c / "status"],
             "verbosity": 2,
             "uptodate": [False],
             "meta": {
-                "single_line": True
+                "suppress_reporter": True
             }
         }
 
@@ -362,8 +394,10 @@ def task__create_raw():
         bin_file = outdir / source_file.with_suffix("").name
         yield {
             "name": bin_file.name,
-            "actions": ["riscv64-unknown-elf-objcopy -O binary \
-                        {dependencies} {targets}"],
+            # {dependencies} and {targets} doesn't work for parallel
+            # (at least on Windows). But f-strings do.
+            "actions": ["riscv64-unknown-elf-objcopy -O binary "
+                        f"{elf_file} {bin_file}"],
             "file_dep": [elf_file],
             "targets": [bin_file],
         }
@@ -376,7 +410,8 @@ def task__dump_tests():
     isa_dir = upstream_tests / "riscv-tests/isa/rv32ui"
     mmode_dir = upstream_tests / "riscv-tests/isa/rv32mi"
 
-    for elf_file in map(lambda s: outdir / s.with_suffix(".elf").name,
+    for elf_file in map(partial(with_root_and_suffix, root=outdir,
+                                suffix=".elf"),
                         chain(isa_dir.glob('*.S'), mmode_dir.glob('*.S'))):
         if elf_file.stem in UNSUPPORTED_UPSTREAM:
             continue
@@ -388,7 +423,9 @@ def task__dump_tests():
             "actions": [f"riscv64-unknown-elf-objdump --disassemble-all \
                         --disassemble-zeroes --section=.text \
                         --section=.text.startup --section=.text.init \
-                        --section=.data {elf_file} > {{targets}}"],
+                        --section=.data {elf_file} > {dump_file}"],
+            # {{targets}} does not work for parallel execution.
+            # But f-strings do.
             "file_dep": [elf_file, bin_file],
             "targets": [dump_file],
         }
