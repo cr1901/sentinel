@@ -49,7 +49,8 @@ module rvfi_wrapper (
                  .rvfi__mem_wdata (rvfi_mem_wdata)
     );
 
-reg [3:0] timeout_bus = 0;
+reg [2:0] timeout_bus = 0;
+reg [1:0] trap_nest = 0;
 
 always @(posedge clock) begin
     timeout_bus <= 0;
@@ -57,10 +58,20 @@ always @(posedge clock) begin
     if (bus__cyc && !bus__ack)
         timeout_bus <= timeout_bus + 1;
 
+    if (rvfi_trap && bus__ack) begin
+        trap_nest <= trap_nest + 2'b01;
+
+        // If mret and in trap, decrement nesting cntr.
+        if((rvfi_insn == 32'b00110000001000000000000001110011) &&
+            |trap_nest) begin
+            trap_nest <= trap_nest - 2'b01;
+        end
+    end
+
     // Prevent peripherals from hogging the bus with exorbitant wait states.
     // That way, if progress is never made, it's Sentinel's fault.
     `ifdef MEMIO_FAIRNESS
-        assume (!timeout_bus[3]);
+        assume (!timeout_bus[2]);
     `endif
 
 
@@ -104,8 +115,8 @@ always @(posedge clock) begin
     if(~|timeout_bus && bus__cyc)
         assume(!bus__ack);
 
-    // Traps not supported yet. Easy enough to lock the core into an illegal
-    // insn and then repeatedly grab illegal insns.
-    assume(!rvfi_trap);
+    // Nested traps not supported yet. Easy enough to lock the core into an
+    // illegal insn and then repeatedly grab illegal insns.
+    assume(trap_nest < 2);
 end
 endmodule
