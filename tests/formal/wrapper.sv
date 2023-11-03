@@ -63,32 +63,49 @@ always @(posedge clock) begin
         assume (!timeout_bus[3]);
     `endif
 
+
+    `ifdef NO_SHIFT_FAIRNESS
+    // Do nothing
+    `else
+        // Constrain shift ops to either shift 0 or 1.
+        // Was for testing; generates interesting CEX w/ nested exceptions.
+        // if((rvfi_insn[0:6] == 7'b0010011) &&
+        //    (rvfi_insn[12:14] == 3'b001)) begin
+        //     assert (rvfi_insn[20:24] < 2);
+        // end
+
+        // SLLI
+        if((rvfi_insn[0:6] == 7'b0010011) &&
+           (rvfi_insn[12:14] == 3'b001)) begin
+            assume (rvfi_insn[20:24] < 2);
+        end
+
+        // SR*I
+        if((rvfi_insn[0:6] == 7'b0010011) &&
+           (rvfi_insn[12:14] == 3'b101)) begin
+            assume (rvfi_insn[20:24] < 2);
+        end
+
+        // SR*
+        if((rvfi_insn[0:6] == 7'b0110011) &&
+           (rvfi_insn[12:14] == 3'b101)) begin
+            assume (rvfi_rs2_rdata < 2);
+        end
+
+        // SLL
+        if((rvfi_insn[0:6] == 7'b0110011) &&
+           (rvfi_insn[12:14] == 3'b001)) begin
+            assume (rvfi_rs2_rdata < 2);
+        end
+    `endif
+
     // Assume peripherals are well-behaved and take at least one cycle to
     // respond.
     if(~|timeout_bus && bus__cyc)
         assume(!bus__ack);
+
+    // Traps not supported yet. Easy enough to lock the core into an illegal
+    // insn and then repeatedly grab illegal insns.
+    assume(!rvfi_trap);
 end
-
-`ifdef NO_SHIFT_FAIRNESS
-// Do nothing
-`else
-// Constrain shift ops to either shift 0 or 1.
-always @(posedge clock) begin
-    // Was for testing; generates interesting CEX w/ nested exceptions.
-    // if((rvfi_insn[0:6] == 7'b0010011) &&
-    //    (rvfi_insn[12:14] == 3'b001)) begin
-    //     assert (rvfi_insn[20:24] < 2);
-    // end
-
-    if((rvfi_insn[0:6] == 7'b0010011) &&
-       (rvfi_insn[12:14] == 3'b001)) begin
-        assume (rvfi_insn[20:24] < 2);
-    end
-
-    if((rvfi_insn[0:6] == 7'b0010011) &&
-       (rvfi_insn[12:14] == 3'b101)) begin
-        assume (rvfi_insn[20:24] < 2);
-    end
-end
-`endif
 endmodule
