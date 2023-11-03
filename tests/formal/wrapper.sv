@@ -68,4 +68,27 @@ always @(posedge clock) begin
     if(~|timeout_bus && bus__cyc)
         assume(!bus__ack);
 end
+
+`ifdef NO_SHIFT_FAIRNESS
+// Do nothing
+`else
+// Constrain shift ops to either shift 0 or 1.
+always @(posedge clock) begin
+    // Was for testing; generates interesting CEX w/ nested exceptions.
+    // if((rvfi_insn[0:6] == 7'b0010011) &&
+    //    (rvfi_insn[12:14] == 3'b001)) begin
+    //     assert (rvfi_insn[20:24] < 2);
+    // end
+
+    if((rvfi_insn[0:6] == 7'b0010011) &&
+       (rvfi_insn[12:14] == 3'b001)) begin
+        assume (rvfi_insn[20:24] < 2);
+    end
+
+    if((rvfi_insn[0:6] == 7'b0010011) &&
+       (rvfi_insn[12:14] == 3'b101)) begin
+        assume (rvfi_insn[20:24] < 2);
+    end
+end
+`endif
 endmodule
