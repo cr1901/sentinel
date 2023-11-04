@@ -115,21 +115,16 @@ class FormalTop(Component):
                   (self.cpu.control.csr.op != CSROp.WRITE_CSR)):
             m.d.sync += dat_w_reg.eq(self.cpu.datapath.regfile.dat_w)
 
-        # RVFI_INTR helpers
-        exception_taken = Signal()
-
         with m.If(committed_to_insn):
             with m.If(in_init):
                 # There is nothing to pipeline/interleave, so wait for first
                 # insn to be fetched, and then process it before declaring
                 # valid.
                 m.d.sync += in_init.eq(0)
-            with m.Elif(exception_taken):
-                # If an exception was taken, we didn't retire an insn. Do
-                # not set valid. Do not increment order. But process all
-                # other signals as normal.
+            with m.Elif(self.rvfi.trap):
+                m.d.comb += self.rvfi.valid.eq(1)
                 m.d.sync += [
-                    exception_taken.eq(0),
+                    self.rvfi.order.eq(self.rvfi.order + 1),
                     self.rvfi.intr.eq(1),
                 ]
             with m.Else():
@@ -205,17 +200,10 @@ class FormalTop(Component):
                 self.rvfi.rs2_rdata.eq(rs2_port.data)
             ]
 
-        # Will be reset every time we commit to a new insn.
+        # Will be reset every time we commit to a new insn. But should be
+        # overridden if there's an exception during the commit cycle.
         with m.If(self.cpu.rvfi.exception):
             m.d.sync += self.rvfi.trap.eq(1)
-        with m.Elif(committed_to_insn):
-            m.d.sync += self.rvfi.trap.eq(0)
-
-        # We've decided to taken an exception. This may be replacable with
-        # RVFI_TRAP, but Idk for sure right now.
-        with m.If(self.cpu.control.ucoderom.addr ==
-                  self.EXCEPTION_HANDLER_ADDR):
-            m.d.sync += exception_taken.eq(1)
 
         # Non-insn memory accesses.
         with m.If(~self.cpu.control.insn_fetch & self.cpu.control.mem_req &
