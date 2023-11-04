@@ -59,7 +59,14 @@ module rvfi_wrapper (
                  .rvfi__csr__mcause__rmask(rvfi_csr_mcause_rmask),
                  .rvfi__csr__mcause__wmask(rvfi_csr_mcause_wmask),
                  .rvfi__csr__mcause__rdata(rvfi_csr_mcause_rdata),
-                 .rvfi__csr__mcause__wdata(rvfi_csr_mcause_wdata)
+                 .rvfi__csr__mcause__wdata(rvfi_csr_mcause_wdata),
+
+`ifdef RO0_IN_RW_SPACE
+                 .rvfi__csr__misa__rmask(rvfi_csr_misa_rmask),
+                 .rvfi__csr__misa__wmask(rvfi_csr_misa_wmask),
+                 .rvfi__csr__misa__rdata(rvfi_csr_misa_rdata),
+                 .rvfi__csr__misa__wdata(rvfi_csr_misa_wdata)
+`endif
     );
 
 reg [2:0] timeout_bus = 0;

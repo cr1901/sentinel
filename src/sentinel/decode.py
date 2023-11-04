@@ -268,7 +268,7 @@ class Decode(Component):
                         # read a register.
                         with m.If((csr_op != 1) &
                                   (csr_op != 5) &
-                                  (self.rs1 == 0)):
+                                  (self.src_a == 0)):
                             # csrro0
                             m.d.sync += self.requested_op.eq(0x25)
                         with m.Else():

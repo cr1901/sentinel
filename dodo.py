@@ -203,7 +203,8 @@ SBY_TESTS = [
     "insn_srli_ch0", "insn_srl_ch0", "insn_sub_ch0", "insn_sw_ch0",
     "insn_xori_ch0", "insn_xor_ch0", "pc_bwd_ch0", "pc_fwd_ch0", "reg_ch0",
     "unique_ch0", "liveness_ch0", "csrw_mscratch_ch0", "csrc_any_mscratch_ch0",
-    "csrw_mcause_ch0"
+    "csrw_mcause_ch0", "csr_ill_eff_ch0"
+    # "csrw_misa_ch0", "csrc_zero_misa_ch0",
 ]
 
 
