@@ -46,7 +46,12 @@ module rvfi_wrapper (
                  .rvfi__mem_rmask (rvfi_mem_rmask),
                  .rvfi__mem_wmask (rvfi_mem_wmask),
                  .rvfi__mem_rdata (rvfi_mem_rdata),
-                 .rvfi__mem_wdata (rvfi_mem_wdata)
+                 .rvfi__mem_wdata (rvfi_mem_wdata),
+
+                 .rvfi__csr__mscratch__rmask(rvfi_csr_mscratch_rmask),
+                 .rvfi__csr__mscratch__wmask(rvfi_csr_mscratch_wmask),
+                 .rvfi__csr__mscratch__rdata(rvfi_csr_mscratch_rdata),
+                 .rvfi__csr__mscratch__wdata(rvfi_csr_mscratch_wdata)
     );
 
 reg [2:0] timeout_bus = 0;

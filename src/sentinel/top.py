@@ -176,7 +176,7 @@ class Top(Component):
                         with m.Case(MemSel.WORD):
                             m.d.sync += self.b_input.eq(self.bus.dat_r)
                 with m.Case(BSrc.CSR_IMM):
-                    m.d.sync += self.b_input.eq(self.decode.rs1)
+                    m.d.sync += self.b_input.eq(self.decode.src_a)
                 with m.Case(BSrc.CSR):
                     m.d.sync += self.b_input.eq(self.datapath.csr.dat_r)
                 with m.Case(BSrc.MCAUSE_LATCH):

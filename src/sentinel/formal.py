@@ -7,7 +7,7 @@ from .top import Top
 from .alu import ALU
 from .control import Control
 from .csr import MCause
-from .datapath import DataPath
+from .datapath import CSRFile
 from .decode import OpcodeType
 from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
     PcAction, MemExtend, CSRSel, CSROp, ExceptCtl
@@ -47,13 +47,29 @@ class FormalTop(Component):
         return Signature({
             "bus": Out(wishbone.Signature(addr_width=30, data_width=32,
                                           granularity=8)),
-            "rvfi": Out(RVFISignature),
+            "rvfi": Out(self.rvfi_sig),
             "irq": In(1)
         })
 
     def __init__(self):
+        self.rvfi_sig = RVFISignature
+        self.csrs = Signature({})
+        
+        self.add_csr("mscratch")
+        self.rvfi_sig.members["csr"] = Out(self.csrs)
+
         super().__init__()
         self.cpu = Top(formal=True)
+
+    def add_csr(self, name):
+        csr_ports = Signature({
+            "rmask": Out(32),
+            "wmask": Out(32),
+            "rdata": Out(32),
+            "wdata": Out(32)
+        })
+
+        self.csrs.members[name] = Out(csr_ports)
 
     def elaborate(self, plat):
         m = Module()
@@ -228,5 +244,31 @@ class FormalTop(Component):
 
         # rvfi_ixl
         m.d.comb += self.rvfi.ixl.eq(1)
+
+        # CSRS
+        # MSCRATCH
+        m.submodules.mscratch = mscratch_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
+        m.d.comb += [
+            mscratch_port.addr.eq(CSRFile.MSCRATCH + 32),
+            self.rvfi.csr.mscratch.rmask.eq(-1),
+            self.rvfi.csr.mscratch.wmask.eq(-1),
+            self.rvfi.csr.mscratch.rdata.eq(mscratch_port.data)
+        ]
+
+        # By default, don't output CSR data
+        m.d.comb += [
+            mscratch_port.en.eq(0),
+        ]
+
+        with m.If(self.cpu.control.csr.op == CSROp.READ_CSR):
+            with m.Switch(self.cpu.datapath.csr.adr_r):
+                with m.Case(CSRFile.MSCRATCH):
+                    m.d.comb += mscratch_port.en.eq(1)
+
+        with m.If(self.cpu.control.csr.op == CSROp.WRITE_CSR):
+            with m.Switch(self.cpu.datapath.csr.adr_w):
+                with m.Case(CSRFile.MSCRATCH):
+                    m.d.sync += self.rvfi.csr.mscratch.wdata.eq(
+                        self.cpu.datapath.csr.dat_w)
 
         return m
