@@ -60,14 +60,29 @@ def with_root_and_suffix(path, root, suffix):
 
 def maybe_disasm_move_vcd(sentinel_dir, root, path):
     sby_dir = sentinel_dir / "checks" / path.stem
-    for trace_name in ("trace.vcd", "trace0.vcd"):
+
+    cover = path.stem == "cover"
+
+    if cover:
+        trace_names = ("trace0.vcd", "trace1.vcd")
+    else:
+        trace_names = ("trace.vcd",)
+
+    for i, trace_name in enumerate(trace_names):
+        if cover:
+            maybe_path_with_num = path.parent / (path.stem + str(i) +
+                                                 path.suffix)
+        else:
+            maybe_path_with_num = path
+
         if (sby_dir / "engine_0" / trace_name).exists():
             copy2(sby_dir / "engine_0" / trace_name,
-                  with_root_and_suffix(path, root, ".vcd"))
+                  with_root_and_suffix(maybe_path_with_num, root, ".vcd"))
 
             rc = subprocess.Popen(["python3", "disasm.py",
                                    Path("checks") / path.stem /
-                                   "engine_0" / trace_name],
+                                   "engine_0" / trace_name,
+                                   maybe_path_with_num.stem],
                                   cwd=sentinel_dir).wait()
 
             if rc:
@@ -75,18 +90,16 @@ def maybe_disasm_move_vcd(sentinel_dir, root, path):
 
             # If successful, will produce a disasm.s
             rc = subprocess.Popen("riscv64-unknown-elf-objdump -d "
-                                  "-M numeric,no-aliases disasm.o "
-                                  "> disasm.s",
+                                  f"-M numeric,no-aliases disasm-{maybe_path_with_num.stem}.o "  # noqa E501
+                                  f"> disasm-{maybe_path_with_num.stem}.s",
                                   cwd=sentinel_dir, shell=True).wait()
 
             if rc:
                 return False
 
             # Which we then copy to the root.
-            copy2(sentinel_dir / "disasm.s",
-                  with_root_and_suffix(path, root, ".s"))
-            # Assume only one trace w/ various possible names exists.
-            break
+            copy2(sentinel_dir / f"disasm-{maybe_path_with_num.stem}.s",
+                  with_root_and_suffix(maybe_path_with_num, root, ".s"))
 
     return True
 
