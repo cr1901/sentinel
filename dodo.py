@@ -64,7 +64,7 @@ def maybe_disasm_move_vcd(sentinel_dir, root, path):
     cover = path.stem == "cover"
 
     if cover:
-        trace_names = ("trace0.vcd", "trace1.vcd")
+        trace_names = ("trace0.vcd", "trace1.vcd", "trace2.vcd")
     else:
         trace_names = ("trace.vcd",)
 
@@ -202,7 +202,8 @@ SBY_TESTS = [
     "insn_sltu_ch0", "insn_slt_ch0", "insn_srai_ch0", "insn_sra_ch0",
     "insn_srli_ch0", "insn_srl_ch0", "insn_sub_ch0", "insn_sw_ch0",
     "insn_xori_ch0", "insn_xor_ch0", "pc_bwd_ch0", "pc_fwd_ch0", "reg_ch0",
-    "unique_ch0", "liveness_ch0", "csrw_mscratch_ch0", "csrc_any_mscratch_ch0"
+    "unique_ch0", "liveness_ch0", "csrw_mscratch_ch0", "csrc_any_mscratch_ch0",
+    "csrw_mcause_ch0"
 ]
 
 

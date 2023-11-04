@@ -54,8 +54,9 @@ class FormalTop(Component):
     def __init__(self):
         self.rvfi_sig = RVFISignature
         self.csrs = Signature({})
-        
+
         self.add_csr("mscratch")
+        self.add_csr("mcause")
         self.rvfi_sig.members["csr"] = Out(self.csrs)
 
         super().__init__()
@@ -77,7 +78,7 @@ class FormalTop(Component):
         m.submodules.cpu = self.cpu
 
         connect(m, self.cpu.bus, flipped(self.bus))
-        m.d.comb += self.irq.eq(self.cpu.irq)
+        m.d.comb += self.cpu.irq.eq(self.irq)
 
         # rs1/rs2_data helpers.
         m.submodules.rvfi_rs1 = rs1_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
@@ -248,27 +249,38 @@ class FormalTop(Component):
         # CSRS
         # MSCRATCH
         m.submodules.mscratch = mscratch_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
+        m.submodules.mcause = mcause_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
         m.d.comb += [
             mscratch_port.addr.eq(CSRFile.MSCRATCH + 32),
+            mcause_port.addr.eq(CSRFile.MCAUSE + 32),
             self.rvfi.csr.mscratch.rmask.eq(-1),
             self.rvfi.csr.mscratch.wmask.eq(-1),
-            self.rvfi.csr.mscratch.rdata.eq(mscratch_port.data)
+            self.rvfi.csr.mscratch.rdata.eq(mscratch_port.data),
+            self.rvfi.csr.mcause.rmask.eq(-1),
+            self.rvfi.csr.mcause.wmask.eq(-1),
+            self.rvfi.csr.mcause.rdata.eq(mcause_port.data)
         ]
 
         # By default, don't output CSR data
         m.d.comb += [
             mscratch_port.en.eq(0),
+            mcause_port.en.eq(0),
         ]
 
         with m.If(self.cpu.control.csr.op == CSROp.READ_CSR):
             with m.Switch(self.cpu.datapath.csr.adr_r):
                 with m.Case(CSRFile.MSCRATCH):
                     m.d.comb += mscratch_port.en.eq(1)
+                with m.Case(CSRFile.MCAUSE):
+                    m.d.comb += mcause_port.en.eq(1)
 
         with m.If(self.cpu.control.csr.op == CSROp.WRITE_CSR):
             with m.Switch(self.cpu.datapath.csr.adr_w):
                 with m.Case(CSRFile.MSCRATCH):
                     m.d.sync += self.rvfi.csr.mscratch.wdata.eq(
+                        self.cpu.datapath.csr.dat_w)
+                with m.Case(CSRFile.MCAUSE):
+                    m.d.sync += self.rvfi.csr.mcause.wdata.eq(
                         self.cpu.datapath.csr.dat_w)
 
         return m

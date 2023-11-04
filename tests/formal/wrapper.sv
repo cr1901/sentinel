@@ -4,6 +4,7 @@ module rvfi_wrapper (
 	`RVFI_OUTPUTS
 );
 	(* keep *) `rvformal_rand_reg bus__ack;
+    (* keep *) `rvformal_rand_reg irq;
 	(* keep *) `rvformal_rand_reg [31:0] bus__dat_r;
 
 	(* keep *) wire        bus__cyc;
@@ -25,6 +26,8 @@ module rvfi_wrapper (
                  .bus__stb (bus__stb),
                  .bus__we (bus__we),
                  .bus__ack (bus__ack),
+
+                 .irq (irq),
 
                  .rvfi__valid     (rvfi_valid    ),
                  .rvfi__order     (rvfi_order    ),
@@ -51,7 +54,12 @@ module rvfi_wrapper (
                  .rvfi__csr__mscratch__rmask(rvfi_csr_mscratch_rmask),
                  .rvfi__csr__mscratch__wmask(rvfi_csr_mscratch_wmask),
                  .rvfi__csr__mscratch__rdata(rvfi_csr_mscratch_rdata),
-                 .rvfi__csr__mscratch__wdata(rvfi_csr_mscratch_wdata)
+                 .rvfi__csr__mscratch__wdata(rvfi_csr_mscratch_wdata),
+
+                 .rvfi__csr__mcause__rmask(rvfi_csr_mcause_rmask),
+                 .rvfi__csr__mcause__wmask(rvfi_csr_mcause_wmask),
+                 .rvfi__csr__mcause__rdata(rvfi_csr_mcause_rdata),
+                 .rvfi__csr__mcause__wdata(rvfi_csr_mcause_wdata)
     );
 
 reg [2:0] timeout_bus = 0;
