@@ -62,7 +62,9 @@ module rvfi_wrapper (
 
                  `RVFI_CSR_AMARANTH_PORTS(mscratch),
                  `RVFI_CSR_AMARANTH_PORTS(mcause),
-                 `RVFI_CSR_AMARANTH_PORTS(mip)
+                 `RVFI_CSR_AMARANTH_PORTS(mip),
+                 `RVFI_CSR_AMARANTH_PORTS(mie),
+                 `RVFI_CSR_AMARANTH_PORTS(mstatus)
 
 `ifdef RO0_IN_RW_SPACE
                  `RVFI_CSR_AMARANTH_PORTS(misa)

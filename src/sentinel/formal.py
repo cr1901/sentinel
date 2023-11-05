@@ -55,10 +55,9 @@ class FormalTop(Component):
         self.rvfi_sig = RVFISignature
         self.csrs = Signature({})
 
-        self.add_csr("mscratch")
-        self.add_csr("mcause")
+        for csr in ("mscratch", "mcause", "mip", "mie", "mstatus"):
+            self.add_csr(csr)
         # self.add_csr("misa")
-        self.add_csr("mip")
         self.rvfi_sig.members["csr"] = Out(self.csrs)
 
         super().__init__()
@@ -255,10 +254,14 @@ class FormalTop(Component):
             # self.rvfi.csr.misa.wdata.eq(0),
             self.rvfi.csr.mip.rmask.eq(-1),
             self.rvfi.csr.mip.wmask.eq(-1),
-            self.rvfi.csr.mip.rdata.eq(self.cpu.datapath.csr.mip_r),
+            self.rvfi.csr.mie.rmask.eq(-1),
+            self.rvfi.csr.mie.wmask.eq(-1),
+            self.rvfi.csr.mstatus.rmask.eq(-1),
+            self.rvfi.csr.mstatus.wmask.eq(-1),
         ]
 
-        # By default, don't output CSR data
+        # By default, don't output CSR data (either from the RAM file CSRs or
+        # from the discrete CSRs.)
         m.d.comb += [
             mscratch_port.en.eq(0),
             mcause_port.en.eq(0),
@@ -270,6 +273,15 @@ class FormalTop(Component):
                     m.d.comb += mscratch_port.en.eq(1)
                 with m.Case(CSRFile.MCAUSE):
                     m.d.comb += mcause_port.en.eq(1)
+                with m.Case(CSRFile.MIP):
+                    m.d.sync += self.rvfi.csr.mip.rdata.eq(
+                        self.cpu.datapath.csr.mip_r)
+                with m.Case(CSRFile.MIE):
+                    m.d.sync += self.rvfi.csr.mie.rdata.eq(
+                        self.cpu.datapath.csr.mie_r)
+                with m.Case(CSRFile.MSTATUS):
+                    m.d.sync += self.rvfi.csr.mstatus.rdata.eq(
+                        self.cpu.datapath.csr.mstatus_r)
 
         with m.If(self.cpu.control.csr.op == CSROp.WRITE_CSR):
             with m.Switch(self.cpu.datapath.csr.adr_w):
@@ -281,6 +293,12 @@ class FormalTop(Component):
                         self.cpu.datapath.csr.dat_w)
                 with m.Case(CSRFile.MIP):
                     m.d.sync += self.rvfi.csr.mip.wdata.eq(
+                        self.cpu.datapath.csr.dat_w)
+                with m.Case(CSRFile.MIE):
+                    m.d.sync += self.rvfi.csr.mie.wdata.eq(
+                        self.cpu.datapath.csr.dat_w)
+                with m.Case(CSRFile.MSTATUS):
+                    m.d.sync += self.rvfi.csr.mstatus.wdata.eq(
                         self.cpu.datapath.csr.dat_w)
 
         return m

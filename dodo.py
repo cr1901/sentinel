@@ -191,7 +191,7 @@ def task_ucode():
 
 
 # RISC-V Formal
-SBY_TESTS = [
+SBY_TESTS = (
     "causal_ch0", "cover", "insn_addi_ch0", "insn_add_ch0", "insn_andi_ch0",
     "insn_and_ch0", "insn_auipc_ch0", "insn_beq_ch0", "insn_bgeu_ch0",
     "insn_bge_ch0", "insn_bltu_ch0", "insn_blt_ch0", "insn_bne_ch0",
@@ -202,10 +202,12 @@ SBY_TESTS = [
     "insn_sltu_ch0", "insn_slt_ch0", "insn_srai_ch0", "insn_sra_ch0",
     "insn_srli_ch0", "insn_srl_ch0", "insn_sub_ch0", "insn_sw_ch0",
     "insn_xori_ch0", "insn_xor_ch0", "pc_bwd_ch0", "pc_fwd_ch0", "reg_ch0",
-    "unique_ch0", "liveness_ch0", "csrw_mscratch_ch0", "csrc_any_mscratch_ch0",
-    "csrw_mcause_ch0", "csr_ill_eff_ch0", "csrw_mip_ch0", "csrc_zero_mip_ch0",
+    "unique_ch0", "liveness_ch0",
+    "csrw_mscratch_ch0", "csrc_any_mscratch_ch0", "csrw_mcause_ch0",
+    "csr_ill_eff_ch0", "csrw_mip_ch0", "csrc_zero_mip_ch0", "csrw_mie_ch0",
+    "csrc_zero_mie_ch0", "csrw_mstatus_ch0", "csrc_const_mstatus_ch0",
     # "csrw_misa_ch0", "csrc_zero_misa_ch0",
-]
+)
 
 
 def task_formal_init():
