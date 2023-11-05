@@ -242,4 +242,14 @@ class DataPath(Component):
                   (prev_csr_adr == CSRFile.MIE))):
             m.d.comb += self.csr.dat_r.eq(self.regfile.dat_r)
 
+        # For MTVEC, only Direct Mode is supported, and field is WARL,
+        # so honor that.
+        # MEPC is also WARL, and says low 2 bits are always zero for
+        # only-IALIGN=32.
+        # By contrast, MCAUSE is WLRL ("anything goes if illegal value is
+        # written"), and MSCRATCH can hold anything.
+        with m.If((self.csr.adr_w == CSRFile.MTVEC) |
+                  (self.csr.adr_w == CSRFile.MEPC)):
+            m.d.comb += self.regfile.dat_w[0:2].eq(0)
+
         return m

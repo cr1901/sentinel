@@ -55,7 +55,8 @@ class FormalTop(Component):
         self.rvfi_sig = RVFISignature
         self.csrs = Signature({})
 
-        for csr in ("mscratch", "mcause", "mip", "mie", "mstatus"):
+        for csr in ("mscratch", "mcause", "mip", "mie", "mstatus", "mtvec",
+                    "mepc"):
             self.add_csr(csr)
         # self.add_csr("misa")
         self.rvfi_sig.members["csr"] = Out(self.csrs)
@@ -239,9 +240,13 @@ class FormalTop(Component):
         # MSCRATCH
         m.submodules.mscratch = mscratch_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
         m.submodules.mcause = mcause_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
+        m.submodules.mtvec = mtvec_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
+        m.submodules.mepc = mepc_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
         m.d.comb += [
             mscratch_port.addr.eq(CSRFile.MSCRATCH + 32),
             mcause_port.addr.eq(CSRFile.MCAUSE + 32),
+            mtvec_port.addr.eq(CSRFile.MTVEC + 32),
+            mepc_port.addr.eq(CSRFile.MEPC + 32),
             self.rvfi.csr.mscratch.rmask.eq(-1),
             self.rvfi.csr.mscratch.wmask.eq(-1),
             self.rvfi.csr.mscratch.rdata.eq(mscratch_port.data),
@@ -258,6 +263,12 @@ class FormalTop(Component):
             self.rvfi.csr.mie.wmask.eq(-1),
             self.rvfi.csr.mstatus.rmask.eq(-1),
             self.rvfi.csr.mstatus.wmask.eq(-1),
+            self.rvfi.csr.mtvec.rmask.eq(-1),
+            self.rvfi.csr.mtvec.wmask.eq(-1),
+            self.rvfi.csr.mtvec.rdata.eq(mtvec_port.data),
+            self.rvfi.csr.mepc.rmask.eq(-1),
+            self.rvfi.csr.mepc.wmask.eq(-1),
+            self.rvfi.csr.mepc.rdata.eq(mepc_port.data),
         ]
 
         # By default, don't output CSR data (either from the RAM file CSRs or
@@ -265,6 +276,8 @@ class FormalTop(Component):
         m.d.comb += [
             mscratch_port.en.eq(0),
             mcause_port.en.eq(0),
+            mtvec_port.en.eq(0),
+            mepc_port.en.eq(0),
         ]
 
         with m.If(self.cpu.control.csr.op == CSROp.READ_CSR):
@@ -282,6 +295,10 @@ class FormalTop(Component):
                 with m.Case(CSRFile.MSTATUS):
                     m.d.sync += self.rvfi.csr.mstatus.rdata.eq(
                         self.cpu.datapath.csr.mstatus_r)
+                with m.Case(CSRFile.MTVEC):
+                    m.d.comb += mtvec_port.en.eq(1)
+                with m.Case(CSRFile.MEPC):
+                    m.d.comb += mepc_port.en.eq(1)
 
         with m.If(self.cpu.control.csr.op == CSROp.WRITE_CSR):
             with m.Switch(self.cpu.datapath.csr.adr_w):
@@ -299,6 +316,12 @@ class FormalTop(Component):
                         self.cpu.datapath.csr.dat_w)
                 with m.Case(CSRFile.MSTATUS):
                     m.d.sync += self.rvfi.csr.mstatus.wdata.eq(
+                        self.cpu.datapath.csr.dat_w)
+                with m.Case(CSRFile.MTVEC):
+                    m.d.sync += self.rvfi.csr.mtvec.wdata.eq(
+                        self.cpu.datapath.csr.dat_w)
+                with m.Case(CSRFile.MEPC):
+                    m.d.sync += self.rvfi.csr.mepc.wdata.eq(
                         self.cpu.datapath.csr.dat_w)
 
         return m
