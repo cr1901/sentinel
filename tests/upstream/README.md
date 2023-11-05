@@ -7,6 +7,8 @@ with.
 
 Binaries are generated using the [`dodo.py`](https://pydoit.org) at the root of
 this repo. If you need to regenerate binaries, use `pdm run compile-upstream`;
-right now, the DoIt tasks are considered private.
+although the DoIt tasks are document, using `pdm` should be preferred over
+running `doit` directly.
 
-(Make sure `doit` is installed via `pdm install --dev`.)
+(Make sure `doit` is installed via `pdm install --dev`. _You must provide your
+own copy of `riscv64-unknown-elf-gcc`_.)

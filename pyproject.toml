@@ -44,27 +44,37 @@ dev = [
 ]
 
 [tool.pdm.scripts]
-lint = { cmd = "flake8" }
+lint = { cmd = "flake8", help="lint python sources" }
 # Most Tests
-test = { cmd = "pytest" }
-test-quick = { cmd = "pytest -k \"test_top or test_upstream or test_witness\"" }
+test = { cmd = "pytest", help="run all pytest tests" }
 # Generate
-gen = { call = "sentinel.gen:generate" }
-demo = { call = "sentinel.gen:demo" }
+gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
+demo = { call = "sentinel.gen:demo", help="create Sentinel demo bitstream" }
 # DoIt wrappers. Prefer using these over running DoIt directly.
-doit = { cmd = "doit" }
-ucode = { cmd = "doit ucode" }
+doit = { cmd = "doit", help="escape hatch to call doit directly" }
+ucode = { cmd = "doit ucode", help="generate supplementary microcode files" }
 # LUTs
-bench-luts = { cmd = "doit bench_luts"}
-plot-luts = { cmd = "doit plot_luts"}
+bench-luts = { cmd = "doit bench_luts", help="add stats to LUTs.csv" }
+plot-luts = { cmd = "doit plot_luts", help="plot LUTs.csv" }
 # Upstream
-compile-upstream = { cmd = "doit _dump_tests"}
+compile-upstream = { cmd = "doit dump_tests", help="regnerate riscv-test binaries" }
 # RISC-V Formal
-rvformal = { cmd = "doit run_sby:{args}_vcds"}
+rvformal = { cmd = "doit run_sby:{args}_vcds", help="run a single RISC-V Formal test" }
 rvformal-force = { composite = [
     "doit forget run_sby:{args}",
     "rvformal {args}"
-]}
-rvformal-gen = { cmd = "doit formal_gen_files"}
-rvformal-all = { cmd = "doit {args:-n 2} run_sby"}
-rvformal-status = { cmd = "doit list_sby_status"}
+], help="force-run a single RISC-V Formal test"}
+rvformal-gen = { cmd = "doit formal_gen_files", help="generate RISC-V Formal files" }
+rvformal-all = { cmd = "doit {args:-n 2} run_sby", help="run all RISC-V Formal tests" }
+
+[tool.pdm.scripts.test-quick]
+cmd = "pytest -k \"test_top or test_upstream or test_witness\""
+help = "run quick subset of pytest tests"
+
+[tool.pdm.scripts.rvformal-status]
+cmd = "doit list_sby_status:{args}"
+help="list a single RISC-V Formal test's status"
+
+[tool.pdm.scripts.rvformal-status-all]
+cmd = "doit list_sby_status"
+help="list all RISC-V Formal tests' status"

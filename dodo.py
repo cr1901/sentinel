@@ -12,8 +12,9 @@ from doit.reporter import ConsoleReporter
 
 
 # Overrides
-# Customize the status task(s) to print all output on a single line.
-# Think like autoconf scripts "checking for foo... yes"!
+# Tasks typically only skip printing titles if they're private. For the
+# list_sby_status tasks, I want to skip the titles because it interfaces
+# with their extra stdout when parallelism is on.
 class MaybeSuppressReporter(ConsoleReporter):
     def execute_task(self, task):
         if task.meta and task.meta.get("suppress_reporter", False):
@@ -104,6 +105,8 @@ def maybe_disasm_move_vcd(sentinel_dir, root, path):
     return True
 
 
+# Customize the status task(s) to print all output on a single line.
+# Think like autoconf scripts "checking for foo... yes"!
 def echo_sby_status(checks_dir, c):
     with open(checks_dir / c / "status", "r") as fp:
         res = fp.read()
@@ -114,7 +117,7 @@ def echo_sby_status(checks_dir, c):
         print(f"{c}... PASS")
 
 
-# Basic tasks
+# Private tasks
 def task__git():
     return {'actions': ["git rev-parse HEAD"]}
 
@@ -136,6 +139,7 @@ def task__demo():
 # matplotlib into the venv. Intended usage in cases like mine is
 # "doit bench_luts" or "doit plot_luts".
 def task_bench_luts():
+    "build \"pdm demo\" bitstream (if out of date), record LUT usage using LogLUTs"  # noqa: E501
     build_dir = Path("./build")
     yosys_log = build_dir / "top.rpt"
     nextpnr_log = build_dir / "top.tim"
@@ -154,6 +158,7 @@ def task_bench_luts():
 
 
 def task_plot_luts():
+    "build \"pdm demo\" bitstream (if out of date), plot LUT usage using LogLUTs"  # noqa: E501
     build_dir = Path("./build")
     yosys_log = build_dir / "top.rpt"
     nextpnr_log = build_dir / "top.tim"
@@ -172,6 +177,7 @@ def task_plot_luts():
 
 
 def task_ucode():
+    "assemble microcode and copy non-bin artifacts to root"
     ucode = Path("./src/sentinel/microcode.asm")
     hex_ = ucode.with_suffix(".asm_block_ram.hex")
     fdef = ucode.with_suffix(".asm_block_ram.fdef")
@@ -213,6 +219,7 @@ SBY_TESTS = (
 
 
 def task_formal_init():
+    "initialize RISC-V Formal submodule"
     formal_tests = Path("./tests/formal/")
     submod = formal_tests / "riscv-formal" / ".git"
     return {
@@ -228,6 +235,7 @@ def task_formal_init():
 
 
 def task_formal_mkdir_copy_files():
+    "copy Sentinel files in tests/formal to RISC-V Formal submodule"
     formal_tests = Path("./tests/formal/")
     submod = formal_tests / "riscv-formal" / ".git"
     cores_dir = formal_tests / "riscv-formal" / "cores"
@@ -254,6 +262,7 @@ def task_formal_mkdir_copy_files():
 
 
 def task_formal_gen_files():
+    "run RISC-V Formal's genchecks.py script using copied Sentinel inputs"
     formal_tests = Path("./tests/formal/")
     cores_dir = formal_tests / "riscv-formal" / "cores"
     sentinel_dir = cores_dir / "sentinel"
@@ -283,6 +292,7 @@ def task_formal_gen_files():
 
 
 def task_run_sby():
+    "run symbiyosys flow on Sentinel, \"doit list --all run_sby\" for choices"
     root = Path(".")
     formal_tests = Path("./tests/formal/")
     cores_dir = formal_tests / "riscv-formal" / "cores"
@@ -326,6 +336,7 @@ def task_run_sby():
 
 
 def task_list_sby_status():
+    "list \"run_sby\" subtasks' status, \"doit list --all list_sby_status\" for choices"  # noqa: E501
     formal_tests = Path("./tests/formal/")
     cores_dir = formal_tests / "riscv-formal" / "cores"
     sentinel_dir = cores_dir / "sentinel"
@@ -348,7 +359,8 @@ def task_list_sby_status():
 UNSUPPORTED_UPSTREAM = ("breakpoint",)
 
 
-def task__upstream_init():
+def task_upstream_init():
+    "initialize riscv-tests submodule"
     upstream_tests = Path("./tests/upstream/")
     submod = upstream_tests / "riscv-tests" / ".git"
     return {
@@ -363,7 +375,8 @@ def task__upstream_init():
 # the autoconf script, compiling normally, and seeing which flags the compiler
 # and objdump are invoked with. It might not be perfect (but seems to work
 # fine).
-def task__compile_upstream():
+def task_compile_upstream():
+    "compile riscv-tests tests to ELF, \"doit list --all compile_upstream\" for choices"  # noqa: E501
     flags = "-march=rv32g -mabi=ilp32 -static -mcmodel=medany \
 -fvisibility=hidden -nostdlib -nostartfiles".split(" ")
 
@@ -397,7 +410,8 @@ def task__compile_upstream():
         }
 
 
-def task__create_raw():
+def task_create_raw():
+    "convert riscv-tests ELFs into raw bins for pytest, \"doit list --all create_raw\" for choices"  # noqa: E501
     upstream_tests = Path("./tests/upstream/")
     outdir = upstream_tests / "binaries"
 
@@ -421,7 +435,8 @@ def task__create_raw():
         }
 
 
-def task__dump_tests():
+def task_dump_tests():
+    "dump listing of ELF files for debugging/pytest, \"doit list --all dump_tests\" for choices"  # noqa: E501
     upstream_tests = Path("./tests/upstream/")
     outdir = upstream_tests / "binaries"
 
