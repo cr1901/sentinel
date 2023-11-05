@@ -45,6 +45,7 @@ dev = [
 ]
 
 [tool.pdm.scripts]
+lint = { cmd = "flake8" }
 # Most Tests
 test = { cmd = "pytest" }
 test-quick = { cmd = "pytest -k \"test_top or test_upstream or test_witness\"" }

@@ -1,16 +1,12 @@
-from amaranth import Signal, Module, Cat, C, Mux
+from amaranth import Signal, Module, Mux
 from amaranth.lib.wiring import Component, Signature, Out, In, connect, \
     flipped
 from amaranth_soc import wishbone
 
 from .top import Top
-from .alu import ALU
-from .control import Control
-from .csr import MCause
 from .datapath import CSRFile
 from .decode import OpcodeType
-from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
-    PcAction, MemExtend, CSRSel, CSROp, ExceptCtl
+from .ucodefields import CSROp
 
 
 RVFISignature = Signature({

@@ -7,7 +7,7 @@ from .ucoderom import UCodeROM
 from .datapath import GPControlSignature, PCControlSignature, \
     CSRControlSignature
 
-from .ucodefields import JmpType, CondTest, CSROp
+from .ucodefields import JmpType, CondTest
 
 from typing import TextIO, Optional
 

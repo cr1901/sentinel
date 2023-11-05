@@ -1,7 +1,6 @@
 
 import pytest
 
-from dataclasses import dataclass
 from enum import Enum, auto
 
 from sentinel.soc import AttoSoC

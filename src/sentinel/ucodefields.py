@@ -1,6 +1,6 @@
 # Microcode field classes (this file is required to avoid circular imports)
 
-import enum
+from amaranth.lib import enum
 
 
 class JmpType(enum.Enum):

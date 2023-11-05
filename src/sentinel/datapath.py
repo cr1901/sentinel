@@ -1,4 +1,4 @@
-from amaranth import Cat, C, Module, Signal, Memory, Mux
+from amaranth import Cat, Module, Signal, Memory
 from amaranth.lib.data import View
 from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 

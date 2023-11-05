@@ -20,7 +20,8 @@ def test_alu(sim_mod):
                 else:
                     assert (yield m.o) == o
 
-        def expect_delayed_curr_op(num_cycles, op_type, o=None, *, ready=True, signed=False):
+        def expect_delayed_curr_op(num_cycles, op_type, o=None, *, ready=True,
+                                   signed=False):
             # From previous op
             assert OpType((yield m.op)) == op_type
             assert (yield m.ready) == ready
@@ -52,13 +53,16 @@ def test_alu(sim_mod):
         yield from expect_prev_op(OpType.XOR, 0xffffff00)
 
         yield from expect_prev_op(OpType.NOP, ready=False)
-        yield from expect_delayed_curr_op(4, OpType.SLL, (255 << 3), ready=False)
+        yield from expect_delayed_curr_op(4, OpType.SLL, (255 << 3),
+                                          ready=False)
 
         yield from expect_prev_op(OpType.NOP, ready=False)
-        yield from expect_delayed_curr_op(4, OpType.SRL, (255 >> 3), ready=False)
+        yield from expect_delayed_curr_op(4, OpType.SRL, (255 >> 3),
+                                          ready=False)
 
         yield from expect_prev_op(OpType.NOP, ready=False)
-        yield from expect_delayed_curr_op(4, OpType.SRA, -0x10000000, signed=True, ready=False)
+        yield from expect_delayed_curr_op(4, OpType.SRA, -0x10000000,
+                                          signed=True, ready=False)
 
         yield from expect_prev_op(OpType.CMP_EQ, 0)
 

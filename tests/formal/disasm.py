@@ -12,11 +12,11 @@ rvfi_insn = None
 for netinfo in parse_vcd(argv[1]).values():
     for net in netinfo['nets']:
         # print(net["hier"], net["name"])
-        if net["hier"] == "rvfi_testbench.wrapper" and net["name"] == "rvfi_valid":
+        if net["hier"] == "rvfi_testbench.wrapper" and net["name"] == "rvfi_valid":  # noqa: E501
             rvfi_valid = netinfo['tv']
-        if net["hier"] == "rvfi_testbench.wrapper" and net["name"] == "rvfi_order":
+        if net["hier"] == "rvfi_testbench.wrapper" and net["name"] == "rvfi_order":  # noqa: E501
             rvfi_order = netinfo['tv']
-        if net["hier"] == "rvfi_testbench.wrapper" and net["name"] == "rvfi_insn":
+        if net["hier"] == "rvfi_testbench.wrapper" and net["name"] == "rvfi_insn":  # noqa: E501
             rvfi_insn = netinfo['tv']
 
 assert len(rvfi_valid) == len(rvfi_order)

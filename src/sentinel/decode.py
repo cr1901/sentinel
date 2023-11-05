@@ -1,4 +1,4 @@
-from amaranth import Signal, Module, Cat, Value, C, Elaboratable, Memory
+from amaranth import Signal, Module, Cat, Value, C, Elaboratable
 from amaranth.lib import enum
 from amaranth.lib.wiring import Component, Signature, In, Out
 
