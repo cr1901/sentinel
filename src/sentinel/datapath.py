@@ -170,16 +170,23 @@ class CSRFile(Component):
             with m.If(self.adr_r == self.MSTATUS):
                 mstatus_buf = View(MStatus, read_buf)
                 m.d.sync += [
+                    read_buf.eq(0),
                     mstatus_buf.mie.eq(mstatus.mie),
                     mstatus_buf.mpie.eq(mstatus.mpie),
                     mstatus_buf.mpp.eq(mstatus.mpp),
                 ]
             with m.If(self.adr_r == self.MIE):
                 mie_buf = View(MIE, read_buf)
-                m.d.sync += mie_buf.meie.eq(mie.meie)
+                m.d.sync += [
+                    read_buf.eq(0),
+                    mie_buf.meie.eq(mie.meie)
+                ]
             with m.If(self.adr_r == self.MIP):
                 mip_buf = View(MIP, read_buf)
-                m.d.sync += mip_buf.meip.eq(mip.meip)
+                m.d.sync += [
+                    read_buf.eq(0),
+                    mip_buf.meip.eq(mip.meip)
+                ]
 
         # Make sure we don't lose interrupts.
         with m.If(self.mip_w.meip):

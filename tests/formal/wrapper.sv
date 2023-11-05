@@ -61,6 +61,11 @@ module rvfi_wrapper (
                  .rvfi__csr__mcause__rdata(rvfi_csr_mcause_rdata),
                  .rvfi__csr__mcause__wdata(rvfi_csr_mcause_wdata),
 
+                 .rvfi__csr__mip__rmask(rvfi_csr_mip_rmask),
+                 .rvfi__csr__mip__wmask(rvfi_csr_mip_wmask),
+                 .rvfi__csr__mip__rdata(rvfi_csr_mip_rdata),
+                 .rvfi__csr__mip__wdata(rvfi_csr_mip_wdata)
+
 `ifdef RO0_IN_RW_SPACE
                  .rvfi__csr__misa__rmask(rvfi_csr_misa_rmask),
                  .rvfi__csr__misa__wmask(rvfi_csr_misa_wmask),

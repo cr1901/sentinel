@@ -58,6 +58,7 @@ class FormalTop(Component):
         self.add_csr("mscratch")
         self.add_csr("mcause")
         # self.add_csr("misa")
+        self.add_csr("mip")
         self.rvfi_sig.members["csr"] = Out(self.csrs)
 
         super().__init__()
@@ -252,6 +253,9 @@ class FormalTop(Component):
             # self.rvfi.csr.misa.wmask.eq(-1),
             # self.rvfi.csr.misa.rdata.eq(0),
             # self.rvfi.csr.misa.wdata.eq(0),
+            self.rvfi.csr.mip.rmask.eq(-1),
+            self.rvfi.csr.mip.wmask.eq(-1),
+            self.rvfi.csr.mip.rdata.eq(self.cpu.datapath.csr.mip_r),
         ]
 
         # By default, don't output CSR data
@@ -274,6 +278,9 @@ class FormalTop(Component):
                         self.cpu.datapath.csr.dat_w)
                 with m.Case(CSRFile.MCAUSE):
                     m.d.sync += self.rvfi.csr.mcause.wdata.eq(
+                        self.cpu.datapath.csr.dat_w)
+                with m.Case(CSRFile.MIP):
+                    m.d.sync += self.rvfi.csr.mip.wdata.eq(
                         self.cpu.datapath.csr.dat_w)
 
         return m
