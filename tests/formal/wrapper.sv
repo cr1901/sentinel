@@ -3,6 +3,15 @@ module rvfi_wrapper (
 	input         reset,
 	`RVFI_OUTPUTS
 );
+
+    // Convert from RVFI naming scheme to Amaranth interface naming scheme.
+    `define RVFI_AMARANTH_PORT(suff) .rvfi__``suff(rvfi_``suff)
+    `define RVFI_CSR_AMARANTH_PORTS(csr) \
+        .rvfi__csr__``csr``__rmask(rvfi_csr_``csr``_rmask),       \
+        .rvfi__csr__``csr``__wmask(rvfi_csr_``csr``_wmask),       \
+        .rvfi__csr__``csr``__rdata(rvfi_csr_``csr``_rdata),       \
+        .rvfi__csr__``csr``__wdata(rvfi_csr_``csr``_wdata)
+
 	(* keep *) `rvformal_rand_reg bus__ack;
     (* keep *) `rvformal_rand_reg irq;
 	(* keep *) `rvformal_rand_reg [31:0] bus__dat_r;
@@ -29,48 +38,34 @@ module rvfi_wrapper (
 
                  .irq (irq),
 
-                 .rvfi__valid     (rvfi_valid    ),
-                 .rvfi__order     (rvfi_order    ),
-                 .rvfi__insn      (rvfi_insn     ),
-                 .rvfi__trap      (rvfi_trap     ),
-                 .rvfi__halt      (rvfi_halt     ),
-                 .rvfi__intr      (rvfi_intr     ),
-                 .rvfi__mode      (rvfi_mode     ),
-                 .rvfi__ixl       (rvfi_ixl      ),
-                 .rvfi__rs1_addr  (rvfi_rs1_addr ),
-                 .rvfi__rs2_addr  (rvfi_rs2_addr ),
-                 .rvfi__rs1_rdata (rvfi_rs1_rdata),
-                 .rvfi__rs2_rdata (rvfi_rs2_rdata),
-                 .rvfi__rd_addr   (rvfi_rd_addr  ),
-                 .rvfi__rd_wdata  (rvfi_rd_wdata ),
-                 .rvfi__pc_rdata  (rvfi_pc_rdata ),
-                 .rvfi__pc_wdata  (rvfi_pc_wdata ),
-                 .rvfi__mem_addr  (rvfi_mem_addr ),
-                 .rvfi__mem_rmask (rvfi_mem_rmask),
-                 .rvfi__mem_wmask (rvfi_mem_wmask),
-                 .rvfi__mem_rdata (rvfi_mem_rdata),
-                 .rvfi__mem_wdata (rvfi_mem_wdata),
+                 `RVFI_AMARANTH_PORT(valid),
+                 `RVFI_AMARANTH_PORT(order),
+                 `RVFI_AMARANTH_PORT(insn),
+                 `RVFI_AMARANTH_PORT(trap),
+                 `RVFI_AMARANTH_PORT(halt),
+                 `RVFI_AMARANTH_PORT(intr),
+                 `RVFI_AMARANTH_PORT(mode),
+                 `RVFI_AMARANTH_PORT(ixl),
+                 `RVFI_AMARANTH_PORT(rs1_addr),
+                 `RVFI_AMARANTH_PORT(rs2_addr),
+                 `RVFI_AMARANTH_PORT(rs1_rdata),
+                 `RVFI_AMARANTH_PORT(rs2_rdata),
+                 `RVFI_AMARANTH_PORT(rd_addr),
+                 `RVFI_AMARANTH_PORT(rd_wdata),
+                 `RVFI_AMARANTH_PORT(pc_rdata),
+                 `RVFI_AMARANTH_PORT(pc_wdata),
+                 `RVFI_AMARANTH_PORT(mem_addr),
+                 `RVFI_AMARANTH_PORT(mem_rmask),
+                 `RVFI_AMARANTH_PORT(mem_wmask),
+                 `RVFI_AMARANTH_PORT(mem_rdata),
+                 `RVFI_AMARANTH_PORT(mem_wdata),
 
-                 .rvfi__csr__mscratch__rmask(rvfi_csr_mscratch_rmask),
-                 .rvfi__csr__mscratch__wmask(rvfi_csr_mscratch_wmask),
-                 .rvfi__csr__mscratch__rdata(rvfi_csr_mscratch_rdata),
-                 .rvfi__csr__mscratch__wdata(rvfi_csr_mscratch_wdata),
-
-                 .rvfi__csr__mcause__rmask(rvfi_csr_mcause_rmask),
-                 .rvfi__csr__mcause__wmask(rvfi_csr_mcause_wmask),
-                 .rvfi__csr__mcause__rdata(rvfi_csr_mcause_rdata),
-                 .rvfi__csr__mcause__wdata(rvfi_csr_mcause_wdata),
-
-                 .rvfi__csr__mip__rmask(rvfi_csr_mip_rmask),
-                 .rvfi__csr__mip__wmask(rvfi_csr_mip_wmask),
-                 .rvfi__csr__mip__rdata(rvfi_csr_mip_rdata),
-                 .rvfi__csr__mip__wdata(rvfi_csr_mip_wdata)
+                 `RVFI_CSR_AMARANTH_PORTS(mscratch),
+                 `RVFI_CSR_AMARANTH_PORTS(mcause),
+                 `RVFI_CSR_AMARANTH_PORTS(mip)
 
 `ifdef RO0_IN_RW_SPACE
-                 .rvfi__csr__misa__rmask(rvfi_csr_misa_rmask),
-                 .rvfi__csr__misa__wmask(rvfi_csr_misa_wmask),
-                 .rvfi__csr__misa__rdata(rvfi_csr_misa_rdata),
-                 .rvfi__csr__misa__wdata(rvfi_csr_misa_wdata)
+                 `RVFI_CSR_AMARANTH_PORTS(misa)
 `endif
     );
 
@@ -93,46 +88,45 @@ always @(posedge clock) begin
         end
     end
 
-    // Prevent peripherals from hogging the bus with exorbitant wait states.
-    // That way, if progress is never made, it's Sentinel's fault.
-    `ifdef MEMIO_FAIRNESS
-        assume (!timeout_bus[2]);
-    `endif
+    `ifdef RISCV_FORMAL_FAIRNESS
+        // Prevent peripherals from hogging the bus with exorbitant wait states.
+        // That way, if progress is never made, it's Sentinel's fault.
+        `ifdef MEMIO_FAIRNESS
+            assume (!timeout_bus[2]);
+        `endif
 
+        `ifndef NO_SHIFT_FAIRNESS
+            // Constrain shift ops to either shift 0 or 1.
+            // Was for testing; generates interesting CEX w/ nested exceptions.
+            // if((rvfi_insn[0:6] == 7'b0010011) &&
+            //    (rvfi_insn[12:14] == 3'b001)) begin
+            //     assert (rvfi_insn[20:24] < 2);
+            // end
 
-    `ifdef NO_SHIFT_FAIRNESS
-    // Do nothing
-    `else
-        // Constrain shift ops to either shift 0 or 1.
-        // Was for testing; generates interesting CEX w/ nested exceptions.
-        // if((rvfi_insn[0:6] == 7'b0010011) &&
-        //    (rvfi_insn[12:14] == 3'b001)) begin
-        //     assert (rvfi_insn[20:24] < 2);
-        // end
+            // SLLI
+            if((rvfi_insn[0:6] == 7'b0010011) &&
+            (rvfi_insn[12:14] == 3'b001)) begin
+                assume (rvfi_insn[20:24] < 2);
+            end
 
-        // SLLI
-        if((rvfi_insn[0:6] == 7'b0010011) &&
-           (rvfi_insn[12:14] == 3'b001)) begin
-            assume (rvfi_insn[20:24] < 2);
-        end
+            // SR*I
+            if((rvfi_insn[0:6] == 7'b0010011) &&
+            (rvfi_insn[12:14] == 3'b101)) begin
+                assume (rvfi_insn[20:24] < 2);
+            end
 
-        // SR*I
-        if((rvfi_insn[0:6] == 7'b0010011) &&
-           (rvfi_insn[12:14] == 3'b101)) begin
-            assume (rvfi_insn[20:24] < 2);
-        end
+            // SR*
+            if((rvfi_insn[0:6] == 7'b0110011) &&
+            (rvfi_insn[12:14] == 3'b101)) begin
+                assume (rvfi_rs2_rdata < 2);
+            end
 
-        // SR*
-        if((rvfi_insn[0:6] == 7'b0110011) &&
-           (rvfi_insn[12:14] == 3'b101)) begin
-            assume (rvfi_rs2_rdata < 2);
-        end
-
-        // SLL
-        if((rvfi_insn[0:6] == 7'b0110011) &&
-           (rvfi_insn[12:14] == 3'b001)) begin
-            assume (rvfi_rs2_rdata < 2);
-        end
+            // SLL
+            if((rvfi_insn[0:6] == 7'b0110011) &&
+            (rvfi_insn[12:14] == 3'b001)) begin
+                assume (rvfi_rs2_rdata < 2);
+            end
+        `endif
     `endif
 
     // Assume peripherals are well-behaved and take at least one cycle to
@@ -142,6 +136,7 @@ always @(posedge clock) begin
 
     // Nested traps not supported yet. Easy enough to lock the core into an
     // illegal insn and then repeatedly grab illegal insns.
+    // TODO: Move into RISCV_FORMAL_FAIRNESS ifdef block?
     assume(trap_nest < 2);
 end
 endmodule
