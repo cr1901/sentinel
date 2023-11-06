@@ -293,7 +293,11 @@ def save_last_testfile(testfile):
 
 
 def last_testfile(task, values, testfile):
-    with open(testfile, "rb") as fp:
+    path_tf = Path(testfile)
+    if not path_tf.exists():
+        return False
+
+    with open(path_tf, "rb") as fp:
         hash = hashlib.md5(fp.read()).hexdigest()
 
     task.value_savers.append(partial(save_last_testfile, hash))

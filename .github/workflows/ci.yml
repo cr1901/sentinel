@@ -1,0 +1,79 @@
+on:
+    push:
+    pull_request:
+
+name: CI
+
+# TODO: Print outputs on failing steps. This can be done with something like:
+# gzip -c cover.vcd | base64 | base64 -d | gunzip > cover-out.vcd
+
+jobs:
+    ci-linux:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v3
+            - uses: actions/setup-python@v4
+              with:
+                python-version: "3.11"
+            - uses: pdm-project/setup-pdm@v3
+              with:
+                python-version: 3.11
+                cache: true
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                targets: riscv32i-unknown-none-elf
+            - name: Install riscv64 GCC (for tests) and x64 GCC Linker Driver (for Rust)
+              run: sudo apt install -y gcc-riscv64-unknown-elf gcc
+            - name: Set oss-cad-suite vars (for cache)
+              run: |
+                echo >> $GITHUB_ENV OSS_CAD_SUITE_DATE=$(cat ci/oss-cad-suite-version)
+            - name: Cache OSS CAD Suite
+              id: cache-oss-cad-suite
+              uses: actions/cache@v3
+              with:
+                path: ~/cache/
+                key: ${{ runner.os }}-${{ env.OSS_CAD_SUITE_DATE }}
+            - name: Download OSS CAD Suite
+              if: steps.cache-oss-cad-suite.outputs.cache-hit != 'true'
+              run: |
+                mkdir -p ~/cache/oss-cad-suite-linux-x64
+                wget https://github.com/YosysHQ/oss-cad-suite-build/releases/download/$OSS_CAD_SUITE_DATE/oss-cad-suite-linux-x64-$(echo $OSS_CAD_SUITE_DATE | sed s/-//g).tgz -nv -O oss-cad-suite-linux-x64.tar.gz
+                tar -xzf oss-cad-suite-linux-x64.tar.gz -C ~/cache/oss-cad-suite-linux-x64
+            - name: Set OSS CAD Suite path
+              run: echo >> $GITHUB_PATH `echo ~/cache/oss-cad-suite-linux-x64/*/bin`
+            - name: Install PDM dependencies
+              run: pdm install -G examples -G dev -G riscof
+            - name: Run Pytest Tests
+              run: |
+                pdm test-quick
+            - name: Run RISCOF Suite
+              run: |
+                LD_PRELOAD="" pdm riscof-all
+            - name: Run RISC-V Formal
+              # LD_PRELOAD, which GHA seems to set by default, interferes with 
+              # oss-cad-suite setup by mixing incompatible libcs, so unset it
+              # for any commands requiring yosys/nextpnr.
+              run: |
+                LD_PRELOAD="" pdm rvformal-all
+            - name: Test Generate Verilog
+              run: |
+                LD_PRELOAD="" pdm gen -o sentinel.v
+              # We only build the Rust firmware here and not build the
+              # bitstream; building the bitstream will be identical to the next
+              # Benchmark step, aside from block RAM contents- redundant.
+            - name: Create Rust Bitstream
+              run: |
+                LD_PRELOAD="" pdm _rust-firmware
+              # Get an idea of whether the full default prime-counting firmware
+              # demo fits into 1280 LUTs or exceeds it a bit. This also
+              # checks whether a demo bitstream build was successful.
+              #
+              # I will remove continue-on-error once I'm confident the demo
+              # fits into 1280 LUTs on more than just my machines (*nix/Win).
+              # HINT: abc compiled with clang seems to optimize worse than abc
+              # compiled with gcc, regardless of OS.
+            - name: Benchmark Demo Bitstream
+              continue-on-error: true
+              run: |
+                LD_PRELOAD="" pdm bench-luts
