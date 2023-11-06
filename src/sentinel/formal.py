@@ -36,6 +36,7 @@ RVFISignature = Signature({
 
 class FormalTop(Component):
     CHECK_INT_ADDR = 1
+    CSR_DECODE_VALIDITY_ADDR = 0x24
     EXCEPTION_HANDLER_ADDR = 240
 
     @property
@@ -52,9 +53,8 @@ class FormalTop(Component):
         self.csrs = Signature({})
 
         for csr in ("mscratch", "mcause", "mip", "mie", "mstatus", "mtvec",
-                    "mepc"):
+                    "mepc", "misa"):
             self.add_csr(csr)
-        # self.add_csr("misa")
         self.rvfi_sig.members["csr"] = Out(self.csrs)
 
         super().__init__()
@@ -233,7 +233,6 @@ class FormalTop(Component):
         m.d.comb += self.rvfi.ixl.eq(1)
 
         # CSRS
-        # MSCRATCH
         m.submodules.mscratch = mscratch_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
         m.submodules.mcause = mcause_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
         m.submodules.mtvec = mtvec_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
@@ -249,10 +248,9 @@ class FormalTop(Component):
             self.rvfi.csr.mcause.rmask.eq(-1),
             self.rvfi.csr.mcause.wmask.eq(-1),
             self.rvfi.csr.mcause.rdata.eq(mcause_port.data),
-            # self.rvfi.csr.misa.rmask.eq(-1),
-            # self.rvfi.csr.misa.wmask.eq(-1),
-            # self.rvfi.csr.misa.rdata.eq(0),
-            # self.rvfi.csr.misa.wdata.eq(0),
+            self.rvfi.csr.misa.rmask.eq(-1),
+            self.rvfi.csr.misa.wmask.eq(-1),
+            self.rvfi.csr.misa.rdata.eq(0),
             self.rvfi.csr.mip.rmask.eq(-1),
             self.rvfi.csr.mip.wmask.eq(-1),
             self.rvfi.csr.mie.rmask.eq(-1),
@@ -276,6 +274,7 @@ class FormalTop(Component):
             mepc_port.en.eq(0),
         ]
 
+        # Actually-implemented CSRs
         with m.If(self.cpu.control.csr.op == CSROp.READ_CSR):
             with m.Switch(self.cpu.datapath.csr.adr_r):
                 with m.Case(CSRFile.MSCRATCH):
@@ -319,5 +318,38 @@ class FormalTop(Component):
                 with m.Case(CSRFile.MEPC):
                     m.d.sync += self.rvfi.csr.mepc.wdata.eq(
                         self.cpu.datapath.csr.dat_w)
+
+        # Read-only zero CSRs
+        # Read-only ops are optimized, so we can't inspect the datapath for
+        # their values. We'll have to manually construct the expected values
+        # and hope for the best.
+        csr_addr_shadow = Signal(12)
+        csr_op_shadow = Signal(3)
+        doing_csr_decode = Signal()
+
+        # sync, since uPC points one ahead of currently executing insn :).
+        m.d.sync += doing_csr_decode.eq(self.cpu.control.ucoderom.addr ==
+                                        self.CSR_DECODE_VALIDITY_ADDR)
+        with m.If(self.cpu.decode.do_decode):
+            m.d.sync += [
+                csr_addr_shadow.eq(self.cpu.decode.funct12),
+                csr_op_shadow.eq(self.cpu.decode.funct3)
+            ]
+
+        with m.If(doing_csr_decode):
+            with m.Switch(csr_addr_shadow):
+                with m.Case(0x301):  # misa
+                    with m.If((csr_op_shadow == 1) |
+                              ((csr_op_shadow == 2) &
+                               (self.rvfi.rs1_addr != 0))):
+                        # csrrw/csrrs
+                        m.d.sync += self.rvfi.csr.misa.wdata.eq(self.rvfi.rs1_rdata)  # noqa: E501
+                    with m.Elif((csr_op_shadow == 5) |
+                                ((csr_op_shadow == 6) &
+                                 (self.rvfi.rs1_addr != 0))):
+                        # csrrwi/csrrsi
+                        m.d.sync += self.rvfi.csr.misa.wdata.eq(self.rvfi.rs1_addr)  # noqa: E501
+                    with m.Else():
+                        m.d.sync += self.rvfi.csr.misa.wdata.eq(0)
 
         return m

@@ -213,8 +213,7 @@ SBY_TESTS = (
     "csr_ill_eff_ch0", "csrw_mip_ch0", "csrc_zero_mip_ch0", "csrw_mie_ch0",
     "csrc_zero_mie_ch0", "csrw_mstatus_ch0", "csrc_const_mstatus_ch0",
     "csrw_mtvec_ch0", "csrc_zero_mtvec_ch0", "csrw_mepc_ch0",
-    "csrc_zero_mepc_ch0",
-    # "csrw_misa_ch0", "csrc_zero_misa_ch0",
+    "csrc_zero_mepc_ch0", "csrw_misa_ch0", "csrc_zero_misa_ch0",
 )
 
 

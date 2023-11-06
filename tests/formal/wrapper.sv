@@ -66,11 +66,8 @@ module rvfi_wrapper (
                  `RVFI_CSR_AMARANTH_PORTS(mie),
                  `RVFI_CSR_AMARANTH_PORTS(mstatus),
                  `RVFI_CSR_AMARANTH_PORTS(mtvec),
-                 `RVFI_CSR_AMARANTH_PORTS(mepc)
-
-`ifdef RO0_IN_RW_SPACE
+                 `RVFI_CSR_AMARANTH_PORTS(mepc),
                  `RVFI_CSR_AMARANTH_PORTS(misa)
-`endif
     );
 
 reg [2:0] timeout_bus = 0;
