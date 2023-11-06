@@ -102,6 +102,7 @@ class Decode(Component):
         forward_csr = Signal()
         csr_quadrant = Signal(2)
         csr_op = Signal.like(self.funct3)
+        csr_ro_space = Signal()
 
         m.d.sync += [
             forward_csr.eq(0),
@@ -109,6 +110,7 @@ class Decode(Component):
             self.exception.eq(0),
             csr_quadrant.eq(self.funct12[8:10]),
             csr_op.eq(self.funct3),
+            csr_ro_space.eq(self.funct12[10:12] == 0b11)
         ]
 
         with m.If(self.do_decode):
@@ -262,17 +264,23 @@ class Decode(Component):
                     with m.If(illegal):
                         m.d.sync += self.exception.eq(1)
 
-                    # Read-only Zero CSRs.
+                    # Read-only Zero CSRs. Includes CSRs that are in actually
+                    # read-only space (top 2 bits set), all of which are 0
+                    # for this core.
                     with m.Elif(ro0):
-                        # CSRRW and CSRRWI don't have a mechanism to only
-                        # read a register.
-                        with m.If((csr_op != 1) &
-                                  (csr_op != 5) &
-                                  (self.src_a == 0)):
-                            # csrro0
-                            m.d.sync += self.requested_op.eq(0x25)
-                        with m.Else():
-                            m.d.sync += self.exception.eq(1)
+                        # AFAICT, writing to ro0 registers outside of the
+                        # read-only space should succeed (but the write is
+                        # ignored).
+                        # None of the ro0 registers have side effects either?
+                        # csrro0
+                        m.d.sync += self.requested_op.eq(0x25)
+                        with m.If(csr_ro_space):
+                            # CSRRW and CSRRWI don't have a mechanism to only
+                            # read a register.
+                            with m.If((csr_op == 1) |
+                                      (csr_op == 5) |
+                                      (self.src_a != 0)):
+                                m.d.sync += self.exception.eq(1)
 
                     with m.Else():
                         # Jump to microcode routines for actual, implemented
