@@ -9,6 +9,10 @@ import string
 from string import Template
 import sys
 from pathlib import Path
+from sentinel.soc import AttoSoC
+from amaranth.sim import Simulator
+from enum import Enum, auto
+
 
 import riscof.utils as utils
 import riscof.constants as constants
@@ -115,6 +119,7 @@ class sentinel(pluginTemplate):
       # we will iterate over each entry in the testList. Each entry node will be referred to by the
       # variable testname.
       for testname in testList:
+          soc = AttoSoC(sim=True, depth=8*32*1024)
 
           logger.debug('Running Test: {0} on DUT'.format(testname))
           # for each testname we get all its fields (as described by the testList format)
@@ -159,18 +164,80 @@ class sentinel(pluginTemplate):
           objcopy_run = f'riscv64-unknown-elf-objcopy -O binary {elf} {bin}'
           utils.shellCommand(objcopy_run).run(cwd=test_dir)
 
+          objdump_run = f'riscv64-unknown-elf-objdump -D {elf} > {test.stem}.disass;'
+          utils.shellCommand(objdump_run).run(cwd=test_dir)
+
           # for debug purposes if you would like stop the DUT plugin after compilation, you can
           # comment out the lines below and raise a SystemExit
-
           if self.target_run:
-            # build the command for running the elf on the DUT. In this case we use spike and indicate
-            # the isa arg that we parsed in the build stage, elf filename and signature filename.
-            # Template is for spike. Please change for your DUT
-            execute = self.dut_exe + ' --isa={0} +signature={1} +signature-granularity=4 {2}'.format(self.isa, sig_file, elf)
-            logger.debug('Executing on Spike ' + execute)
+            # TODO: Convert into SoC module (use wishbone.Decoder and friends)?
 
-          # launch the execute command. Change the test_dir if required.
-          utils.shellCommand(execute).run(cwd=test_dir)
+            class HOST_STATE(Enum):
+                WAITING_FIRST = auto()
+                FIRST_ACCESS_ACK = auto()
+                WAITING_SECOND = auto()
+                SECOND_ACCESS_ACK = auto()
+                DONE = auto()
+                TIMEOUT = auto()
+
+            def wait_for_host_write():
+                i = 0
+                state = HOST_STATE.WAITING_FIRST
+
+                while True:
+                    match state:
+                        case HOST_STATE.WAITING_FIRST:
+                            if ((yield soc.cpu.bus.adr) == 0x4000000 >> 2) and \
+                                    (yield soc.cpu.bus.sel == 0b1111) and \
+                                    (yield soc.cpu.bus.cyc) and (yield soc.cpu.bus.stb):
+                                yield soc.cpu.bus.ack.eq(1)
+                                state = HOST_STATE.FIRST_ACCESS_ACK
+                        case HOST_STATE.FIRST_ACCESS_ACK:
+                            begin_sig = (yield soc.cpu.bus.dat_w)
+                            yield soc.cpu.bus.ack.eq(0)
+                            state = HOST_STATE.WAITING_SECOND
+                        case HOST_STATE.WAITING_SECOND:
+                            if (yield soc.cpu.bus.adr) == ((0x4000000 + 4) >> 2) and \
+                                    (yield soc.cpu.bus.sel == 0b1111) and \
+                                    (yield soc.cpu.bus.cyc) and (yield soc.cpu.bus.stb):
+                                yield soc.cpu.bus.ack.eq(1)
+                                state = HOST_STATE.SECOND_ACCESS_ACK
+                        case HOST_STATE.SECOND_ACCESS_ACK:
+                            end_sig = (yield soc.cpu.bus.dat_w)
+                            yield soc.cpu.bus.ack.eq(0)
+                            state = HOST_STATE.DONE
+                        case HOST_STATE.DONE:
+                            break
+                        case HOST_STATE.TIMEOUT:
+                            raise AssertionError("CPU (but not microcode) probably "
+                                                "stuck in infinite loop")
+
+                    yield
+                    i += 1
+                    if i > 65535:
+                        state = HOST_STATE.TIMEOUT
+
+                # The end state of the simulation is to print out the locations
+                # of the beginning and ending signatures. They can then
+                # immediately be inserted into a file.
+                with open(sig_file, "w") as fp:
+                    for i in range(begin_sig, end_sig, 4):
+                        dat = (yield soc.mem.mem[i >> 2])
+                        fp.write(f"{dat:08x}\n")
+
+            with open(test_dir / bin, "rb") as fp:
+                soc.rom = fp.read()
+
+            logger.debug("Executing in Amaranth simulator")
+            sim = Simulator(soc)
+            sim.add_clock(1/(12e6))
+            sim.add_sync_process(wait_for_host_write)
+
+            vcd = test_dir / Path(test.stem).with_suffix(".vcd")
+            gtkw = test_dir / Path(test.stem).with_suffix(".gtkw")
+            with sim.write_vcd(vcd_file=str(vcd),
+                               gtkw_file=str(gtkw)):
+                sim.run()
 
           # post-processing steps can be added here in the template below
           #postprocess = 'mv {0} temp.sig'.format(sig_file)'

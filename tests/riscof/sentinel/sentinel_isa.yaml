@@ -4,10 +4,11 @@
 # defaults.
 hart_ids: [0]
 hart0:
-  ISA: RV32IZicsr
+  # ISA: RV32IZicsr  # Revisit once I-tests are working
+  ISA: RV32I
   physical_addr_sz: 32
   User_Spec_Version: '2.3'
-  Privilege_Spec_Version: '1.11'
+  # Privilege_Spec_Version: '1.11'  # Revisit once I-tests are working
   hw_data_misaligned_support: False
   supported_xlen: [32]
   mstatus:

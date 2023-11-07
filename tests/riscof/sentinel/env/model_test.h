@@ -10,11 +10,16 @@
         .align 8; .global end_regstate; end_regstate:                   \
         .word 4;
 
+#define HOST_PORT 0x4000000
+
 //RV_COMPLIANCE_HALT
 #define RVMODEL_HALT                                              \
-  li x1, 1;                                                                   \
-  write_tohost:                                                               \
-    sw x1, tohost, t5;                                                        \
+  la x1, begin_signature;                                         \
+  la x2, end_signature;                                           \
+  li t5, HOST_PORT;                                               \
+  write_tohost:                                                   \
+    sw x1, 0(t5);                                                 \
+    sw x2, 4(t5);                                                 \
     j write_tohost;
 
 #define RVMODEL_BOOT
@@ -28,7 +33,7 @@
 //RV_COMPLIANCE_DATA_END
 #define RVMODEL_DATA_END                                                      \
   .align 4;\
-  .global end_signature; end_signature:  
+  .global end_signature; end_signature:
 
 //RVTEST_IO_INIT
 #define RVMODEL_IO_INIT
