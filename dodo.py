@@ -1,7 +1,8 @@
 from pathlib import Path
 import subprocess
 from shutil import copy2, move
-from itertools import chain
+import os
+from itertools import chain, filterfalse
 from functools import partial
 
 # https://groups.google.com/g/python-doit/c/GFtEuBp82xc/m/j7jFkvAGH1QJ
@@ -117,6 +118,28 @@ def echo_sby_status(checks_dir, c):
         print(f"{c}... PASS")
 
 
+def opam_vars():
+    out, _ = subprocess.Popen("opam env", shell=True,
+                          stdout=subprocess.PIPE).communicate()
+    
+    vars = os.environ.copy()
+    for var in out.decode().replace("\n", " ").split("; "):
+        if "export" in var or not var:
+            continue
+        tmp = var.split("=")
+        k, v = tmp
+        vars[k] = v
+
+    return { "env": vars }
+
+
+def run_with_env(cmd, cwd, env):
+    rc = subprocess.Popen(cmd, cwd=cwd, env=env, shell=True).wait()
+
+    if rc:
+        return False
+
+
 # Private tasks
 def task__git():
     return {'actions': ["git rev-parse HEAD"]}
@@ -133,6 +156,10 @@ def task__demo():
         "targets": [yosys_log, nextpnr_log],
         "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")],
     }
+
+
+def task__opam():
+    return { "actions": [(opam_vars,)], "verbosity": 2 }
 
 
 # These two tasks do not require "pdm run" because I had trouble installing
@@ -210,6 +237,30 @@ def task_riscof_init():
         "uptodate": [run_once],
         "meta": {
             "title": "Initializing Sail RISC-V and RISCOF Tests submodules"
+        }
+    }
+
+
+def task_build_sail():
+    "initialize opam environment and build SAIL RISC-V emulators"
+    riscof_tests = Path("./tests/riscof/")
+    emu = riscof_tests / "sail-riscv" / "c_emulator/riscv_sim_RV32"
+    # FIXME: Imprecise.
+    src_files = [s for s in (riscof_tests / "sail-riscv" / "model").glob("*.sail")]  # noqa: E501
+    return {
+        "title": print_title,
+        "actions": [(partial(run_with_env,
+                             cmd="make ARCH=RV32 c_emulator/riscv_sim_RV32",
+                             cwd=riscof_tests / "sail-riscv")),
+                    (copy_, (emu, riscof_tests / "bin"))],
+        "verbosity": 2,
+        "meta": {
+            "title": "Building SAIL RISC-V emulators"
+        },
+        "file_dep": src_files,
+        "targets": [emu],
+        "getargs": {
+                "env": ("_opam", "env")
         }
     }
 
