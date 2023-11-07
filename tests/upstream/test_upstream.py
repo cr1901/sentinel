@@ -59,12 +59,7 @@ def wait_for_host_write(sim_mod, request):
                     yield m.cpu.bus.ack.eq(0)
                     state = HOST_STATE.DONE
                 case HOST_STATE.DONE:
-                    if "ma_fetch" in request.node.name:
-                        assert (val >> 1, val & 1) == (7, 1)
-                        pytest.xfail("ma_fetch requires a writable misa at "
-                                     "test 7, which we don't have")
-                    else:
-                        assert (val >> 1, val & 1) == (0, 1)
+                    assert (val >> 1, val & 1) == (0, 1)
                     break
                 case HOST_STATE.TIMEOUT:
                     raise AssertionError("CPU (but not microcode) probably "
