@@ -33,7 +33,7 @@ up-to-date test.
 `pdm run rvformal-status [name]` can be used to list whether a test/all tests
 passed or failed.
 
-(Make sure `doit` and `click` are installed via `pdm install --dev`. _You must
+(Make sure `doit` and `click` are installed via `pdm install -G dev`. _You must
 provide your own copy of `sby` and `boolector`_.)
 
 

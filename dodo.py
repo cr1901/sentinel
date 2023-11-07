@@ -196,6 +196,24 @@ def task_ucode():
     }
 
 
+# RISCOF
+def task_riscof_init():
+    "initialize Sail RISC-V and RISCOF Tests submodules"
+    riscof_tests = Path("./tests/riscof/")
+    sail_submod = riscof_tests / "sail-riscv" / ".git"
+    test_submod = riscof_tests / "riscv-arch-test" / ".git"
+    return {
+        "title": print_title,
+        "actions": [CmdAction("git submodule update --init --recursive",
+                              cwd=riscof_tests)],
+        "targets": [sail_submod, test_submod],
+        "uptodate": [run_once],
+        "meta": {
+            "title": "Initializing Sail RISC-V and RISCOF Tests submodules"
+        }
+    }
+
+
 # RISC-V Formal
 SBY_TESTS = (
     "causal_ch0", "cover", "insn_addi_ch0", "insn_add_ch0", "insn_andi_ch0",

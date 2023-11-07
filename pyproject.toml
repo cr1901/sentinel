@@ -42,6 +42,9 @@ dev = [
                      # this module and doesn't opt-in to PEP 517. So provide
                      # it here.
 ]
+riscof = [
+    "riscof>=1.25.3",
+]
 
 [tool.pdm.scripts]
 lint = { cmd = "flake8", help="lint python sources" }

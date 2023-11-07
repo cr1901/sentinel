@@ -43,13 +43,7 @@ development, a user must provide:
 **A user must first run the following before anything else:**
 
 ```
-pdm install
-```
-
-The [Run Tests](#run-tests) section and below require:
-
-```
-pdm install --dev
+pdm install -G dev
 ```
 
 ### Generate A Core
