@@ -265,6 +265,44 @@ def task_build_sail():
     }
 
 
+def task_run_riscof():
+    "run the RISCOF tests against Sentinel and Sail, and report results"
+    riscof_tests = Path("./tests/riscof/")
+    riscof_work = riscof_tests / "riscof_work"
+    sail_submod = riscof_tests / "sail-riscv" / ".git"
+    test_submod = riscof_tests / "riscv-arch-test" / ".git"
+
+    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
+    emu = riscof_tests / "sail-riscv" / "c_emulator/riscv_sim_RV32"
+    sail_plugin = riscof_tests / "sail_cSim"
+    sentinel_plugin = riscof_tests / "sentinel"
+    config_ini = riscof_tests / "config.ini"
+
+    sailp_files = [sail_plugin / s for s in ("env/link.ld", "env/model_test.h",
+                                             "__init__.py", "riscof_sail_cSim.py")]
+    sentp_files = [sentinel_plugin / s for s in ("riscof_sentinel.py",
+                                                 "env/link.ld",
+                                                 "env/model_test.h",
+                                                 "sentinel_isa.yaml",
+                                                 "sentinel_platform.yaml")]
+
+    vars = os.environ.copy()
+    vars["PATH"] += os.pathsep + str(riscof_tests.absolute() / "bin")
+    return {
+        "actions": [CmdAction("pdm run riscof run --config=config.ini "
+                              "--suite=riscv-arch-test/riscv-test-suite/ "
+                              "--env=riscv-arch-test/riscv-test-suite/env "
+                              "--no-browser",
+                              cwd=riscof_tests,
+                              env = vars)],
+        "targets": [riscof_work / "report.html",
+                    riscof_work / "test_list.yaml"],
+        "verbosity": 2,
+        "file_dep": pyfiles + sailp_files + sentp_files + [emu, config_ini,
+            sail_submod, test_submod, Path("./src/sentinel/microcode.asm")],
+    }
+    
+
 # RISC-V Formal
 SBY_TESTS = (
     "causal_ch0", "cover", "insn_addi_ch0", "insn_add_ch0", "insn_andi_ch0",

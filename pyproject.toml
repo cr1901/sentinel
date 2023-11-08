@@ -69,6 +69,8 @@ rvformal-force = { composite = [
 ], help="force-run a single RISC-V Formal test"}
 rvformal-gen = { cmd = "doit formal_gen_files", help="generate RISC-V Formal files" }
 rvformal-all = { cmd = "doit {args:-n 2} run_sby", help="run all RISC-V Formal tests" }
+# RISCOF
+riscof-all = { cmd = "doit run_riscof", help="run all RISCOF tests"}
 
 [tool.pdm.scripts.test-quick]
 cmd = "pytest -k \"test_top or test_upstream or test_witness\""
