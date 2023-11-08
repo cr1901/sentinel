@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess
 from shutil import copy2, move
 import os
+import gzip
 from itertools import chain, filterfalse
 from functools import partial
 
@@ -140,6 +141,24 @@ def run_with_env(cmd, cwd, env):
         return False
 
 
+def compress(src, dst):
+    with open(src, "rb") as fp:
+        c_bytes = gzip.compress(fp.read())
+
+    with open(dst, "wb") as fp:
+        fp.write(c_bytes) 
+
+
+def decompress(src, dst):
+    with open(src, "rb") as fp:
+        d_bytes = gzip.decompress(fp.read())
+
+    with open(dst, "wb") as fp:
+        fp.write(d_bytes) 
+
+    os.chmod(dst, 0o775)
+
+
 # Private tasks
 def task__git():
     return {'actions': ["git rev-parse HEAD"]}
@@ -160,6 +179,19 @@ def task__demo():
 
 def task__opam():
     return { "actions": [(opam_vars,)], "verbosity": 2 }
+
+
+def task__decompress_sail():
+    riscof_tests = Path("./tests/riscof/")
+    comp_emu = riscof_tests / "bin/riscv_sim_RV32.gz"
+    bin_emu = riscof_tests / "bin/riscv_sim_RV32"
+
+    return {
+        "actions": [(decompress, (comp_emu, bin_emu))],
+        # No file dep to avoid dependency on building SAIL.
+        "file_dep": [],
+        "targets": [bin_emu]
+    }
 
 
 # These two tasks do not require "pdm run" because I had trouble installing
@@ -252,13 +284,18 @@ def task_build_sail():
         "actions": [(partial(run_with_env,
                              cmd="make ARCH=RV32 c_emulator/riscv_sim_RV32",
                              cwd=riscof_tests / "sail-riscv")),
-                    (copy_, (emu, riscof_tests / "bin"))],
+                    # This is not a task of it's own because there shouldn't
+                    # be a dependency on building SAIL just for running
+                    # RISCOF in a just checked-out repo. Delegate to
+                    # decompression routine instead. This task should be
+                    # run manually.
+                    (compress, (emu, riscof_tests / "bin/riscv_sim_RV32.gz"))],
         "verbosity": 2,
         "meta": {
             "title": "Building SAIL RISC-V emulators"
         },
         "file_dep": src_files,
-        "targets": [emu],
+        "targets": [emu, riscof_tests / "bin/riscv_sim_RV32.gz"],
         "getargs": {
                 "env": ("_opam", "env")
         }
@@ -273,7 +310,7 @@ def task_run_riscof():
     test_submod = riscof_tests / "riscv-arch-test" / ".git"
 
     pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
-    emu = riscof_tests / "sail-riscv" / "c_emulator/riscv_sim_RV32"
+    emu = riscof_tests / "bin" / "riscv_sim_RV32"
     sail_plugin = riscof_tests / "sail_cSim"
     sentinel_plugin = riscof_tests / "sentinel"
     config_ini = riscof_tests / "config.ini"
@@ -289,6 +326,7 @@ def task_run_riscof():
     vars = os.environ.copy()
     vars["PATH"] += os.pathsep + str(riscof_tests.absolute() / "bin")
     return {
+        "title": print_title,
         "actions": [CmdAction("pdm run riscof run --config=config.ini "
                               "--suite=riscv-arch-test/riscv-test-suite/ "
                               "--env=riscv-arch-test/riscv-test-suite/env "
@@ -298,6 +336,9 @@ def task_run_riscof():
         "targets": [riscof_work / "report.html",
                     riscof_work / "test_list.yaml"],
         "verbosity": 2,
+        "meta": {
+            "title": "Running RISCOF tests"
+        },
         "file_dep": pyfiles + sailp_files + sentp_files + [emu, config_ini,
             sail_submod, test_submod, Path("./src/sentinel/microcode.asm")],
     }
