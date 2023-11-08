@@ -9,8 +9,8 @@ import string
 from string import Template
 import sys
 from pathlib import Path
-from sentinel.soc import AttoSoC
-from amaranth.sim import Simulator
+from sentinel.top import Top
+from amaranth.sim import Simulator, Passive
 from enum import Enum, auto
 
 
@@ -119,7 +119,7 @@ class sentinel(pluginTemplate):
       # we will iterate over each entry in the testList. Each entry node will be referred to by the
       # variable testname.
       for testname in testList:
-          soc = AttoSoC(sim=True, depth=8*32*1024)
+          top = Top()
 
           logger.debug('Running Test: {0} on DUT'.format(testname))
           # for each testname we get all its fields (as described by the testList format)
@@ -171,6 +171,8 @@ class sentinel(pluginTemplate):
           # comment out the lines below and raise a SystemExit
           if self.target_run:
             # TODO: Convert into SoC module (use wishbone.Decoder and friends)?
+            with open(test_dir / bin, "rb") as fp:
+                bin_ = bytearray(fp.read())
 
             class HOST_STATE(Enum):
                 WAITING_FIRST = auto()
@@ -187,24 +189,24 @@ class sentinel(pluginTemplate):
                 while True:
                     match state:
                         case HOST_STATE.WAITING_FIRST:
-                            if ((yield soc.cpu.bus.adr) == 0x4000000 >> 2) and \
-                                    (yield soc.cpu.bus.sel == 0b1111) and \
-                                    (yield soc.cpu.bus.cyc) and (yield soc.cpu.bus.stb):
-                                yield soc.cpu.bus.ack.eq(1)
+                            if ((yield top.bus.adr) == 0x4000000 >> 2) and \
+                                    (yield top.bus.sel == 0b1111) and \
+                                    (yield top.bus.cyc) and (yield top.bus.stb):
+                                # yield top.bus.ack.eq(1)
                                 state = HOST_STATE.FIRST_ACCESS_ACK
                         case HOST_STATE.FIRST_ACCESS_ACK:
-                            begin_sig = (yield soc.cpu.bus.dat_w)
-                            yield soc.cpu.bus.ack.eq(0)
+                            begin_sig = (yield top.bus.dat_w)
+                            # yield top.bus.ack.eq(0)
                             state = HOST_STATE.WAITING_SECOND
                         case HOST_STATE.WAITING_SECOND:
-                            if (yield soc.cpu.bus.adr) == ((0x4000000 + 4) >> 2) and \
-                                    (yield soc.cpu.bus.sel == 0b1111) and \
-                                    (yield soc.cpu.bus.cyc) and (yield soc.cpu.bus.stb):
-                                yield soc.cpu.bus.ack.eq(1)
+                            if (yield top.bus.adr) == ((0x4000000 + 4) >> 2) and \
+                                    (yield top.bus.sel == 0b1111) and \
+                                    (yield top.bus.cyc) and (yield top.bus.stb):
+                                # yield top.bus.ack.eq(1)
                                 state = HOST_STATE.SECOND_ACCESS_ACK
                         case HOST_STATE.SECOND_ACCESS_ACK:
-                            end_sig = (yield soc.cpu.bus.dat_w)
-                            yield soc.cpu.bus.ack.eq(0)
+                            end_sig = (yield top.bus.dat_w)
+                            # yield top.bus.ack.eq(0)
                             state = HOST_STATE.DONE
                         case HOST_STATE.DONE:
                             break
@@ -222,16 +224,63 @@ class sentinel(pluginTemplate):
                 # immediately be inserted into a file.
                 with open(sig_file, "w") as fp:
                     for i in range(begin_sig, end_sig, 4):
-                        dat = (yield soc.mem.mem[i >> 2])
+                        dat = 0
+                        dat |= bin_[i]
+                        dat |= bin_[i + 1] << 8
+                        dat |= bin_[i + 2] << 16
+                        dat |= bin_[i + 3] << 24
                         fp.write(f"{dat:08x}\n")
 
-            with open(test_dir / bin, "rb") as fp:
-                soc.rom = fp.read()
+            def read_write_mem():
+                yield Passive()
+
+                ios = (0x4000000 >> 2, 0x4000000 + 4 >> 2)
+                while True:
+                    yield top.bus.dat_r.eq(0)
+                    yield top.bus.ack.eq(0)
+
+                    if ((yield top.bus.cyc) and (yield top.bus.stb)):
+                        if not (yield top.bus.ack):
+                            yield top.bus.ack.eq(1)
+
+                        if ((yield top.bus.we) and (yield top.bus.ack) and
+                           ((yield top.bus.adr) not in ios)):
+                            data_word = (yield top.bus.dat_w)
+                            sel = (yield top.bus.sel)
+                            word_adr = (yield top.bus.adr) << 2
+
+                            if sel & 0b0001:
+                                bin_[word_adr] = data_word & 0xff
+                            if sel & 0b0010:
+                                bin_[word_adr + 1] = (data_word >> 8) & 0xff
+                            if sel & 0b0100:
+                                bin_[word_adr + 2] = (data_word >> 16) & 0xff
+                            if sel & 0b1000:
+                                bin_[word_adr + 3] = (data_word >> 24) & 0xff
+
+                        elif ((not (yield top.bus.ack)) and
+                             ((yield top.bus.adr) not in ios)):
+                            data_word = 0
+                            sel = (yield top.bus.sel)
+                            word_adr = (yield top.bus.adr) << 2
+
+                            if sel & 0b0001:
+                                data_word |= bin_[word_adr]
+                            if sel & 0b0010:
+                                data_word |= bin_[word_adr + 1] << 8
+                            if sel & 0b0100:
+                                data_word |= bin_[word_adr + 2] << 16
+                            if sel & 0b1000:
+                                data_word |= bin_[word_adr + 3] << 24
+
+                            yield top.bus.dat_r.eq(data_word)
+                    yield
 
             logger.debug("Executing in Amaranth simulator")
-            sim = Simulator(soc)
+            sim = Simulator(top)
             sim.add_clock(1/(12e6))
             sim.add_sync_process(wait_for_host_write)
+            sim.add_sync_process(read_write_mem)
 
             vcd = test_dir / Path(test.stem).with_suffix(".vcd")
             gtkw = test_dir / Path(test.stem).with_suffix(".gtkw")
