@@ -60,14 +60,13 @@ ucode = { cmd = "doit ucode", help="generate supplementary microcode files" }
 bench-luts = { cmd = "doit bench_luts", help="add stats to LUTs.csv" }
 plot-luts = { cmd = "doit plot_luts", help="plot LUTs.csv" }
 # Upstream
-compile-upstream = { cmd = "doit dump_tests", help="regnerate riscv-test binaries" }
+compile-upstream = { cmd = "doit compile_upstream", help="regnerate riscv-test binaries" }
 # RISC-V Formal
-rvformal = { cmd = "doit run_sby:{args}_vcds", help="run a single RISC-V Formal test" }
+rvformal = { cmd = "doit run_sby:{args}", help="run a single RISC-V Formal test" }
 rvformal-force = { composite = [
     "doit forget run_sby:{args}",
     "rvformal {args}"
 ], help="force-run a single RISC-V Formal test"}
-rvformal-gen = { cmd = "doit formal_gen_files", help="generate RISC-V Formal files" }
 rvformal-all = { cmd = "doit {args:-n 2} run_sby", help="run all RISC-V Formal tests" }
 # RISCOF
 riscof-all = { cmd = "doit run_riscof", help="run all RISCOF tests"}
