@@ -63,6 +63,7 @@ plot-luts = { cmd = "doit plot_luts", help="plot LUTs.csv" }
 compile-upstream = { cmd = "doit compile_upstream", help="regnerate riscv-test binaries" }
 # RISC-V Formal
 rvformal = { cmd = "doit run_sby:{args}", help="run a single RISC-V Formal test" }
+# Not clear to me that this is still required after refactors.
 rvformal-force = { composite = [
     "doit forget run_sby:{args}",
     "rvformal {args}"
@@ -82,3 +83,7 @@ help="list a single RISC-V Formal test's status"
 [tool.pdm.scripts.rvformal-status-all]
 cmd = "doit list_sby_status"
 help="list all RISC-V Formal tests' status"
+
+[tool.pdm.scripts.riscof-override]
+cmd = "doit run_riscof -t {args}"
+help = "run RISCOF with custom testfile"

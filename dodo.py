@@ -1,12 +1,14 @@
 from pathlib import Path
 import subprocess
-from shutil import copy2, move
+from shutil import copy2, move, rmtree
 import os
 import re
 import gzip
+import hashlib
 from itertools import chain
 from functools import partial
 
+from doit import task_params
 # https://groups.google.com/g/python-doit/c/GFtEuBp82xc/m/j7jFkvAGH1QJ
 from doit.action import CmdAction
 from doit.tools import run_once, create_folder, result_dep, title_with_actions
@@ -42,6 +44,12 @@ def copy_(src, dst):
 # Ditto.
 def move_(src, dst):
     move(src, dst)
+
+
+# Iterate over multiple trees and remove them!
+def rmtrees(paths):
+    for p in paths:
+        rmtree(p)
 
 
 # Lambdas are unpickleable on Windows (works on *nix?!), and some tasks can
@@ -238,8 +246,72 @@ def task__build_sail():
     }
 
 
-def task_run_riscof():
-    "run the RISCOF tests against Sentinel and Sail, and report results"
+def task__riscof_gen():
+    "run RISCOF's testlist command to prepare RISCOF files and directories"
+    riscof_tests = Path("./tests/riscof/")
+    riscof_work = riscof_tests / "riscof_work"
+
+    sentinel_plugin = riscof_tests / "sentinel"
+    config_ini = riscof_tests / "config.ini"
+
+    return {
+        "actions": [CmdAction("pdm run riscof testlist --config=config.ini "
+                              "--suite=riscv-arch-test/riscv-test-suite/ "
+                              "--env=riscv-arch-test/riscv-test-suite/env "
+                              "--work-dir=riscof_work",
+                              cwd=riscof_tests)],
+        "targets": [riscof_work / "sentinel_isa_checked.yaml",
+                    riscof_work / "sentinel_platform_checked.yaml",
+                    riscof_work / "database.yaml",
+                    riscof_work / "test_list.yaml"],
+        "file_dep": [config_ini, sentinel_plugin / "sentinel_isa.yaml",
+                     sentinel_plugin / "sentinel_platform.yaml"] 
+    }
+
+
+def task__clean_dut_ref_dirs():
+    "remove dut/ref directories from last RISCOF run"
+    
+    # This is required because RISCOF expects dut/ref dirs to not exist.
+    riscof_tests = Path("./tests/riscof/")
+    riscof_work = riscof_tests / "riscof_work"
+
+    dut_dirs = [s for s in riscof_work.glob("**/dut/")]
+    ref_dirs = [s for s in riscof_work.glob("**/ref/")]
+
+    return {
+        "actions": [(rmtrees, (dut_dirs,)),
+                    (rmtrees, (ref_dirs,))]
+    }
+
+
+def save_last_testfile(testfile):
+    return { "last_testfile": testfile }
+
+
+def last_testfile(task, values, testfile):
+    with open(testfile, "rb") as fp:
+        hash = hashlib.md5(fp.read()).hexdigest()
+
+    task.value_savers.append(partial(save_last_testfile, hash))
+    return values.get("last_testfile") == hash
+
+
+# Task params is required because task-creation time is the only time where
+# we can pass a command-line argument into uptodate. AFAICT, this still
+# creates one single task regardless of input parameters. Also note that
+# the param is still available in action string formatting (though I use
+# f-strings instead to create relative paths).
+#
+# The uptodate check checks whether we've passed the same testfile in
+# consecutively _by checking the file's MD5_. If the MD5 changed since the last
+# run, then our report is, in fact, out-of-date, regardless of the testfile's
+# location. Yes, this is all to support using custom testfiles :).
+@task_params([{"name": "testfile", "short": "t",
+               "default": "./tests/riscof/riscof_work/test_list.yaml",  # noqa: E501
+               "help": "path to alternate test list"}])
+def task_run_riscof(testfile):
+    "run RISCOF tests against Sentinel/Sail, and report results, removes previous run's artifacts"  # noqa: E501
     riscof_tests = Path("./tests/riscof/")
     riscof_work = riscof_tests / "riscof_work"
 
@@ -256,6 +328,12 @@ def task_run_riscof():
                                                  "sentinel_isa.yaml",
                                                  "sentinel_platform.yaml")]
 
+    # Support both absolute and relative paths from dodo.py root for "pdm run"
+    # convenience.
+    path_tf = Path(testfile)
+    if not path_tf.is_absolute():
+        path_tf = path_tf.absolute()
+
     vars = os.environ.copy()
     vars["PATH"] += os.pathsep + str(riscof_tests.absolute() / "bin")
     return {
@@ -263,20 +341,23 @@ def task_run_riscof():
         "actions": [CmdAction("pdm run riscof run --config=config.ini "
                               "--suite=riscv-arch-test/riscv-test-suite/ "
                               "--env=riscv-arch-test/riscv-test-suite/env "
-                              "--no-browser",
+                              f"--testfile={path_tf} "
+                              "--no-browser --no-clean",
                               cwd=riscof_tests,
-                              env = vars)],
-        "targets": [riscof_work / "report.html",
-                    riscof_work / "test_list.yaml"],
+                              env=vars)],
+        "targets": [riscof_work / "report.html" ],
         "verbosity": 2,
         "setup": ["_git_init:sail-riscv",
                   "_git_init:riscv-arch-test",
-                  "_decompress_sail"],
+                  "_decompress_sail",
+                  "_riscof_gen",
+                  "_clean_dut_ref_dirs"],
         "meta": {
             "title": "Running RISCOF tests"
         },
         "file_dep": pyfiles + sailp_files + sentp_files + [config_ini,
-            Path("./src/sentinel/microcode.asm")],
+                    Path("./src/sentinel/microcode.asm")],
+        "uptodate": [partial(last_testfile, testfile=testfile)],
     }
 
 
