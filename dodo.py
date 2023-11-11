@@ -53,22 +53,19 @@ def rmtrees(paths):
 
 
 # Lambdas are unpickleable on Windows (works on *nix?!), and some tasks can
-# be easily parallelized using multiprocessing if we don't use lambdas.
+# be easily parallelized using multiprocessing if we use pickleable types.
 # Custom titles were originally supplied using lambdas; work around the
 # multiprocessing limitation this by dispatching to a single print_title
-# function and using each tasks' "meta" field. Note this runs before
+# function whose evaluation is deferred using partial. Note this runs before
 # custom reporters (like MaybeSuppressReporter), and so can be combined.
-def print_title(task):
-    if task.meta:
-        return task.meta.get("title", "")
-    else:
-        return ""
+def print_title(task, title):
+    return title
 
 
 # Generic tasks
 def git_init(repo_dir):
     submod = repo_dir / ".git"
-    yield {
+    return {
         "basename": f"_git_init",
         "name": repo_dir.stem,
         "actions": [CmdAction("git submodule update --init --recursive",
@@ -224,7 +221,8 @@ def task__build_sail():
     # FIXME: Imprecise.
     src_files = [s for s in (riscof_tests / "sail-riscv" / "model").glob("*.sail")]  # noqa: E501
     return {
-        "title": print_title,
+        # TODO: Maybe make public?
+        "title": partial(print_title, title="Building SAIL RISC-V emulators"),
         "actions": [(partial(run_with_env,
                              cmd="make ARCH=RV32 c_emulator/riscv_sim_RV32",
                              cwd=riscof_tests / "sail-riscv")),
@@ -235,9 +233,6 @@ def task__build_sail():
                     # run manually.
                     (compress, (emu, riscof_tests / "bin/riscv_sim_RV32.gz"))],
         "verbosity": 2,
-        "meta": {
-            "title": "Building SAIL RISC-V emulators"
-        },
         "file_dep": src_files,
         "targets": [emu, riscof_tests / "bin/riscv_sim_RV32.gz"],
         "getargs": {
@@ -269,10 +264,10 @@ def task__riscof_gen():
     }
 
 
+# This is required because RISCOF expects dut/ref dirs to not exist.
 def task__clean_dut_ref_dirs():
     "remove dut/ref directories from last RISCOF run"
-    
-    # This is required because RISCOF expects dut/ref dirs to not exist.
+
     riscof_tests = Path("./tests/riscof/")
     riscof_work = riscof_tests / "riscof_work"
 
@@ -308,7 +303,7 @@ def last_testfile(task, values, testfile):
 # run, then our report is, in fact, out-of-date, regardless of the testfile's
 # location. Yes, this is all to support using custom testfiles :).
 @task_params([{"name": "testfile", "short": "t",
-               "default": "./tests/riscof/riscof_work/test_list.yaml",  # noqa: E501
+               "default": "./tests/riscof/riscof_work/test_list.yaml",
                "help": "path to alternate test list"}])
 def task_run_riscof(testfile):
     "run RISCOF tests against Sentinel/Sail, and report results, removes previous run's artifacts"  # noqa: E501
@@ -337,7 +332,7 @@ def task_run_riscof(testfile):
     vars = os.environ.copy()
     vars["PATH"] += os.pathsep + str(riscof_tests.absolute() / "bin")
     return {
-        "title": print_title,
+        "title": partial(print_title, title="Running RISCOF tests"),
         "actions": [CmdAction("pdm run riscof run --config=config.ini "
                               "--suite=riscv-arch-test/riscv-test-suite/ "
                               "--env=riscv-arch-test/riscv-test-suite/env "
@@ -352,9 +347,6 @@ def task_run_riscof(testfile):
                   "_decompress_sail",
                   "_riscof_gen",
                   "_clean_dut_ref_dirs"],
-        "meta": {
-            "title": "Running RISCOF tests"
-        },
         "file_dep": pyfiles + sailp_files + sentp_files + [config_ini,
                     Path("./src/sentinel/microcode.asm")],
         "uptodate": [partial(last_testfile, testfile=testfile)],
@@ -443,7 +435,8 @@ def task_run_sby():
         sby_file = (sentinel_dir / "checks" / c).with_suffix(".sby")
         yield {
             "name": c,
-            "title": print_title,
+            "title": partial(print_title,
+                             title=f"Running RISC-V Formal Test {c}"),
             "actions": [CmdAction(f"sby -f {sby_file.name}",
                                   cwd=sentinel_dir / "checks"),
                         (maybe_disasm_move_vcd, (sentinel_dir, root,
@@ -454,9 +447,6 @@ def task_run_sby():
             "verbosity": 2,
             "setup": ["_git_init:riscv-formal",
                       "_formal_gen_files"],
-            "meta": {
-                "title": f"Running RISC-V Formal Test {c}"
-            }
         }
 
 
