@@ -4,20 +4,20 @@ Tests from [RISC-V Formal](https://github.com/YosysHQ/riscv-formal) and
 support config files/code go here.
 
 Running the solvers used for RISC-V Formal is orchestrated by the [`dodo.py`](https://pydoit.org)
-at the root of this repo. If you need to run tests, first run:
-
-```
-pdm run rvformal-gen
-```
-
-and then run:
+at the root of this repo. If you need to run tests run:
 
 ```
 pdm run rvformal [name]
 ```
 
-where `name` is the name of one of the `.sby` files _minus the extension_
-under `riscv-formal/cores/sentinel/checks` (generated in `rvformal-gen`).
+where `name` is the name of one of [available tests](#available-tests) listed
+below. This will:
+
+* Check out the RISC-V Formal submodule for you.
+* Generated all files all files to run the formal flow will automatically by
+  running RISC-V Formals' [genchecks.py](https://github.com/YosysHQ/riscv-formal/blob/main/checks/genchecks.py),
+  subject to DoIt's dependency management.
+* Actually run the RISC-V Formal flow.
 
 You can also run `pdm run rvformal-all` to run everything; `rvformal-all`
 takes an `-n [num_cores]` option to parallelize the tests. Either command will
@@ -27,15 +27,14 @@ repo.
 Although public and documented, the DoIt tasks should be considered unstable;
 `pdm run` should be preferred. Note that the DoIt tasks might not run unless
 input files contents (like the Python source) are meaningfully changed.- i.e.
-_not just the timestamp_.  Run `pdm run rvformal-force [name]` to force-run an
+_not just the timestamp_. Run `pdm run rvformal-force [name]` to force-run an
 up-to-date test.
 
 `pdm run rvformal-status [name]` can be used to list whether a test/all tests
-passed or failed.
+passed or failed. _This will run the test if it has not been run yet._
 
 (Make sure `doit` and `click` are installed via `pdm install -G dev`. _You must
 provide your own copy of `sby` and `boolector`_.)
-
 
 ## Available Tests
 This list should reflect the `SBY_TESTS` tuple in `dodo.py`. It may
