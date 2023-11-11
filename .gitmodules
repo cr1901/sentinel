@@ -4,3 +4,9 @@
 [submodule "tests/formal/riscv-formal"]
 	path = tests/formal/riscv-formal
 	url = https://github.com/YosysHQ/riscv-formal
+[submodule "tests/riscof/sail-riscv"]
+	path = tests/riscof/sail-riscv
+	url = https://github.com/riscv/sail-riscv.git
+[submodule "tests/riscof/riscv-arch-test"]
+	path = tests/riscof/riscv-arch-test
+	url = https://github.com/riscv-non-isa/riscv-arch-test

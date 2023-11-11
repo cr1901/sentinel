@@ -1,0 +1,26 @@
+# Useful docs: https://riscv-config.readthedocs.io/en/stable/yaml-specs.html
+# https://github.com/riscv-software-src/riscv-config/blob/b550aaa38538797b6f63aba2e2385c83642f6756/riscv_config/schemas/schema_isa.yaml
+# This file references the schema to skip over CSR fields with already-correct
+# defaults.
+hart_ids: [0]
+hart0:
+  # ISA: RV32IZicsr  # Revisit once I-tests are working
+  ISA: RV32I
+  physical_addr_sz: 32
+  User_Spec_Version: '2.3'
+  # Privilege_Spec_Version: '1.11'  # Revisit once I-tests are working
+  hw_data_misaligned_support: False
+  supported_xlen: [32]
+  mstatus:
+    reset-val: 0x00018000
+    rv64:
+      accessible: false
+    rv32:
+      mpp:
+        type:
+          ro_constant: 0b11
+      sd:
+        implemented: false
+  mstatush:
+    rv32:
+      accessible: true

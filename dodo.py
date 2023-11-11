@@ -1,13 +1,17 @@
 from pathlib import Path
 import subprocess
-from shutil import copy2, move
+from shutil import copy2, move, rmtree
+import os
+import re
+import gzip
+import hashlib
 from itertools import chain
 from functools import partial
 
+from doit import task_params
 # https://groups.google.com/g/python-doit/c/GFtEuBp82xc/m/j7jFkvAGH1QJ
 from doit.action import CmdAction
-from doit.tools import run_once, create_folder, result_dep, \
-    check_timestamp_unchanged
+from doit.tools import run_once, create_folder, result_dep, title_with_actions
 from doit.reporter import ConsoleReporter
 
 
@@ -42,137 +46,96 @@ def move_(src, dst):
     move(src, dst)
 
 
+# Iterate over multiple trees and remove them!
+def rmtrees(paths):
+    for p in paths:
+        rmtree(p)
+
+
 # Lambdas are unpickleable on Windows (works on *nix?!), and some tasks can
-# be easily parallelized using multiprocessing if we don't use lambdas.
+# be easily parallelized using multiprocessing if we use pickleable types.
 # Custom titles were originally supplied using lambdas; work around the
 # multiprocessing limitation this by dispatching to a single print_title
-# function and using each tasks' "meta" field. Note this runs before
+# function whose evaluation is deferred using partial. Note this runs before
 # custom reporters (like MaybeSuppressReporter), and so can be combined.
-def print_title(task):
-    if task.meta:
-        return task.meta.get("title", "")
-    else:
-        return ""
+def print_title(task, title):
+    return title
 
 
-def with_root_and_suffix(path, root, suffix):
-    return root / path.with_suffix(suffix).name
+# Generic tasks
+def git_init(repo_dir):
+    submod = repo_dir / ".git"
+    return {
+        "basename": f"_git_init",
+        "name": repo_dir.stem,
+        "actions": [CmdAction("git submodule update --init --recursive",
+                              cwd=repo_dir)],
+        "targets": [submod],
+        "uptodate": [run_once],
+    }
 
 
-def maybe_disasm_move_vcd(sentinel_dir, root, path):
-    sby_dir = sentinel_dir / "checks" / path.stem
+def task_git():
+    riscof_tests = Path("./tests/riscof/")
 
-    cover = path.stem == "cover"
+    yield {
+        "basename": "_git_init",
+        "name": None,
+        "doc": "initialize git submodules, \"doit list --all -p _git_init\" for choices"
+    }
 
-    if cover:
-        trace_names = ("trace0.vcd", "trace1.vcd", "trace2.vcd")
-    else:
-        trace_names = ("trace.vcd",)
-
-    for i, trace_name in enumerate(trace_names):
-        if cover:
-            maybe_path_with_num = path.parent / (path.stem + str(i) +
-                                                 path.suffix)
-        else:
-            maybe_path_with_num = path
-
-        if (sby_dir / "engine_0" / trace_name).exists():
-            copy2(sby_dir / "engine_0" / trace_name,
-                  with_root_and_suffix(maybe_path_with_num, root, ".vcd"))
-
-            rc = subprocess.Popen(["python3", "disasm.py",
-                                   Path("checks") / path.stem /
-                                   "engine_0" / trace_name,
-                                   maybe_path_with_num.stem],
-                                  cwd=sentinel_dir).wait()
-
-            if rc:
-                return False
-
-            # If successful, will produce a disasm.s
-            rc = subprocess.Popen("riscv64-unknown-elf-objdump -d "
-                                  f"-M numeric,no-aliases disasm-{maybe_path_with_num.stem}.o "  # noqa E501
-                                  f"> disasm-{maybe_path_with_num.stem}.s",
-                                  cwd=sentinel_dir, shell=True).wait()
-
-            if rc:
-                return False
-
-            # Which we then copy to the root.
-            copy2(sentinel_dir / f"disasm-{maybe_path_with_num.stem}.s",
-                  with_root_and_suffix(maybe_path_with_num, root, ".s"))
-
-    return True
+    for p in [Path("./tests/upstream/riscv-tests"),
+              Path("./tests/formal/riscv-formal"),
+              riscof_tests / "sail-riscv", riscof_tests / "riscv-arch-test"]:
+        yield git_init(p)
 
 
-# Customize the status task(s) to print all output on a single line.
-# Think like autoconf scripts "checking for foo... yes"!
-def echo_sby_status(checks_dir, c):
-    with open(checks_dir / c / "status", "r") as fp:
-        res = fp.read()
-
-    if "FAIL" in res:
-        print(f"{c}... FAIL")
-    else:
-        print(f"{c}... PASS")
-
-
-# Private tasks
-def task__git():
+def task__git_rev():
+    "get git revision"
     return {'actions': ["git rev-parse HEAD"]}
 
 
 def task__demo():
-    build_dir = Path("./build")
-    yosys_log = build_dir / "top.rpt"
-    nextpnr_log = build_dir / "top.tim"
-    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
-
-    return {
-        "actions": ["pdm demo"],
-        "targets": [yosys_log, nextpnr_log],
-        "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")],
-    }
+    "create a demo bitstream (for benchmarking)"
+    return { "actions": ["pdm demo"] }
 
 
 # These two tasks do not require "pdm run" because I had trouble installing
 # matplotlib into the venv. Intended usage in cases like mine is
 # "doit bench_luts" or "doit plot_luts".
-def task_bench_luts():
-    "build \"pdm demo\" bitstream (if out of date), record LUT usage using LogLUTs"  # noqa: E501
+# Private tasks
+def task_luts():
     build_dir = Path("./build")
     yosys_log = build_dir / "top.rpt"
     nextpnr_log = build_dir / "top.tim"
     luts_csv = Path("./LUTs.csv")
+    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
 
-    return {
+    yield {
+        "basename": "bench_luts",
         "actions": [f"python -m logluts --yosys-log {yosys_log} "
                     f"--nextpnr-log {nextpnr_log} --git . --target ice40 "
                     f"--add-commit --csvfile {luts_csv}"
                     ],
         "targets": [luts_csv],
-        "file_dep": [yosys_log, nextpnr_log],
-        "uptodate": [result_dep("_git")],
-        "verbosity": 2
+        "uptodate": [result_dep("_git_rev")],
+        "verbosity": 2,
+        "setup" : ["_demo"],
+        "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")],
+        "doc": "build \"pdm demo\" bitstream (if out of date), record LUT usage using LogLUTs"  # noqa: E501
     }
 
-
-def task_plot_luts():
-    "build \"pdm demo\" bitstream (if out of date), plot LUT usage using LogLUTs"  # noqa: E501
-    build_dir = Path("./build")
-    yosys_log = build_dir / "top.rpt"
-    nextpnr_log = build_dir / "top.tim"
-    luts_csv = Path("./LUTs.csv")
-
-    return {
+    yield {
+        "basename": "plot_luts",
         "actions": [f"python -m logluts --yosys-log {yosys_log} "
                     f"--nextpnr-log {nextpnr_log} --git . --target ice40 "
                     f"--plot --csvfile {luts_csv}"
                     ],
         "targets": [],
-        "file_dep": [yosys_log, nextpnr_log],
         "uptodate": [False],
-        "verbosity": 2
+        "verbosity": 2,
+        "file_dep": [luts_csv],
+        "doc": "build \"pdm demo\" bitstream (if out of date), plot LUT usage using LogLUTs"  # noqa: E501
     }
 
 
@@ -193,6 +156,200 @@ def task_ucode():
                     }],
         "targets": [Path(".") / hex_.name, Path(".") / fdef.name],
         "file_dep": [ucode],
+    }
+
+
+# RISCOF
+def opam_vars():
+    out = subprocess.run("opam env", shell=True, stdout=subprocess.PIPE).stdout
+
+    vars = os.environ.copy()
+    for var in out.decode().replace("\n", " ").split("; "):
+        if "export" in var or not var:
+            continue
+        tmp = var.split("=")
+        k, v = tmp
+        vars[k] = v
+
+    return { "env": vars }
+
+
+def compress(src, dst):
+    with open(src, "rb") as fp:
+        c_bytes = gzip.compress(fp.read())
+
+    with open(dst, "wb") as fp:
+        fp.write(c_bytes)
+
+
+def decompress(src, dst):
+    with open(src, "rb") as fp:
+        d_bytes = gzip.decompress(fp.read())
+
+    with open(dst, "wb") as fp:
+        fp.write(d_bytes)
+
+    os.chmod(dst, 0o775)
+
+
+def run_with_env(cmd, cwd, env):
+    return subprocess.run(cmd, cwd=cwd, env=env, shell=True).check_returncode()
+
+
+def task__opam():
+    "extract environment vars from opam"
+    return { "actions": [(opam_vars,)], "verbosity": 2 }
+
+
+def task__decompress_sail():
+    "decompress previously-built SAIL emulator"
+    riscof_tests = Path("./tests/riscof/")
+    comp_emu = riscof_tests / "bin/riscv_sim_RV32.gz"
+    bin_emu = riscof_tests / "bin/riscv_sim_RV32"
+
+    return {
+        "actions": [(decompress, (comp_emu, bin_emu))],
+        # No file dep to avoid dependency on building SAIL.
+        "file_dep": [],
+    }
+
+
+def task__build_sail():
+    "build SAIL RISC-V emulators in opam environment, compress"
+    riscof_tests = Path("./tests/riscof/")
+    emu = riscof_tests / "sail-riscv" / "c_emulator/riscv_sim_RV32"
+    # FIXME: Imprecise.
+    src_files = [s for s in (riscof_tests / "sail-riscv" / "model").glob("*.sail")]  # noqa: E501
+    return {
+        # TODO: Maybe make public?
+        "title": partial(print_title, title="Building SAIL RISC-V emulators"),
+        "actions": [(partial(run_with_env,
+                             cmd="make ARCH=RV32 c_emulator/riscv_sim_RV32",
+                             cwd=riscof_tests / "sail-riscv")),
+                    # This is not a task of it's own because there shouldn't
+                    # be a dependency on building SAIL just for running
+                    # RISCOF in a just checked-out repo. Delegate to
+                    # decompression routine instead. This task should be
+                    # run manually.
+                    (compress, (emu, riscof_tests / "bin/riscv_sim_RV32.gz"))],
+        "verbosity": 2,
+        "file_dep": src_files,
+        "targets": [emu, riscof_tests / "bin/riscv_sim_RV32.gz"],
+        "getargs": {
+                "env": ("_opam", "env")
+        }
+    }
+
+
+def task__riscof_gen():
+    "run RISCOF's testlist command to prepare RISCOF files and directories"
+    riscof_tests = Path("./tests/riscof/")
+    riscof_work = riscof_tests / "riscof_work"
+
+    sentinel_plugin = riscof_tests / "sentinel"
+    config_ini = riscof_tests / "config.ini"
+
+    return {
+        "actions": [CmdAction("pdm run riscof testlist --config=config.ini "
+                              "--suite=riscv-arch-test/riscv-test-suite/ "
+                              "--env=riscv-arch-test/riscv-test-suite/env "
+                              "--work-dir=riscof_work",
+                              cwd=riscof_tests)],
+        "targets": [riscof_work / "sentinel_isa_checked.yaml",
+                    riscof_work / "sentinel_platform_checked.yaml",
+                    riscof_work / "database.yaml",
+                    riscof_work / "test_list.yaml"],
+        "file_dep": [config_ini, sentinel_plugin / "sentinel_isa.yaml",
+                     sentinel_plugin / "sentinel_platform.yaml"] 
+    }
+
+
+# This is required because RISCOF expects dut/ref dirs to not exist.
+def task__clean_dut_ref_dirs():
+    "remove dut/ref directories from last RISCOF run"
+
+    riscof_tests = Path("./tests/riscof/")
+    riscof_work = riscof_tests / "riscof_work"
+
+    dut_dirs = [s for s in riscof_work.glob("**/dut/")]
+    ref_dirs = [s for s in riscof_work.glob("**/ref/")]
+
+    return {
+        "actions": [(rmtrees, (dut_dirs,)),
+                    (rmtrees, (ref_dirs,))]
+    }
+
+
+def save_last_testfile(testfile):
+    return { "last_testfile": testfile }
+
+
+def last_testfile(task, values, testfile):
+    with open(testfile, "rb") as fp:
+        hash = hashlib.md5(fp.read()).hexdigest()
+
+    task.value_savers.append(partial(save_last_testfile, hash))
+    return values.get("last_testfile") == hash
+
+
+# Task params is required because task-creation time is the only time where
+# we can pass a command-line argument into uptodate. AFAICT, this still
+# creates one single task regardless of input parameters. Also note that
+# the param is still available in action string formatting (though I use
+# f-strings instead to create relative paths).
+#
+# The uptodate check checks whether we've passed the same testfile in
+# consecutively _by checking the file's MD5_. If the MD5 changed since the last
+# run, then our report is, in fact, out-of-date, regardless of the testfile's
+# location. Yes, this is all to support using custom testfiles :).
+@task_params([{"name": "testfile", "short": "t",
+               "default": "./tests/riscof/riscof_work/test_list.yaml",
+               "help": "path to alternate test list"}])
+def task_run_riscof(testfile):
+    "run RISCOF tests against Sentinel/Sail, and report results, removes previous run's artifacts"  # noqa: E501
+    riscof_tests = Path("./tests/riscof/")
+    riscof_work = riscof_tests / "riscof_work"
+
+    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
+    sail_plugin = riscof_tests / "sail_cSim"
+    sentinel_plugin = riscof_tests / "sentinel"
+    config_ini = riscof_tests / "config.ini"
+
+    sailp_files = [sail_plugin / s for s in ("env/link.ld", "env/model_test.h",
+                                             "__init__.py", "riscof_sail_cSim.py")]
+    sentp_files = [sentinel_plugin / s for s in ("riscof_sentinel.py",
+                                                 "env/link.ld",
+                                                 "env/model_test.h",
+                                                 "sentinel_isa.yaml",
+                                                 "sentinel_platform.yaml")]
+
+    # Support both absolute and relative paths from dodo.py root for "pdm run"
+    # convenience.
+    path_tf = Path(testfile)
+    if not path_tf.is_absolute():
+        path_tf = path_tf.absolute()
+
+    vars = os.environ.copy()
+    vars["PATH"] += os.pathsep + str(riscof_tests.absolute() / "bin")
+    return {
+        "title": partial(print_title, title="Running RISCOF tests"),
+        "actions": [CmdAction("pdm run riscof run --config=config.ini "
+                              "--suite=riscv-arch-test/riscv-test-suite/ "
+                              "--env=riscv-arch-test/riscv-test-suite/env "
+                              f"--testfile={path_tf} "
+                              "--no-browser --no-clean",
+                              cwd=riscof_tests,
+                              env=vars)],
+        "targets": [riscof_work / "report.html" ],
+        "verbosity": 2,
+        "setup": ["_git_init:sail-riscv",
+                  "_git_init:riscv-arch-test",
+                  "_decompress_sail",
+                  "_riscof_gen",
+                  "_clean_dut_ref_dirs"],
+        "file_dep": pyfiles + sailp_files + sentp_files + [config_ini,
+                    Path("./src/sentinel/microcode.asm")],
+        "uptodate": [partial(last_testfile, testfile=testfile)],
     }
 
 
@@ -217,77 +374,49 @@ SBY_TESTS = (
 )
 
 
-def task_formal_init():
-    "initialize RISC-V Formal submodule"
+def task__formal_gen_files():
+    "copy Sentinel files and run RISC-V Formal's genchecks.py script"
     formal_tests = Path("./tests/formal/")
-    submod = formal_tests / "riscv-formal" / ".git"
-    return {
-        "title": print_title,
-        "actions": [CmdAction("git submodule update --init --recursive",
-                              cwd=formal_tests)],
-        "targets": [submod],
-        "uptodate": [run_once],
-        "meta": {
-            "title": "Initializing RISC-V Formal submodule"
-        }
-    }
-
-
-def task_formal_mkdir_copy_files():
-    "copy Sentinel files in tests/formal to RISC-V Formal submodule"
-    formal_tests = Path("./tests/formal/")
-    submod = formal_tests / "riscv-formal" / ".git"
     cores_dir = formal_tests / "riscv-formal" / "cores"
     sentinel_dir = cores_dir / "sentinel"
 
     disasm_py = formal_tests / "disasm.py"
     checks_cfg = formal_tests / "checks.cfg"
     wrapper_sv = formal_tests / "wrapper.sv"
+    sentinel_v = sentinel_dir / "sentinel.v"
 
     return {
-        "title": print_title,
         "actions": [(create_folder, [cores_dir / "sentinel"]),
                     (copy_, [disasm_py, sentinel_dir / disasm_py.name]),
                     (copy_, [checks_cfg, sentinel_dir / checks_cfg.name]),
-                    (copy_, [wrapper_sv, sentinel_dir / wrapper_sv.name])],
-        "targets": [sentinel_dir / disasm_py.name,
-                    sentinel_dir / checks_cfg.name,
-                    sentinel_dir / wrapper_sv.name],
-        "file_dep": [disasm_py, checks_cfg, wrapper_sv, submod],
-        "meta": {
-            "title": "Moving formal cfg into RISC-V Formal submodule"
-        }
-    }
-
-
-def task_formal_gen_files():
-    "run RISC-V Formal's genchecks.py script using copied Sentinel inputs"
-    formal_tests = Path("./tests/formal/")
-    cores_dir = formal_tests / "riscv-formal" / "cores"
-    sentinel_dir = cores_dir / "sentinel"
-    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
-
-    disasm_py = sentinel_dir / "disasm.py"
-    checks_cfg = sentinel_dir / "checks.cfg"
-    wrapper_sv = sentinel_dir / "wrapper.sv"
-    sentinel_v = sentinel_dir / "sentinel.v"
-    genchecks = formal_tests / "riscv-formal" / "checks" / "genchecks.py"
-
-    sby_files = [(sentinel_dir / "checks" / s).with_suffix(".sby")
-                 for s in SBY_TESTS]
-
-    return {
-        "title": print_title,
-        "actions": [f"pdm gen -o {sentinel_v} -f",
+                    (copy_, [wrapper_sv, sentinel_dir / wrapper_sv.name]),
+                    f"pdm gen -o {sentinel_v} -f",
                     CmdAction("python3 ../../checks/genchecks.py",
-                              cwd=sentinel_dir),
-                    ],
-        "targets": sby_files + [sentinel_v],
-        "file_dep": [disasm_py, checks_cfg, wrapper_sv, genchecks] + pyfiles,
-        "meta": {
-            "title": "Generating RISC-V Formal tests"
-        }
+                              cwd=sentinel_dir)],
     }
+
+
+def maybe_disasm_move_vcd(sentinel_dir, root, sby_file):
+    sby_dir: Path = sby_file.with_suffix("")
+    trace_names = [t for t in (sby_dir / "engine_0" ).glob("trace*.vcd")]
+
+    id_re = re.compile("[0-9]*$")
+    for tn in trace_names:
+        num = id_re.search(str(tn.stem))
+        rel_tn = tn.relative_to(sentinel_dir)
+        stem_id = sby_file.stem + num[0] if num else ""
+        out_path = root / stem_id
+
+        copy2(tn, out_path.with_suffix(".vcd"))
+        ret = subprocess.run(["python3", "disasm.py", rel_tn,
+                              stem_id], stdout=subprocess.PIPE,
+                             cwd=sentinel_dir)
+        ret.check_returncode()
+
+        d_src = ret.stdout.decode("utf-8")
+        print(d_src)
+        with open(out_path.with_suffix(".s"), "w") as fp:
+            fp.write(d_src)
 
 
 def task_run_sby():
@@ -296,42 +425,42 @@ def task_run_sby():
     formal_tests = Path("./tests/formal/")
     cores_dir = formal_tests / "riscv-formal" / "cores"
     sentinel_dir = cores_dir / "sentinel"
-    sentinel_v = sentinel_dir / "sentinel.v"
+    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
+    genchecks = formal_tests / "riscv-formal" / "checks" / "genchecks.py"
+    disasm_py = formal_tests / "disasm.py"
+    checks_cfg = formal_tests / "checks.cfg"
 
-    sby_files = [(sentinel_dir / "checks" / s).with_suffix(".sby")
-                 for s in SBY_TESTS]
-
-    for c in sby_files:
+    for c in SBY_TESTS:
+        sby_file = (sentinel_dir / "checks" / c).with_suffix(".sby")
         yield {
-            "name": c.stem,
-            "title": print_title,
-            "actions": [CmdAction(f"sby -f {c.name}",
-                                  cwd=sentinel_dir / "checks")],
-            "targets": [sentinel_dir / "checks" / c.stem / "status"],
-            "file_dep": [c, sentinel_v],
+            "name": c,
+            "title": partial(print_title,
+                             title=f"Running RISC-V Formal Test {c}"),
+            "actions": [CmdAction(f"sby -f {sby_file.name}",
+                                  cwd=sentinel_dir / "checks"),
+                        (maybe_disasm_move_vcd, (sentinel_dir, root,
+                                                 sby_file))],
+            "targets": [sentinel_dir / "checks" / c / "status"],
+            "file_dep": pyfiles + [genchecks, disasm_py, checks_cfg,
+                                   Path("./src/sentinel/microcode.asm")],
             "verbosity": 2,
-            "meta": {
-                "title": f"Running RISC-V Formal Test {c.stem}"
-            }
+            "setup": ["_git_init:riscv-formal",
+                      "_formal_gen_files"],
         }
 
-        yield {
-            "name": f"{c.stem}_vcds",
-            "title": print_title,
-            "actions": [
-                (maybe_disasm_move_vcd, (sentinel_dir, root, c))
-            ],
-            "file_dep": [sentinel_dir / "checks" / c.stem / "status"],
-            "targets": [],
-            "task_dep": [f"run_sby:{c.stem}"],
-            "verbosity": 2,
-            "uptodate": [check_timestamp_unchanged(str(sentinel_dir /
-                                                       "checks" /
-                                                       c.stem / "status"))],
-            "meta": {
-                "title": f"Generating VCD and disasm for RISC-V Formal Test {c.stem} (if exists)"  # noqa: E501
-            }
-        }
+
+# Customize the status task(s) to print all output on a single line.
+# Think like autoconf scripts "checking for foo... yes"!
+def echo_sby_status(checks_dir, c):
+    # TODO: Handle "not run yet" if status doesn't exist? What about
+    # "out-of-date"?
+    with open(checks_dir / c / "status", "r") as fp:
+        res = fp.read()
+
+    if "FAIL" in res:
+        print(f"{c}... FAIL")
+    else:
+        print(f"{c}... PASS")
 
 
 def task_list_sby_status():
@@ -358,18 +487,6 @@ def task_list_sby_status():
 UNSUPPORTED_UPSTREAM = ("breakpoint",)
 
 
-def task_upstream_init():
-    "initialize riscv-tests submodule"
-    upstream_tests = Path("./tests/upstream/")
-    submod = upstream_tests / "riscv-tests" / ".git"
-    return {
-        "actions": [CmdAction("git submodule update --init --recursive",
-                              cwd=upstream_tests)],
-        "targets": [submod],
-        "uptodate": [run_once],
-    }
-
-
 # I figured out the correct invocations for compiling and objdump by running
 # the autoconf script, compiling normally, and seeing which flags the compiler
 # and objdump are invoked with. It might not be perfect (but seems to work
@@ -377,7 +494,7 @@ def task_upstream_init():
 def task_compile_upstream():
     "compile riscv-tests tests to ELF, \"doit list --all compile_upstream\" for choices"  # noqa: E501
     flags = "-march=rv32g -mabi=ilp32 -static -mcmodel=medany \
--fvisibility=hidden -nostdlib -nostartfiles".split(" ")
+-fvisibility=hidden -nostdlib -nostartfiles"
 
     upstream_tests = Path("./tests/upstream/")
     outdir = upstream_tests / "binaries"
@@ -392,6 +509,7 @@ def task_compile_upstream():
     yield {
         "name": "mkdir",
         "actions": [(create_folder, [outdir])],
+        "uptodate": [run_once]
     }
 
     for source_file in chain(isa_dir.glob('*.S'), mmode_dir.glob('*.S')):
@@ -399,65 +517,25 @@ def task_compile_upstream():
             continue
 
         elf_file = outdir / source_file.with_suffix(".elf").name
-        yield {
-            "name": elf_file.name,
-            "actions": [["riscv64-unknown-elf-gcc", source_file, *flags,
-                         "-I", upstream_tests, "-I", macros_dir, "-I", env_dir,
-                         "-T", link_file, "-o", elf_file]],
-            "file_dep": [source_file, cfg, link_file, submod],
-            "targets": [elf_file],
-        }
-
-
-def task_create_raw():
-    "convert riscv-tests ELFs into raw bins for pytest, \"doit list --all create_raw\" for choices"  # noqa: E501
-    upstream_tests = Path("./tests/upstream/")
-    outdir = upstream_tests / "binaries"
-
-    isa_dir = upstream_tests / "riscv-tests/isa/rv32ui"
-    mmode_dir = upstream_tests / "riscv-tests/isa/rv32mi"
-
-    for source_file in chain(isa_dir.glob('*.S'), mmode_dir.glob('*.S')):
-        if source_file.stem in UNSUPPORTED_UPSTREAM:
-            continue
-
-        elf_file = outdir / source_file.with_suffix(".elf").name
         bin_file = outdir / source_file.with_suffix("").name
-        yield {
-            "name": bin_file.name,
-            # {dependencies} and {targets} doesn't work for parallel
-            # (at least on Windows). But f-strings do.
-            "actions": ["riscv64-unknown-elf-objcopy -O binary "
-                        f"{elf_file} {bin_file}"],
-            "file_dep": [elf_file],
-            "targets": [bin_file],
-        }
-
-
-def task_dump_tests():
-    "dump listing of ELF files for debugging/pytest, \"doit list --all dump_tests\" for choices"  # noqa: E501
-    upstream_tests = Path("./tests/upstream/")
-    outdir = upstream_tests / "binaries"
-
-    isa_dir = upstream_tests / "riscv-tests/isa/rv32ui"
-    mmode_dir = upstream_tests / "riscv-tests/isa/rv32mi"
-
-    for elf_file in map(partial(with_root_and_suffix, root=outdir,
-                                suffix=".elf"),
-                        chain(isa_dir.glob('*.S'), mmode_dir.glob('*.S'))):
-        if elf_file.stem in UNSUPPORTED_UPSTREAM:
-            continue
-
         dump_file = elf_file.with_suffix(".dump")
-        bin_file = elf_file.with_suffix("")
         yield {
-            "name": dump_file.name,
-            "actions": [f"riscv64-unknown-elf-objdump --disassemble-all \
-                        --disassemble-zeroes --section=.text \
-                        --section=.text.startup --section=.text.init \
-                        --section=.data {elf_file} > {dump_file}"],
-            # {{targets}} does not work for parallel execution.
-            # But f-strings do.
-            "file_dep": [elf_file, bin_file],
-            "targets": [dump_file],
+            "title": title_with_actions,
+            "name": source_file.stem,
+            # {dependencies}, {targets}, and {{targets}} don't work
+            # for parallel (at least on Windows). But f-strings do.
+            "actions": [ f"riscv64-unknown-elf-gcc {source_file} {flags} "
+                         f"-I {upstream_tests} -I {macros_dir} -I {env_dir} "
+                         f"-T {link_file} -o {elf_file}",
+
+                         "riscv64-unknown-elf-objcopy -O binary "
+                         f"{elf_file} {bin_file}",
+
+                         f"riscv64-unknown-elf-objdump --disassemble-all "
+                         "--disassemble-zeroes --section=.text "
+                         "--section=.text.startup --section=.text.init "
+                         f"--section=.data {elf_file} > {dump_file}"],
+            "file_dep": [source_file, cfg, link_file, submod],
+            "targets": [elf_file, bin_file, dump_file],
+            "setup": ["compile_upstream:mkdir"]
         }

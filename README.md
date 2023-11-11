@@ -43,13 +43,7 @@ development, a user must provide:
 **A user must first run the following before anything else:**
 
 ```
-pdm install
-```
-
-The [Run Tests](#run-tests) section and below require:
-
-```
-pdm install --dev
+pdm install -G dev
 ```
 
 ### Generate A Core
@@ -106,6 +100,14 @@ pdm rvformal-all [-n num_cores]
 
 See [README.md](tests/formal/README.md) in `tests/formal` for more information.
 
+### Run RISCOF Flow
+
+```
+pdm riscof-all
+pdm riscof-override /path/to/test_list.yaml
+```
+
+See [README.md](tests/riscof/README.md) in `tests/riscof` for more information.
 
 ### List `pdm` Scripts And `doit` Tasks
 
