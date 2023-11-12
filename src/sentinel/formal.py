@@ -53,7 +53,10 @@ class FormalTop(Component):
         self.csrs = Signature({})
 
         for csr in ("mscratch", "mcause", "mip", "mie", "mstatus", "mtvec",
-                    "mepc", "misa"):
+                    "mepc", "misa", "mvendorid", "marchid", "mimpid",
+                    "mhartid", "mconfigptr", "mstatush", "mcountinhibit",
+                    "mtval", "mcycle", "minstret", "mhpmcounter3",
+                    "mhpmevent3"):
             self.add_csr(csr)
         self.rvfi_sig.members["csr"] = Out(self.csrs)
 
@@ -61,12 +64,21 @@ class FormalTop(Component):
         self.cpu = Top(formal=True)
 
     def add_csr(self, name):
-        csr_ports = Signature({
-            "rmask": Out(32),
-            "wmask": Out(32),
-            "rdata": Out(32),
-            "wdata": Out(32)
-        })
+        # Per RVFI: Always 64-bit wide, even on pure RV32 processors.
+        if name in ("mcycle", "minstret", "mhpmcounter3"):
+            csr_ports = Signature({
+                "rmask": Out(64),
+                "wmask": Out(64),
+                "rdata": Out(64),
+                "wdata": Out(64)
+            })
+        else:
+            csr_ports = Signature({
+                "rmask": Out(32),
+                "wmask": Out(32),
+                "rdata": Out(32),
+                "wdata": Out(32)
+            })
 
         self.csrs.members[name] = Out(csr_ports)
 
@@ -248,9 +260,6 @@ class FormalTop(Component):
             self.rvfi.csr.mcause.rmask.eq(-1),
             self.rvfi.csr.mcause.wmask.eq(-1),
             self.rvfi.csr.mcause.rdata.eq(mcause_port.data),
-            self.rvfi.csr.misa.rmask.eq(-1),
-            self.rvfi.csr.misa.wmask.eq(-1),
-            self.rvfi.csr.misa.rdata.eq(0),
             self.rvfi.csr.mip.rmask.eq(-1),
             self.rvfi.csr.mip.wmask.eq(-1),
             self.rvfi.csr.mie.rmask.eq(-1),
@@ -370,20 +379,60 @@ class FormalTop(Component):
                 csr_op_shadow.eq(self.cpu.decode.funct3)
             ]
 
-        with m.If(doing_csr_decode):
-            with m.Switch(csr_addr_shadow):
-                with m.Case(0x301):  # misa
-                    with m.If((csr_op_shadow == 1) |
-                              ((csr_op_shadow == 2) &
-                               (self.rvfi.rs1_addr != 0))):
+        for addr, csr_name, hiword in [
+                (0xF11, "mvendorid", False), (0xF12, "marchid", False),
+                (0xF13, "mimpid", False), (0xF14, "mhartid", False),
+                (0xF15, "mconfigptr", False), (0x301, "misa", False),
+                (0x310, "mstatush", False), (0x343, "mtval", False),
+                (0xB00, "mcycle", False), (0xB02, "minstret", False),
+                # `define RISCV_FORMAL_CSRWH isn't there for mhpmcounter3...
+                # should it be?
+                (0xB03, "mhpmcounter3", False), (0xB80, "mcycle", True),
+                (0xB82, "minstret", True), (0xB83, "mhpmcounter3", True),
+                (0x320, "mcountinhibit", False), (0x323, "mhpmevent3", False)]:
+            rvfi_csr = getattr(self.rvfi.csr, csr_name)
+            m.d.comb += [
+                rvfi_csr.rmask.eq(-1),
+                rvfi_csr.wmask.eq(-1),
+                rvfi_csr.rdata.eq(0)
+            ]
+
+            # 64-bit registers. These are the only regs where we take
+            # advantage of masks (to keep the hiword logic in the decode block
+            # below easier). Make sure only 32-bits are ever updated at once.
+            if csr_name in ("mcycle", "minstret", "mhpmcounter3") and hiword:
+                with m.If(csr_addr_shadow == addr):
+                    m.d.comb += rvfi_csr.wmask[:32].eq(0)
+                    m.d.comb += rvfi_csr.wmask[32:].eq(-1)
+                with m.Else():
+                    m.d.comb += rvfi_csr.wmask[:32].eq(-1)
+                    m.d.comb += rvfi_csr.wmask[32:].eq(0)
+
+            with m.If(doing_csr_decode):
+                # RVFI CSRW Check mandates this.
+                with m.If(self.cpu.rvfi.exception):
+                    m.d.sync += self.rvfi.rd_addr.eq(0)
+
+                with m.If(csr_addr_shadow == addr):
+                    with m.If((csr_op_shadow == 1) | ((csr_op_shadow == 2) &
+                              (self.rvfi.rs1_addr != 0))):
                         # csrrw/csrrs
-                        m.d.sync += self.rvfi.csr.misa.wdata.eq(self.rvfi.rs1_rdata)  # noqa: E501
+                        if hiword:
+                            m.d.sync += rvfi_csr.wdata[32:].eq(self.rvfi.rs1_rdata)  # noqa: E501
+                        else:
+                            m.d.sync += rvfi_csr.wdata[:32].eq(self.rvfi.rs1_rdata)  # noqa: E501
                     with m.Elif((csr_op_shadow == 5) |
                                 ((csr_op_shadow == 6) &
-                                 (self.rvfi.rs1_addr != 0))):
+                                (self.rvfi.rs1_addr != 0))):
                         # csrrwi/csrrsi
-                        m.d.sync += self.rvfi.csr.misa.wdata.eq(self.rvfi.rs1_addr)  # noqa: E501
+                        if hiword:
+                            m.d.sync += rvfi_csr.wdata[32:].eq(self.rvfi.rs1_addr)  # noqa: E501
+                        else:
+                            m.d.sync += rvfi_csr.wdata[:32].eq(self.rvfi.rs1_addr)  # noqa: E501
                     with m.Else():
-                        m.d.sync += self.rvfi.csr.misa.wdata.eq(0)
+                        if hiword:
+                            m.d.sync += rvfi_csr.wdata[32:].eq(0)
+                        else:
+                            m.d.sync += rvfi_csr.wdata[:32].eq(0)
 
         return m

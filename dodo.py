@@ -260,7 +260,7 @@ def task__riscof_gen():
                     riscof_work / "database.yaml",
                     riscof_work / "test_list.yaml"],
         "file_dep": [config_ini, sentinel_plugin / "sentinel_isa.yaml",
-                     sentinel_plugin / "sentinel_platform.yaml"] 
+                     sentinel_plugin / "sentinel_platform.yaml"]
     }
 
 
@@ -367,11 +367,41 @@ SBY_TESTS = (
     "insn_xori_ch0", "insn_xor_ch0", "pc_bwd_ch0", "pc_fwd_ch0", "reg_ch0",
     "unique_ch0", "liveness_ch0",
     "csrw_mscratch_ch0", "csrc_any_mscratch_ch0", "csrw_mcause_ch0",
-    "csr_ill_eff_ch0", "csrw_mip_ch0", "csrc_zero_mip_ch0", "csrw_mie_ch0",
-    "csrc_zero_mie_ch0", "csrw_mstatus_ch0", "csrc_const_mstatus_ch0",
-    "csrw_mtvec_ch0", "csrc_zero_mtvec_ch0", "csrw_mepc_ch0",
-    "csrc_zero_mepc_ch0", "csrw_misa_ch0", "csrc_zero_misa_ch0",
+    "csrw_mip_ch0", "csrc_zero_mip_ch0", "csrw_mie_ch0", "csrc_zero_mie_ch0",
+    "csrw_mstatus_ch0", "csrc_const_mstatus_ch0", "csrw_mtvec_ch0",
+    "csrc_zero_mtvec_ch0", "csrw_mepc_ch0", "csrc_zero_mepc_ch0",
+    "csrw_mvendorid_ch0", "csrc_zero_mvendorid_ch0", "csrw_marchid_ch0",
+    "csrc_zero_marchid_ch0", "csrw_mimpid_ch0", "csrc_zero_mimpid_ch0",
+    "csrw_mhartid_ch0", "csrc_zero_mhartid_ch0", "csrw_mconfigptr_ch0",
+    "csrc_zero_mconfigptr_ch0", "csrw_misa_ch0", "csrc_zero_misa_ch0",
+    "csrw_mstatush_ch0", "csrc_zero_mstatush_ch0", "csrw_mcountinhibit_ch0",
+    "csrc_zero_mcountinhibit_ch0", "csrw_mtval_ch0", "csrc_zero_mtval_ch0",
+    "csrw_mcycle_ch0", "csrc_zero_mcycle_ch0", "csrw_minstret_ch0",
+    "csrc_zero_minstret_ch0", "csrw_mhpmcounter3_ch0",
+    "csrc_zero_mhpmcounter3_ch0", "csrw_mhpmevent3_ch0",
+    "csrc_zero_mhpmevent3_ch0", "csr_ill_eff_ch0", "csr_ill_302_ch0",
+    "csr_ill_303_ch0", "csr_ill_306_ch0", "csr_ill_34a_ch0", "csr_ill_34b_ch0",
+    "csr_ill_30a_ch0", "csr_ill_31a_ch0"
 )
+
+
+# This task is useful for when hacking on *.py files, but the RISC-V Formal
+# config files haven't actually changed (and thus genchecks.py need not be
+# run).
+def task__formal_gen_sentinel():
+    "generate Sentinel subdir and Verilog in RISC-V Formal cores dir"
+    formal_tests = Path("./tests/formal/")
+    cores_dir = formal_tests / "riscv-formal" / "cores"
+    sentinel_dir = cores_dir / "sentinel"
+    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
+    sentinel_v = sentinel_dir / "sentinel.v"
+
+    return {
+        "actions": [(create_folder, [cores_dir / "sentinel"]),
+                    f"pdm gen -o {sentinel_v} -f"],
+        "targets": [sentinel_v],
+        "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")],
+    }
 
 
 def task__formal_gen_files():
@@ -380,19 +410,21 @@ def task__formal_gen_files():
     cores_dir = formal_tests / "riscv-formal" / "cores"
     sentinel_dir = cores_dir / "sentinel"
 
+    genchecks = formal_tests / "riscv-formal" / "checks" / "genchecks.py"
     disasm_py = formal_tests / "disasm.py"
     checks_cfg = formal_tests / "checks.cfg"
     wrapper_sv = formal_tests / "wrapper.sv"
-    sentinel_v = sentinel_dir / "sentinel.v"
 
     return {
-        "actions": [(create_folder, [cores_dir / "sentinel"]),
-                    (copy_, [disasm_py, sentinel_dir / disasm_py.name]),
+        "actions": [(copy_, [disasm_py, sentinel_dir / disasm_py.name]),
                     (copy_, [checks_cfg, sentinel_dir / checks_cfg.name]),
                     (copy_, [wrapper_sv, sentinel_dir / wrapper_sv.name]),
-                    f"pdm gen -o {sentinel_v} -f",
                     CmdAction("python3 ../../checks/genchecks.py",
                               cwd=sentinel_dir)],
+        "targets": [sentinel_dir / disasm_py.name,
+                    sentinel_dir / checks_cfg.name,
+                    sentinel_dir / wrapper_sv.name],
+        "file_dep": [disasm_py, checks_cfg, wrapper_sv, genchecks]
     }
 
 
@@ -444,6 +476,7 @@ def task_run_sby():
                                    Path("./src/sentinel/microcode.asm")],
             "verbosity": 2,
             "setup": ["_git_init:riscv-formal",
+                      "_formal_gen_sentinel",
                       "_formal_gen_files"],
         }
 

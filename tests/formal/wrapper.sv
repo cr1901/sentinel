@@ -67,7 +67,19 @@ module rvfi_wrapper (
                  `RVFI_CSR_AMARANTH_PORTS(mstatus),
                  `RVFI_CSR_AMARANTH_PORTS(mtvec),
                  `RVFI_CSR_AMARANTH_PORTS(mepc),
-                 `RVFI_CSR_AMARANTH_PORTS(misa)
+                 `RVFI_CSR_AMARANTH_PORTS(mvendorid),
+                 `RVFI_CSR_AMARANTH_PORTS(marchid),
+                 `RVFI_CSR_AMARANTH_PORTS(mimpid),
+                 `RVFI_CSR_AMARANTH_PORTS(mhartid),
+                 `RVFI_CSR_AMARANTH_PORTS(mconfigptr),
+                 `RVFI_CSR_AMARANTH_PORTS(misa),
+                 `RVFI_CSR_AMARANTH_PORTS(mstatush),
+                 `RVFI_CSR_AMARANTH_PORTS(mcountinhibit),
+                 `RVFI_CSR_AMARANTH_PORTS(mtval),
+                 `RVFI_CSR_AMARANTH_PORTS(mcycle),
+                 `RVFI_CSR_AMARANTH_PORTS(minstret),
+                 `RVFI_CSR_AMARANTH_PORTS(mhpmcounter3),
+                 `RVFI_CSR_AMARANTH_PORTS(mhpmevent3)
     );
 
 reg [2:0] timeout_bus = 0;
