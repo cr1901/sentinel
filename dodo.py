@@ -413,10 +413,9 @@ def maybe_disasm_move_vcd(sentinel_dir, root, sby_file):
                              cwd=sentinel_dir)
         ret.check_returncode()
 
-        d_src = ret.stdout.decode("utf-8")
-        print(d_src)
-        with open(out_path.with_suffix(".s"), "w") as fp:
-            fp.write(d_src)
+        print(ret.stdout.decode("utf-8"))
+        with open(out_path.with_suffix(".s"), "wb") as fp:
+            fp.write(ret.stdout)
 
 
 def task_run_sby():
