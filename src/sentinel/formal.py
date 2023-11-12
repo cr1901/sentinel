@@ -265,59 +265,93 @@ class FormalTop(Component):
             self.rvfi.csr.mepc.rdata.eq(mepc_port.data),
         ]
 
-        # By default, don't output CSR data (either from the RAM file CSRs or
-        # from the discrete CSRs.)
+        # Reads are always valid. But if a CSR is being written, we have to
+        # hold the previous data, b/c RVFI expects the rdata to be that at
+        # the _beginning_ of the insn.
+        mscratch_hold_rd = Signal(1)
+        mcause_hold_rd = Signal(1)
+        mtvec_hold_rd = Signal(1)
+        mepc_hold_rd = Signal(1)
+        mip_hold_rd = Signal(1)
+        mie_hold_rd = Signal(1)
+        mstatus_hold_rd = Signal(1)
+
+        # Holding state is reset on an insn-by-insn basis.
+        with m.If(committed_to_insn):
+            m.d.sync += [
+                mscratch_hold_rd.eq(0),
+                mcause_hold_rd.eq(0),
+                mtvec_hold_rd.eq(0),
+                mepc_hold_rd.eq(0),
+                mip_hold_rd.eq(0),
+                mie_hold_rd.eq(0),
+                mstatus_hold_rd.eq(0)
+            ]
+
         m.d.comb += [
-            mscratch_port.en.eq(0),
-            mcause_port.en.eq(0),
-            mtvec_port.en.eq(0),
-            mepc_port.en.eq(0),
+            mscratch_port.en.eq(~mscratch_hold_rd),
+            mcause_port.en.eq(~mcause_hold_rd),
+            mtvec_port.en.eq(~mtvec_hold_rd),
+            mepc_port.en.eq(~mepc_hold_rd),
         ]
 
-        # Actually-implemented CSRs
-        with m.If(self.cpu.control.csr.op == CSROp.READ_CSR):
-            with m.Switch(self.cpu.datapath.csr.adr_r):
-                with m.Case(CSRFile.MSCRATCH):
-                    m.d.comb += mscratch_port.en.eq(1)
-                with m.Case(CSRFile.MCAUSE):
-                    m.d.comb += mcause_port.en.eq(1)
-                with m.Case(CSRFile.MIP):
-                    m.d.sync += self.rvfi.csr.mip.rdata.eq(
-                        self.cpu.datapath.csr.mip_r)
-                with m.Case(CSRFile.MIE):
-                    m.d.sync += self.rvfi.csr.mie.rdata.eq(
-                        self.cpu.datapath.csr.mie_r)
-                with m.Case(CSRFile.MSTATUS):
-                    m.d.sync += self.rvfi.csr.mstatus.rdata.eq(
-                        self.cpu.datapath.csr.mstatus_r)
-                with m.Case(CSRFile.MTVEC):
-                    m.d.comb += mtvec_port.en.eq(1)
-                with m.Case(CSRFile.MEPC):
-                    m.d.comb += mepc_port.en.eq(1)
+        with m.If(~mip_hold_rd):
+            m.d.sync += self.rvfi.csr.mip.rdata.eq(self.cpu.datapath.csr.mip_r)
+        with m.If(~mie_hold_rd):
+            m.d.sync += self.rvfi.csr.mie.rdata.eq(self.cpu.datapath.csr.mie_r)
+        with m.If(~mstatus_hold_rd):
+            m.d.sync += self.rvfi.csr.mstatus.rdata.eq(
+                self.cpu.datapath.csr.mstatus_r)
 
         with m.If(self.cpu.control.csr.op == CSROp.WRITE_CSR):
             with m.Switch(self.cpu.datapath.csr.adr_w):
                 with m.Case(CSRFile.MSCRATCH):
-                    m.d.sync += self.rvfi.csr.mscratch.wdata.eq(
-                        self.cpu.datapath.csr.dat_w)
+                    m.d.sync += [
+                        self.rvfi.csr.mscratch.wdata.eq(
+                            self.cpu.datapath.csr.dat_w),
+                        mscratch_hold_rd.eq(1)
+                    ]
+                    # Preempt a transparent read.
+                    m.d.comb += mscratch_port.en.eq(0)
                 with m.Case(CSRFile.MCAUSE):
-                    m.d.sync += self.rvfi.csr.mcause.wdata.eq(
-                        self.cpu.datapath.csr.dat_w)
+                    m.d.sync += [
+                        self.rvfi.csr.mcause.wdata.eq(
+                            self.cpu.datapath.csr.dat_w),
+                        mcause_hold_rd.eq(1)
+                    ]
+                    m.d.comb += mcause_port.en.eq(0)
                 with m.Case(CSRFile.MIP):
-                    m.d.sync += self.rvfi.csr.mip.wdata.eq(
-                        self.cpu.datapath.csr.dat_w)
+                    m.d.sync += [
+                        self.rvfi.csr.mip.wdata.eq(
+                            self.cpu.datapath.csr.dat_w),
+                        mip_hold_rd.eq(1)
+                    ]
                 with m.Case(CSRFile.MIE):
-                    m.d.sync += self.rvfi.csr.mie.wdata.eq(
-                        self.cpu.datapath.csr.dat_w)
+                    m.d.sync += [
+                        self.rvfi.csr.mie.wdata.eq(
+                            self.cpu.datapath.csr.dat_w),
+                        mie_hold_rd.eq(1)
+                    ]
                 with m.Case(CSRFile.MSTATUS):
-                    m.d.sync += self.rvfi.csr.mstatus.wdata.eq(
-                        self.cpu.datapath.csr.dat_w)
+                    m.d.sync += [
+                        self.rvfi.csr.mstatus.wdata.eq(
+                            self.cpu.datapath.csr.dat_w),
+                        mstatus_hold_rd.eq(1)
+                    ]
                 with m.Case(CSRFile.MTVEC):
-                    m.d.sync += self.rvfi.csr.mtvec.wdata.eq(
-                        self.cpu.datapath.csr.dat_w)
+                    m.d.sync += [
+                        self.rvfi.csr.mtvec.wdata.eq(
+                            self.cpu.datapath.csr.dat_w),
+                        mtvec_hold_rd.eq(1)
+                    ]
+                    m.d.comb += mtvec_port.en.eq(0)
                 with m.Case(CSRFile.MEPC):
-                    m.d.sync += self.rvfi.csr.mepc.wdata.eq(
-                        self.cpu.datapath.csr.dat_w)
+                    m.d.sync += [
+                        self.rvfi.csr.mepc.wdata.eq(
+                            self.cpu.datapath.csr.dat_w),
+                        mepc_hold_rd.eq(1)
+                    ]
+                    m.d.comb += mepc_port.en.eq(0)
 
         # Read-only zero CSRs
         # Read-only ops are optimized, so we can't inspect the datapath for
