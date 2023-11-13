@@ -53,10 +53,10 @@ class CSRRegs:
         csrregs = {}
 
         csrregs["MSCRATCH"] = (yield m.cpu.datapath.regfile.mem[0x28])
-        csrregs["MSTATUS"] = (yield m.cpu.datapath.csrfile.mstatus_r.as_value())  # noqa: E501
+        csrregs["MSTATUS"] = (yield m.cpu.datapath.csr.mstatus_r.as_value())  # noqa: E501
         csrregs["MTVEC"] = (yield m.cpu.datapath.regfile.mem[0x25])
-        csrregs["MIE"] = (yield m.cpu.datapath.csrfile.mie_r.as_value())
-        csrregs["MIP"] = (yield m.cpu.datapath.csrfile.mip_r.as_value())
+        csrregs["MIE"] = (yield m.cpu.datapath.csr.mie_r.as_value())
+        csrregs["MIP"] = (yield m.cpu.datapath.csr.mip_r.as_value())
         csrregs["MEPC"] = (yield m.cpu.datapath.regfile.mem[0x29])
         csrregs["MCAUSE"] = (yield m.cpu.datapath.regfile.mem[0x2A])
 

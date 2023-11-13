@@ -312,7 +312,6 @@ class Top(Component):
                                                            == CSROp.WRITE_CSR),
                         self.reg_r_adr.eq(self.decode.csr_encoding),
                         self.reg_w_adr.eq(self.decode.csr_encoding),
-                        self.datapath.gp.ctrl.csr_access.eq(1),
                         self.datapath.csr.adr.eq(self.decode.csr_encoding),
                     ]
 
@@ -325,7 +324,6 @@ class Top(Component):
                                                            == CSROp.WRITE_CSR),
                         self.reg_r_adr.eq(self.control.target[0:4]),
                         self.reg_w_adr.eq(self.control.target[0:4]),
-                        self.datapath.gp.ctrl.csr_access.eq(1),
                         self.datapath.csr.adr.eq(self.control.target[0:4]),
                     ]
 

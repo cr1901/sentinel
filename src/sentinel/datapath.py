@@ -15,7 +15,6 @@ GPControlSignature = Signature({
     "reg_read": Out(1),
     "reg_write": Out(1),
     "allow_zero_wr": Out(1),
-    "csr_access": Out(1)
 })
 
 GPSignature = Signature({
@@ -51,6 +50,12 @@ CSRSignature = Signature({
 })
 
 
+# Private interface to control accessing CSR regs stored in GP RAM.
+CSRGPSignature = Signature({
+    "csr_access": Out(1)
+})
+
+
 PcSignature = Signature({
     "dat_r": In(30),
     "dat_w": Out(30),
@@ -80,7 +85,10 @@ class ProgramCounter(Component):
 
 
 class RegFile(Component):
-    signature = GPSignature.flip()
+    signature = Signature({
+        "main": In(GPSignature),
+        "from_csr": In(CSRGPSignature)
+    })
 
     def __init__(self, *, formal):
         self.formal = formal
@@ -109,17 +117,18 @@ class RegFile(Component):
         m.submodules.wrport = wrport = self.mem.write_port()
 
         m.d.comb += [
-            rdport.en.eq(self.ctrl.reg_read),
-            rdport.addr.eq(Cat(self.adr_r, self.ctrl.csr_access)),
-            wrport.addr.eq(Cat(self.adr_w, self.ctrl.csr_access)),
-            wrport.data.eq(self.dat_w),
+            rdport.en.eq(self.main.ctrl.reg_read),
+            rdport.addr.eq(Cat(self.main.adr_r, self.from_csr.csr_access)),
+            wrport.addr.eq(Cat(self.main.adr_w, self.from_csr.csr_access)),
+            wrport.data.eq(self.main.dat_w),
         ]
 
-        m.d.comb += self.dat_r.eq(rdport.data)
+        m.d.comb += self.main.dat_r.eq(rdport.data)
         # "BUG": self.adr_w != 0 prevents mstatus from being shadowed inside
         # block RAM, but this is probably not an actual problem.
-        m.d.comb += wrport.en.eq(self.ctrl.reg_write &
-                                 (self.adr_w != 0 | self.ctrl.allow_zero_wr))
+        m.d.comb += wrport.en.eq(self.main.ctrl.reg_write &
+                                 (self.main.adr_w != 0 |
+                                  self.main.ctrl.allow_zero_wr))
 
         return m
 
@@ -133,7 +142,10 @@ class CSRFile(Component):
     MCAUSE = 0xA
     MIP = 0xC
 
-    signature = CSRSignature.flip()
+    signature = Signature({
+        "main": In(CSRSignature),
+        "to_gp": Out(CSRGPSignature)
+    })
 
     def elaborate(self, platform):
         m = Module()
@@ -145,28 +157,30 @@ class CSRFile(Component):
         read_buf = Signal(32)
 
         m.d.comb += [
-            self.mstatus_r.eq(mstatus),
-            self.mip_r.eq(mip),
-            self.mie_r.eq(mie),
-            self.dat_r.eq(read_buf),
+            self.main.mstatus_r.eq(mstatus),
+            self.main.mip_r.eq(mip),
+            self.main.mie_r.eq(mie),
+            self.main.dat_r.eq(read_buf),
         ]
 
-        with m.If(self.ctrl.op == CSROp.WRITE_CSR):
-            with m.If(self.adr == self.MSTATUS):
-                mstatus_in = View(MStatus, self.dat_w)
+        with m.If(self.main.ctrl.op == CSROp.WRITE_CSR):
+            m.d.comb += self.to_gp.csr_access.eq(1)
+            with m.If(self.main.adr == self.MSTATUS):
+                mstatus_in = View(MStatus, self.main.dat_w)
                 m.d.sync += [
                     mstatus.mie.eq(mstatus_in.mie),
                     mstatus.mpie.eq(mstatus_in.mpie),
                 ]
-            with m.If(self.adr == self.MIE):
-                mie_in = View(MIE, self.dat_w)
+            with m.If(self.main.adr == self.MIE):
+                mie_in = View(MIE, self.main.dat_w)
                 m.d.sync += mie.meie.eq(mie_in.meie)
-            with m.If(self.adr == self.MIP):
-                mip_in = View(MIP, self.dat_w)
+            with m.If(self.main.adr == self.MIP):
+                mip_in = View(MIP, self.main.dat_w)
                 m.d.sync += mip.meip.eq(mip_in.meip)
 
-        with m.If(self.ctrl.op == CSROp.READ_CSR):
-            with m.If(self.adr == self.MSTATUS):
+        with m.If(self.main.ctrl.op == CSROp.READ_CSR):
+            m.d.comb += self.to_gp.csr_access.eq(1)
+            with m.If(self.main.adr == self.MSTATUS):
                 mstatus_buf = View(MStatus, read_buf)
                 m.d.sync += [
                     read_buf.eq(0),
@@ -174,13 +188,13 @@ class CSRFile(Component):
                     mstatus_buf.mpie.eq(mstatus.mpie),
                     mstatus_buf.mpp.eq(mstatus.mpp),
                 ]
-            with m.If(self.adr == self.MIE):
+            with m.If(self.main.adr == self.MIE):
                 mie_buf = View(MIE, read_buf)
                 m.d.sync += [
                     read_buf.eq(0),
                     mie_buf.meie.eq(mie.meie)
                 ]
-            with m.If(self.adr == self.MIP):
+            with m.If(self.main.adr == self.MIP):
                 mip_buf = View(MIP, read_buf)
                 m.d.sync += [
                     read_buf.eq(0),
@@ -188,17 +202,17 @@ class CSRFile(Component):
                 ]
 
         # Make sure we don't lose interrupts.
-        with m.If(self.mip_w.meip):
+        with m.If(self.main.mip_w.meip):
             m.d.sync += mip.meip.eq(1)
 
         # This stack is probably rather difficult to orchestrate in
         # microcode for little gain.
-        with m.If(self.ctrl.exception == ExceptCtl.ENTER_INT):
+        with m.If(self.main.ctrl.exception == ExceptCtl.ENTER_INT):
             m.d.sync += [
                 mstatus.mpie.eq(mstatus.mie),
                 mstatus.mie.eq(0)
             ]
-        with m.Elif(self.ctrl.exception == ExceptCtl.LEAVE_INT):
+        with m.Elif(self.main.ctrl.exception == ExceptCtl.LEAVE_INT):
             m.d.sync += [
                 mstatus.mie.eq(mstatus.mpie),
                 mstatus.mpie.eq(1)
@@ -226,9 +240,10 @@ class DataPath(Component):
         m.submodules.regfile = self.regfile
         m.submodules.csrfile = self.csrfile
 
-        connect(m, self.regfile, flipped(self.gp))
+        connect(m, self.regfile.main, flipped(self.gp))
         connect(m, self.pc_mod, flipped(self.pc))
-        connect(m, self.csrfile, flipped(self.csr))
+        connect(m, self.csrfile.main, flipped(self.csr))
+        connect(m, self.regfile.from_csr, self.csrfile.to_gp)
 
         prev_csr_adr = Signal.like(self.csr.adr)
 
@@ -239,7 +254,7 @@ class DataPath(Component):
         with m.If(~((prev_csr_adr == CSRFile.MSTATUS) |
                   (prev_csr_adr == CSRFile.MIP) |
                   (prev_csr_adr == CSRFile.MIE))):
-            m.d.comb += self.csr.dat_r.eq(self.regfile.dat_r)
+            m.d.comb += self.csr.dat_r.eq(self.regfile.main.dat_r)
 
         # For MTVEC, only Direct Mode is supported, and field is WARL,
         # so honor that.
@@ -249,6 +264,6 @@ class DataPath(Component):
         # written"), and MSCRATCH can hold anything.
         with m.If((self.csr.adr == CSRFile.MTVEC) |
                   (self.csr.adr == CSRFile.MEPC)):
-            m.d.comb += self.regfile.dat_w[0:2].eq(0)
+            m.d.comb += self.regfile.main.dat_w[0:2].eq(0)
 
         return m
