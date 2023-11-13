@@ -76,7 +76,7 @@ def csrrc_bad_rd_process(sim_mod):
         yield m.cpu.bus.dat_r.eq(0b100001110000111110011)
         yield
 
-        assert (yield m.cpu.datapath.csr.adr_w) == 0b0000
+        assert (yield m.cpu.datapath.csr.adr) == 0b0000
 
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b1000100001000000101001101100011)

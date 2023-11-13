@@ -313,8 +313,7 @@ class Top(Component):
                         self.reg_r_adr.eq(self.decode.csr_encoding),
                         self.reg_w_adr.eq(self.decode.csr_encoding),
                         self.datapath.gp.ctrl.csr_access.eq(1),
-                        self.datapath.csr.adr_r.eq(self.decode.csr_encoding),
-                        self.datapath.csr.adr_w.eq(self.decode.csr_encoding)
+                        self.datapath.csr.adr.eq(self.decode.csr_encoding),
                     ]
 
             with m.Case(CSRSel.TRG_CSR):
@@ -327,8 +326,7 @@ class Top(Component):
                         self.reg_r_adr.eq(self.control.target[0:4]),
                         self.reg_w_adr.eq(self.control.target[0:4]),
                         self.datapath.gp.ctrl.csr_access.eq(1),
-                        self.datapath.csr.adr_w.eq(self.control.target[0:4]),
-                        self.datapath.csr.adr_r.eq(self.control.target[0:4]),
+                        self.datapath.csr.adr.eq(self.control.target[0:4]),
                     ]
 
         if self.formal:

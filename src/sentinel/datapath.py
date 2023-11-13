@@ -34,8 +34,7 @@ CSRControlSignature = Signature({
 
 
 CSRSignature = Signature({
-    "adr_r": Out(5),
-    "adr_w": Out(5),
+    "adr": Out(5),
     "dat_r": In(32),
     "dat_w": Out(32),
     "ctrl": Out(CSRControlSignature),
@@ -153,21 +152,21 @@ class CSRFile(Component):
         ]
 
         with m.If(self.ctrl.op == CSROp.WRITE_CSR):
-            with m.If(self.adr_w == self.MSTATUS):
+            with m.If(self.adr == self.MSTATUS):
                 mstatus_in = View(MStatus, self.dat_w)
                 m.d.sync += [
                     mstatus.mie.eq(mstatus_in.mie),
                     mstatus.mpie.eq(mstatus_in.mpie),
                 ]
-            with m.If(self.adr_w == self.MIE):
+            with m.If(self.adr == self.MIE):
                 mie_in = View(MIE, self.dat_w)
                 m.d.sync += mie.meie.eq(mie_in.meie)
-            with m.If(self.adr_w == self.MIP):
+            with m.If(self.adr == self.MIP):
                 mip_in = View(MIP, self.dat_w)
                 m.d.sync += mip.meip.eq(mip_in.meip)
 
         with m.If(self.ctrl.op == CSROp.READ_CSR):
-            with m.If(self.adr_r == self.MSTATUS):
+            with m.If(self.adr == self.MSTATUS):
                 mstatus_buf = View(MStatus, read_buf)
                 m.d.sync += [
                     read_buf.eq(0),
@@ -175,13 +174,13 @@ class CSRFile(Component):
                     mstatus_buf.mpie.eq(mstatus.mpie),
                     mstatus_buf.mpp.eq(mstatus.mpp),
                 ]
-            with m.If(self.adr_r == self.MIE):
+            with m.If(self.adr == self.MIE):
                 mie_buf = View(MIE, read_buf)
                 m.d.sync += [
                     read_buf.eq(0),
                     mie_buf.meie.eq(mie.meie)
                 ]
-            with m.If(self.adr_r == self.MIP):
+            with m.If(self.adr == self.MIP):
                 mip_buf = View(MIP, read_buf)
                 m.d.sync += [
                     read_buf.eq(0),
@@ -231,9 +230,9 @@ class DataPath(Component):
         connect(m, self.pc_mod, flipped(self.pc))
         connect(m, self.csrfile, flipped(self.csr))
 
-        prev_csr_adr = Signal.like(self.csr.adr_r)
+        prev_csr_adr = Signal.like(self.csr.adr)
 
-        m.d.sync += prev_csr_adr.eq(self.csr.adr_r)
+        m.d.sync += prev_csr_adr.eq(self.csr.adr)
 
         # Some CSRs are stored in block RAM. Always write to the block RAM,
         # but preempt reads from CSRs which can't be block RAM.
@@ -248,8 +247,8 @@ class DataPath(Component):
         # only-IALIGN=32.
         # By contrast, MCAUSE is WLRL ("anything goes if illegal value is
         # written"), and MSCRATCH can hold anything.
-        with m.If((self.csr.adr_w == CSRFile.MTVEC) |
-                  (self.csr.adr_w == CSRFile.MEPC)):
+        with m.If((self.csr.adr == CSRFile.MTVEC) |
+                  (self.csr.adr == CSRFile.MEPC)):
             m.d.comb += self.regfile.dat_w[0:2].eq(0)
 
         return m
