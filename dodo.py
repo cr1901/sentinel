@@ -49,7 +49,7 @@ def move_(src, dst):
 # Iterate over multiple trees and remove them!
 def rmtrees(paths):
     for p in paths:
-        rmtree(p)
+        rmtree(p, ignore_errors=True)
 
 
 # Lambdas are unpickleable on Windows (works on *nix?!), and some tasks can
@@ -219,6 +219,9 @@ def task__decompress_sail():
         "actions": [(decompress, (comp_emu, bin_emu))],
         # No file dep to avoid dependency on building SAIL.
         "file_dep": [],
+        # OTOH, no need to repeatedly decompress.
+        "uptodate": [run_once],
+        "targets": [bin_emu],
     }
 
 
@@ -252,7 +255,6 @@ def task__build_sail():
 def task__riscof_gen():
     "run RISCOF's testlist command to prepare RISCOF files and directories"
     riscof_tests = Path("./tests/riscof/")
-    riscof_work = riscof_tests / "riscof_work"
 
     sentinel_plugin = riscof_tests / "sentinel"
     config_ini = riscof_tests / "config.ini"
@@ -263,10 +265,6 @@ def task__riscof_gen():
                               "--env=riscv-arch-test/riscv-test-suite/env "
                               "--work-dir=riscof_work",
                               cwd=riscof_tests)],
-        "targets": [riscof_work / "sentinel_isa_checked.yaml",
-                    riscof_work / "sentinel_platform_checked.yaml",
-                    riscof_work / "database.yaml",
-                    riscof_work / "test_list.yaml"],
         "file_dep": [config_ini, sentinel_plugin / "sentinel_isa.yaml",
                      sentinel_plugin / "sentinel_platform.yaml"]
     }
@@ -412,7 +410,6 @@ def task__formal_gen_sentinel():
     return {
         "actions": [(create_folder, [cores_dir / "sentinel"]),
                     f"pdm gen -o {sentinel_v} -f"],
-        "targets": [sentinel_v],
         "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")],
     }
 
@@ -434,9 +431,6 @@ def task__formal_gen_files():
                     (copy_, [wrapper_sv, sentinel_dir / wrapper_sv.name]),
                     CmdAction("python3 ../../checks/genchecks.py",
                               cwd=sentinel_dir)],
-        "targets": [sentinel_dir / disasm_py.name,
-                    sentinel_dir / checks_cfg.name,
-                    sentinel_dir / wrapper_sv.name],
         "file_dep": [disasm_py, checks_cfg, wrapper_sv, genchecks]
     }
 
@@ -473,6 +467,7 @@ def task_run_sby():
     genchecks = formal_tests / "riscv-formal" / "checks" / "genchecks.py"
     disasm_py = formal_tests / "disasm.py"
     checks_cfg = formal_tests / "checks.cfg"
+    wrapper_sv = formal_tests / "wrapper.sv"
 
     # Expose this until I can figure out how to serialize the setup for
     # all the sby tasks when they run in parallel. If this line isn't
@@ -506,6 +501,7 @@ def task_run_sby():
                                                  sby_file))],
             "targets": [sentinel_dir / "checks" / c / "status"],
             "file_dep": pyfiles + [genchecks, disasm_py, checks_cfg,
+                                   wrapper_sv,
                                    Path("./src/sentinel/microcode.asm")],
             "verbosity": 2,
             "setup": ["run_sby:setup"],
