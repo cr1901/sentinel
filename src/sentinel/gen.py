@@ -60,10 +60,13 @@ def demo_args(parser):
                         default="icestick")
     parser.add_argument("-n", help="dry run",
                         action="store_true")
+    parser.add_argument("-b", help="build directory",
+                        default="build")
 
 
 def demo(args=None):
-    def do_demo(*, p, n):
+    def do_demo(*, p, n, b):
+        print(b)
         asoc = AttoSoC()
         # Primes test firmware from tests and nextpnr AttoSoC.
         asoc.rom = """
@@ -109,13 +112,13 @@ def demo(args=None):
             plat = icestick.ICEStickPlatform()
 
         plan = plat.build(asoc, do_build=False, debug_verilog=True)
-        plan.execute_local(run_script=not n)
+        plan.execute_local(b, run_script=not n)
 
     if isinstance(args, argparse.Namespace):
         do_demo(args)
     else:
         if len(sys.argv) < 2:
-            do_demo(p="icestick", n=False)
+            do_demo(p="icestick", n=False, b="build")
         else:
             parser = argparse.ArgumentParser(description="Sentinel Demo generator (invoked from PDM)")  # noqa: E501
             demo_args(parser)

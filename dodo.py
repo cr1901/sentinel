@@ -97,13 +97,17 @@ def task__git_rev():
 
 def task__demo():
     "create a demo bitstream (for benchmarking)"
-    return { "actions": ["pdm demo"] }
+    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
+
+    return {
+        "actions": ["pdm demo -b build-bench"],
+        "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")]
+    }
 
 
 # These two tasks do not require "pdm run" because I had trouble installing
 # matplotlib into the venv. Intended usage in cases like mine is
 # "doit bench_luts" or "doit plot_luts".
-# Private tasks
 def task_luts():
     build_dir = Path("./build")
     yosys_log = build_dir / "top.rpt"
@@ -120,7 +124,7 @@ def task_luts():
         "targets": [luts_csv],
         "uptodate": [result_dep("_git_rev")],
         "verbosity": 2,
-        "setup" : ["_demo"],
+        "setup": ["_demo"],
         "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")],
         "doc": "build \"pdm demo\" bitstream (if out of date), record LUT usage using LogLUTs"  # noqa: E501
     }
