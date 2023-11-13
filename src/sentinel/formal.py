@@ -114,16 +114,16 @@ class FormalTop(Component):
         m.d.sync += just_committed_to_insn.eq(committed_to_insn)
 
         # RVFI RD_DATAW helpers.
-        dat_w_mux = Signal.like(self.cpu.datapath.regfile.dat_w)
-        dat_w_reg = Signal.like(self.cpu.datapath.regfile.dat_w)
+        dat_w_mux = Signal.like(self.cpu.datapath.gp.dat_w)
+        dat_w_reg = Signal.like(self.cpu.datapath.gp.dat_w)
         m.d.comb += dat_w_mux.eq(Mux(self.cpu.datapath.gp.ctrl.reg_write &
                                      (self.cpu.control.csr.op !=
                                       CSROp.WRITE_CSR),
-                                     self.cpu.datapath.regfile.dat_w,
+                                     self.cpu.datapath.gp.dat_w,
                                      dat_w_reg))
         with m.If(self.cpu.datapath.gp.ctrl.reg_write &
                   (self.cpu.control.csr.op != CSROp.WRITE_CSR)):
-            m.d.sync += dat_w_reg.eq(self.cpu.datapath.regfile.dat_w)
+            m.d.sync += dat_w_reg.eq(self.cpu.datapath.gp.dat_w)
 
         with m.If(committed_to_insn):
             with m.If(in_init):
@@ -313,7 +313,7 @@ class FormalTop(Component):
                 self.cpu.datapath.csr.mstatus_r)
 
         with m.If(self.cpu.control.csr.op == CSROp.WRITE_CSR):
-            with m.Switch(self.cpu.datapath.csr.adr_w):
+            with m.Switch(self.cpu.datapath.csr.adr):
                 with m.Case(CSRFile.MSCRATCH):
                     m.d.sync += [
                         self.rvfi.csr.mscratch.wdata.eq(
