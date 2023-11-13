@@ -52,7 +52,10 @@ CSRSignature = Signature({
 
 # Private interface to control accessing CSR regs stored in GP RAM.
 CSRGPSignature = Signature({
-    "csr_access": Out(1)
+    "adr": Out(5),
+    "dat_r": In(32),
+    "dat_w": Out(32),
+    "op": Out(CSROp)
 })
 
 
@@ -61,6 +64,7 @@ PcSignature = Signature({
     "dat_w": Out(30),
     "ctrl": Out(PCControlSignature)
 })
+
 
 DataPathSignature = Signature({
     "gp": Out(GPSignature),
@@ -117,18 +121,32 @@ class RegFile(Component):
         m.submodules.wrport = wrport = self.mem.write_port()
 
         m.d.comb += [
-            rdport.en.eq(self.main.ctrl.reg_read),
-            rdport.addr.eq(Cat(self.main.adr_r, self.from_csr.csr_access)),
-            wrport.addr.eq(Cat(self.main.adr_w, self.from_csr.csr_access)),
-            wrport.data.eq(self.main.dat_w),
+            self.from_csr.dat_r.eq(rdport.data),
+            self.main.dat_r.eq(rdport.data)
         ]
 
-        m.d.comb += self.main.dat_r.eq(rdport.data)
-        # "BUG": self.adr_w != 0 prevents mstatus from being shadowed inside
-        # block RAM, but this is probably not an actual problem.
-        m.d.comb += wrport.en.eq(self.main.ctrl.reg_write &
+        with m.Switch(self.from_csr.op):
+            with m.Case(CSROp.NONE):
+                m.d.comb += [
+                    rdport.en.eq(self.main.ctrl.reg_read),
+                    rdport.addr.eq(self.main.adr_r),
+                    wrport.addr.eq(self.main.adr_w),
+                    wrport.data.eq(self.main.dat_w),
+                    wrport.en.eq(self.main.ctrl.reg_write &
                                  (self.main.adr_w != 0 |
                                   self.main.ctrl.allow_zero_wr))
+                ]
+            with m.Case(CSROp.READ_CSR):
+                m.d.comb += [
+                    rdport.en.eq(1),
+                    rdport.addr.eq(Cat(self.from_csr.adr, 1)),
+                ]
+            with m.Case(CSROp.WRITE_CSR):
+                m.d.comb += [
+                    wrport.addr.eq(Cat(self.from_csr.adr, 1)),
+                    wrport.data.eq(self.from_csr.dat_w),
+                    wrport.en.eq(1)
+                ]
 
         return m
 
@@ -161,10 +179,13 @@ class CSRFile(Component):
             self.main.mip_r.eq(mip),
             self.main.mie_r.eq(mie),
             self.main.dat_r.eq(read_buf),
+
+            self.to_gp.adr.eq(self.main.adr),
+            self.to_gp.dat_w.eq(self.main.dat_w),
+            self.to_gp.op.eq(self.main.ctrl.op)
         ]
 
         with m.If(self.main.ctrl.op == CSROp.WRITE_CSR):
-            m.d.comb += self.to_gp.csr_access.eq(1)
             with m.If(self.main.adr == self.MSTATUS):
                 mstatus_in = View(MStatus, self.main.dat_w)
                 m.d.sync += [
@@ -179,7 +200,6 @@ class CSRFile(Component):
                 m.d.sync += mip.meip.eq(mip_in.meip)
 
         with m.If(self.main.ctrl.op == CSROp.READ_CSR):
-            m.d.comb += self.to_gp.csr_access.eq(1)
             with m.If(self.main.adr == self.MSTATUS):
                 mstatus_buf = View(MStatus, read_buf)
                 m.d.sync += [
@@ -200,6 +220,26 @@ class CSRFile(Component):
                     read_buf.eq(0),
                     mip_buf.meip.eq(mip.meip)
                 ]
+
+        prev_csr_adr = Signal.like(self.main.adr)
+        m.d.sync += prev_csr_adr.eq(self.main.adr)
+
+        # Some CSRs are stored in block RAM. Always write to the block RAM,
+        # but preempt reads from CSRs which can't be block RAM.
+        with m.If(~((prev_csr_adr == CSRFile.MSTATUS) |
+                  (prev_csr_adr == CSRFile.MIP) |
+                  (prev_csr_adr == CSRFile.MIE))):
+            m.d.comb += self.main.dat_r.eq(self.to_gp.dat_r)
+
+        # For MTVEC, only Direct Mode is supported, and field is WARL,
+        # so honor that.
+        # MEPC is also WARL, and says low 2 bits are always zero for
+        # only-IALIGN=32.
+        # By contrast, MCAUSE is WLRL ("anything goes if illegal value is
+        # written"), and MSCRATCH can hold anything.
+        with m.If((self.main.adr == CSRFile.MTVEC) |
+                  (self.main.adr == CSRFile.MEPC)):
+            m.d.comb += self.to_gp.dat_w[0:2].eq(0)
 
         # Make sure we don't lose interrupts.
         with m.If(self.main.mip_w.meip):
@@ -244,26 +284,5 @@ class DataPath(Component):
         connect(m, self.pc_mod, flipped(self.pc))
         connect(m, self.csrfile.main, flipped(self.csr))
         connect(m, self.regfile.from_csr, self.csrfile.to_gp)
-
-        prev_csr_adr = Signal.like(self.csr.adr)
-
-        m.d.sync += prev_csr_adr.eq(self.csr.adr)
-
-        # Some CSRs are stored in block RAM. Always write to the block RAM,
-        # but preempt reads from CSRs which can't be block RAM.
-        with m.If(~((prev_csr_adr == CSRFile.MSTATUS) |
-                  (prev_csr_adr == CSRFile.MIP) |
-                  (prev_csr_adr == CSRFile.MIE))):
-            m.d.comb += self.csr.dat_r.eq(self.regfile.main.dat_r)
-
-        # For MTVEC, only Direct Mode is supported, and field is WARL,
-        # so honor that.
-        # MEPC is also WARL, and says low 2 bits are always zero for
-        # only-IALIGN=32.
-        # By contrast, MCAUSE is WLRL ("anything goes if illegal value is
-        # written"), and MSCRATCH can hold anything.
-        with m.If((self.csr.adr == CSRFile.MTVEC) |
-                  (self.csr.adr == CSRFile.MEPC)):
-            m.d.comb += self.regfile.main.dat_w[0:2].eq(0)
 
         return m

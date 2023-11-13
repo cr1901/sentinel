@@ -8,7 +8,7 @@ from .csr import MCause
 from .datapath import DataPath
 from .decode import Decode
 from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
-    MemExtend, CSRSel, CSROp, ExceptCtl
+    MemExtend, CSRSel, ExceptCtl
 
 
 class Top(Component):
@@ -302,30 +302,13 @@ class Top(Component):
                     self.datapath.gp.ctrl.allow_zero_wr.eq(1)
                 ]
 
+        # CSR Op/Address control (data conns taken care above)
+        m.d.comb += self.datapath.csr.ctrl.op.eq(self.control.csr.op)
         with m.Switch(self.control.csr_sel):
             with m.Case(CSRSel.INSN_CSR):
-                with m.If(self.control.csr.op != CSROp.NONE):
-                    m.d.comb += [
-                        self.datapath.gp.ctrl.reg_read.eq(self.control.csr.op
-                                                          == CSROp.READ_CSR),
-                        self.datapath.gp.ctrl.reg_write.eq(self.control.csr.op
-                                                           == CSROp.WRITE_CSR),
-                        self.reg_r_adr.eq(self.decode.csr_encoding),
-                        self.reg_w_adr.eq(self.decode.csr_encoding),
-                        self.datapath.csr.adr.eq(self.decode.csr_encoding),
-                    ]
-
+                m.d.comb += self.datapath.csr.adr.eq(self.decode.csr_encoding)
             with m.Case(CSRSel.TRG_CSR):
-                with m.If(self.control.csr.op != CSROp.NONE):
-                    m.d.comb += [
-                        self.datapath.gp.ctrl.reg_read.eq(self.control.csr.op
-                                                          == CSROp.READ_CSR),
-                        self.datapath.gp.ctrl.reg_write.eq(self.control.csr.op
-                                                           == CSROp.WRITE_CSR),
-                        self.reg_r_adr.eq(self.control.target[0:4]),
-                        self.reg_w_adr.eq(self.control.target[0:4]),
-                        self.datapath.csr.adr.eq(self.control.target[0:4]),
-                    ]
+                m.d.comb += self.datapath.csr.adr.eq(self.control.target[0:4])
 
         if self.formal:
             m.d.comb += self.rvfi.exception.eq(exception)
