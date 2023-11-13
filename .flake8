@@ -3,4 +3,5 @@ exclude = .git/,
           __pycache__/,
           .venv/,
           tests/upstream/riscv-tests/,
-          tests/formal/riscv-formal
+          tests/formal/riscv-formal/,
+          tests/riscof/sail_cSim/

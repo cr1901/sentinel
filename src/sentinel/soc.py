@@ -42,7 +42,8 @@ class WBMemory(Component):
 
     def elaborate(self, plat):
         m = Module()
-        self.mem = Memory(width=32, depth=self.depth//4, init=self.mem_contents)
+        self.mem = Memory(width=32, depth=self.depth//4,
+                          init=self.mem_contents)
         m.submodules.rdport = rdport = self.mem.read_port(transparent=True)
         m.submodules.wrport = wrport = self.mem.write_port(granularity=8)
 

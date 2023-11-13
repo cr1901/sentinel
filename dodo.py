@@ -66,7 +66,7 @@ def print_title(task, title):
 def git_init(repo_dir):
     submod = repo_dir / ".git"
     return {
-        "basename": f"_git_init",
+        "basename": "_git_init",
         "name": repo_dir.stem,
         "actions": [CmdAction("git submodule update --init --recursive",
                               cwd=repo_dir)],
@@ -81,7 +81,8 @@ def task_git():
     yield {
         "basename": "_git_init",
         "name": None,
-        "doc": "initialize git submodules, \"doit list --all -p _git_init\" for choices"
+        "doc": "initialize git submodules, \"doit list --all -p _git_init\" "
+               "for choices"
     }
 
     for p in [Path("./tests/upstream/riscv-tests"),
@@ -175,7 +176,7 @@ def opam_vars():
         k, v = tmp
         vars[k] = v
 
-    return { "env": vars }
+    return {"env": vars}
 
 
 def compress(src, dst):
@@ -202,7 +203,7 @@ def run_with_env(cmd, cwd, env):
 
 def task__opam():
     "extract environment vars from opam"
-    return { "actions": [(opam_vars,)], "verbosity": 2 }
+    return {"actions": [(opam_vars,)], "verbosity": 2}
 
 
 def task__decompress_sail():
@@ -285,7 +286,7 @@ def task__clean_dut_ref_dirs():
 
 
 def save_last_testfile(testfile):
-    return { "last_testfile": testfile }
+    return {"last_testfile": testfile}
 
 
 def last_testfile(task, values, testfile):
@@ -320,7 +321,8 @@ def task_run_riscof(testfile):
     config_ini = riscof_tests / "config.ini"
 
     sailp_files = [sail_plugin / s for s in ("env/link.ld", "env/model_test.h",
-                                             "__init__.py", "riscof_sail_cSim.py")]
+                                             "__init__.py",
+                                             "riscof_sail_cSim.py")]
     sentp_files = [sentinel_plugin / s for s in ("riscof_sentinel.py",
                                                  "env/link.ld",
                                                  "env/model_test.h",
@@ -344,15 +346,15 @@ def task_run_riscof(testfile):
                               "--no-browser --no-clean",
                               cwd=riscof_tests,
                               env=vars)],
-        "targets": [riscof_work / "report.html" ],
+        "targets": [riscof_work / "report.html"],
         "verbosity": 2,
         "setup": ["_git_init:sail-riscv",
                   "_git_init:riscv-arch-test",
                   "_decompress_sail",
                   "_riscof_gen",
                   "_clean_dut_ref_dirs"],
-        "file_dep": pyfiles + sailp_files + sentp_files + [config_ini,
-                    Path("./src/sentinel/microcode.asm")],
+        "file_dep": pyfiles + sailp_files + sentp_files + [
+                        config_ini, Path("./src/sentinel/microcode.asm")],
         "uptodate": [partial(last_testfile, testfile=testfile)],
     }
 
@@ -434,7 +436,7 @@ def task__formal_gen_files():
 
 def maybe_disasm_move_vcd(sentinel_dir, root, sby_file):
     sby_dir: Path = sby_file.with_suffix("")
-    trace_names = [t for t in (sby_dir / "engine_0" ).glob("trace*.vcd")]
+    trace_names = [t for t in (sby_dir / "engine_0").glob("trace*.vcd")]
 
     id_re = re.compile("[0-9]*$")
     for tn in trace_names:
@@ -560,17 +562,17 @@ def task_compile_upstream():
             "name": source_file.stem,
             # {dependencies}, {targets}, and {{targets}} don't work
             # for parallel (at least on Windows). But f-strings do.
-            "actions": [ f"riscv64-unknown-elf-gcc {source_file} {flags} "
-                         f"-I {upstream_tests} -I {macros_dir} -I {env_dir} "
-                         f"-T {link_file} -o {elf_file}",
+            "actions": [f"riscv64-unknown-elf-gcc {source_file} {flags} "
+                        f"-I {upstream_tests} -I {macros_dir} -I {env_dir} "
+                        f"-T {link_file} -o {elf_file}",
 
-                         "riscv64-unknown-elf-objcopy -O binary "
-                         f"{elf_file} {bin_file}",
+                        "riscv64-unknown-elf-objcopy -O binary "
+                        f"{elf_file} {bin_file}",
 
-                         f"riscv64-unknown-elf-objdump --disassemble-all "
-                         "--disassemble-zeroes --section=.text "
-                         "--section=.text.startup --section=.text.init "
-                         f"--section=.data {elf_file} > {dump_file}"],
+                        f"riscv64-unknown-elf-objdump --disassemble-all "
+                        "--disassemble-zeroes --section=.text "
+                        "--section=.text.startup --section=.text.init "
+                        f"--section=.data {elf_file} > {dump_file}"],
             "file_dep": [source_file, cfg, link_file, submod],
             "targets": [elf_file, bin_file, dump_file],
             "setup": ["compile_upstream:mkdir"]
