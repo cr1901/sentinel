@@ -110,7 +110,7 @@ def task__demo():
 # matplotlib into the venv. Intended usage in cases like mine is
 # "doit bench_luts" or "doit plot_luts".
 def task_luts():
-    build_dir = Path("./build")
+    build_dir = Path("./build-bench")
     yosys_log = build_dir / "top.rpt"
     nextpnr_log = build_dir / "top.tim"
     luts_csv = Path("./LUTs.csv")
@@ -139,7 +139,8 @@ def task_luts():
         "targets": [],
         "uptodate": [False],
         "verbosity": 2,
-        "file_dep": [luts_csv],
+        "setup": ["_demo"],
+        "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")],
         "doc": "build \"pdm demo\" bitstream (if out of date), plot LUT usage using LogLUTs"  # noqa: E501
     }
 
