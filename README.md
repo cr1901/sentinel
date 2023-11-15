@@ -43,7 +43,7 @@ development, a user must provide:
 **A user must first run the following before anything else:**
 
 ```
-pdm install -G dev
+pdm install -G dev -G examples
 ```
 
 ### Generate A Core

@@ -36,7 +36,7 @@ provided by RISCOF documentation for the [SAIL RISC-V emulators](https://github.
 [out-of-date](https://github.com/riscv-software-src/riscof/issues/88); I
 didn't successfully compile the emulator until I did `opam switch create ocaml-base-compiler.4.08.1`.
 
-(Make sure `riscof` is installed via `pdm install -G dev G riscof`. _You must
+(Make sure `riscof` is installed via `pdm install -G dev -G riscof`. _You must
 provide your own copies of `gcc`, `ocaml`, `opam`, and `sail`, as described
 above_. Additionally, `riscv64-unknown-elf-gcc` must be provided.)
 

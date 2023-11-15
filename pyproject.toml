@@ -8,10 +8,7 @@ authors = [
 dependencies = [
     "m5meta>=1.0.4",
     "m5pre>=1.0.3",
-    "amaranth @ git+https://github.com/amaranth-lang/amaranth",
-    "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
-    "bronzebeard>=0.2.1",
-    "amaranth-boards @ git+https://github.com/amaranth-lang/amaranth-boards",
+    "amaranth @ git+https://github.com/amaranth-lang/amaranth"
 ]
 requires-python = ">=3.11"
 readme = "README.md"
@@ -33,6 +30,7 @@ addopts="--ignore=tests/upstream/binaries"
 
 [tool.pdm.dev-dependencies]
 dev = [
+    "bronzebeard>=0.2.1",
     "flake8>=6.1.0",
     "pytest>=7.4.2",
     "doit>=0.36.0",
@@ -41,6 +39,11 @@ dev = [
     "click>=8.1.7",  # Though I expect users to provide sby, sby requires
                      # this module and doesn't opt-in to PEP 517. So provide
                      # it here.
+]
+examples = [
+    "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
+    "bronzebeard>=0.2.1",
+    "amaranth-boards @ git+https://github.com/amaranth-lang/amaranth-boards",
 ]
 riscof = [
     "riscof>=1.25.3",
@@ -52,7 +55,9 @@ lint = { cmd = "flake8", help="lint python sources" }
 test = { cmd = "pytest", help="run all pytest tests" }
 # Generate
 gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
-demo = { call = "sentinel.gen:demo", help="create Sentinel demo bitstream" }
+# PDM "does the right thing" here; specifying "python " interpreter not required:
+# https://github.com/pdm-project/pdm/blob/73651b7a948679d31f4d00e8b14c8a51009126e8/src/pdm/cli/commands/run.py#L179
+demo = { cmd = "examples/attosoc.py", help="create AttoSoC Sentinel demo bitstream" }
 # DoIt wrappers. Prefer using these over running DoIt directly.
 doit = { cmd = "doit", help="escape hatch to call doit directly" }
 ucode = { cmd = "doit ucode", help="generate supplementary microcode files" }

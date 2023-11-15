@@ -2,17 +2,17 @@
 # It is not intended for manual editing.
 
 [metadata]
-groups = ["default", "dev", "riscof"]
+groups = ["default", "dev", "riscof", "examples"]
 strategy = ["cross_platform"]
 lock_version = "4.4"
-content_hash = "sha256:94e9023f5335a176b94669cb0444de0eeb2fc21287b498d375331c5e240b2594"
+content_hash = "sha256:d2b28200fe8187ea4d10e17dc197f5de3b2bc965d19e8f100026d83c292b2626"
 
 [[package]]
 name = "amaranth"
-version = "0.4.dev230+ge55dec9"
+version = "0.4.dev231+gf9da3c0"
 requires_python = "~=3.8"
 git = "https://github.com/amaranth-lang/amaranth"
-revision = "e55dec9615adfaf6558738930889c74713a3f109"
+revision = "f9da3c0d166dd2be189945dca5a94e781e74afeb"
 summary = "Amaranth hardware definition language"
 dependencies = [
     "Jinja2~=3.0",

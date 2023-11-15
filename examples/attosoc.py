@@ -1,5 +1,7 @@
 # SoC components. This is more of a "utilities" module.
 
+import argparse
+
 from bronzebeard.asm import assemble
 from amaranth import Module, Memory
 from amaranth_soc import wishbone
@@ -8,8 +10,9 @@ from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
     Signature
 from amaranth.build import ResourceError
 from amaranth.utils import log2_int
+from amaranth_boards import icestick, ice40_hx8k_b_evn
 
-from .top import Top
+from sentinel.top import Top
 
 
 class WBMemory(Component):
@@ -158,3 +161,70 @@ class AttoSoC(Elaboratable):
         connect(m, self.cpu.bus, decoder.bus)
 
         return m
+
+
+def demo(args):
+    asoc = AttoSoC()
+    # Primes test firmware from tests and nextpnr AttoSoC.
+    asoc.rom = """
+        li      s0,2
+        lui     s1,0x2000  # IO port at 0x2000000
+        li      s3,256
+outer:
+        addi    s0,s0,1
+        blt     s0,s3,noinit
+        li      s0,2
+noinit:
+        li      s2,2
+next_int:
+        bge     s2,s0,write_io
+        mv      a0,s0
+        mv      a1,s2
+        call    prime?
+        beqz    a0,not_prime
+        addi    s2,s2,1
+        j       next_int
+write_io:
+        sw      s0,0(s1)
+        call    delay
+not_prime:
+        j       outer
+prime?:
+        li      t0,1
+submore:
+        sub     a0,a0,a1
+        bge     a0,t0,submore
+        ret
+delay:
+        li      t0,360000
+countdown:
+        addi    t0,t0,-1
+        bnez    t0,countdown
+        ret
+"""
+
+    match args.p:
+        case "ice40_hx8k_b_evn":
+            plat = ice40_hx8k_b_evn.ICE40HX8KBEVNPlatform()
+        case "icestick":
+            plat = icestick.ICEStickPlatform()
+
+    plan = plat.build(asoc, do_build=False, debug_verilog=True)
+    plan.execute_local(args.b, run_script=not args.n)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Sentinel AttoSoC Demo generator")  # noqa: E501
+    parser.add_argument("-n", help="dry run",
+                        action="store_true")
+    parser.add_argument("-b", help="build directory",
+                        default="build")
+    parser.add_argument("-p", help="build platform",
+                        choices=("icestick", "ice40_hx8k_b_evn"),
+                        default="icestick")
+    args = parser.parse_args()
+    demo(args)
+
+
+if __name__ == "__main__":
+    main()
