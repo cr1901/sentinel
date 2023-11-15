@@ -51,7 +51,7 @@ CSRSignature = Signature({
 
 
 # Private interface to control accessing CSR regs stored in GP RAM.
-CSRGPSignature = Signature({
+PrivateCSRGPSignature = Signature({
     "adr": Out(5),
     "dat_r": In(32),
     "dat_w": Out(32),
@@ -90,8 +90,8 @@ class ProgramCounter(Component):
 
 class RegFile(Component):
     signature = Signature({
-        "main": In(GPSignature),
-        "from_csr": In(CSRGPSignature)
+        "pub": In(GPSignature),
+        "priv": In(PrivateCSRGPSignature)
     })
 
     def __init__(self, *, formal):
@@ -121,30 +121,30 @@ class RegFile(Component):
         m.submodules.wrport = wrport = self.mem.write_port()
 
         m.d.comb += [
-            self.from_csr.dat_r.eq(rdport.data),
-            self.main.dat_r.eq(rdport.data)
+            self.priv.dat_r.eq(rdport.data),
+            self.pub.dat_r.eq(rdport.data)
         ]
 
-        with m.Switch(self.from_csr.op):
+        with m.Switch(self.priv.op):
             with m.Case(CSROp.NONE):
                 m.d.comb += [
-                    rdport.en.eq(self.main.ctrl.reg_read),
-                    rdport.addr.eq(self.main.adr_r),
-                    wrport.addr.eq(self.main.adr_w),
-                    wrport.data.eq(self.main.dat_w),
-                    wrport.en.eq(self.main.ctrl.reg_write &
-                                 (self.main.adr_w != 0 |
-                                  self.main.ctrl.allow_zero_wr))
+                    rdport.en.eq(self.pub.ctrl.reg_read),
+                    rdport.addr.eq(self.pub.adr_r),
+                    wrport.addr.eq(self.pub.adr_w),
+                    wrport.data.eq(self.pub.dat_w),
+                    wrport.en.eq(self.pub.ctrl.reg_write &
+                                 (self.pub.adr_w != 0 |
+                                  self.pub.ctrl.allow_zero_wr))
                 ]
             with m.Case(CSROp.READ_CSR):
                 m.d.comb += [
                     rdport.en.eq(1),
-                    rdport.addr.eq(Cat(self.from_csr.adr, 1)),
+                    rdport.addr.eq(Cat(self.priv.adr, 1)),
                 ]
             with m.Case(CSROp.WRITE_CSR):
                 m.d.comb += [
-                    wrport.addr.eq(Cat(self.from_csr.adr, 1)),
-                    wrport.data.eq(self.from_csr.dat_w),
+                    wrport.addr.eq(Cat(self.priv.adr, 1)),
+                    wrport.data.eq(self.priv.dat_w),
                     wrport.en.eq(1)
                 ]
 
@@ -161,8 +161,8 @@ class CSRFile(Component):
     MIP = 0xC
 
     signature = Signature({
-        "main": In(CSRSignature),
-        "to_gp": Out(CSRGPSignature)
+        "pub": In(CSRSignature),
+        "priv": Out(PrivateCSRGPSignature)
     })
 
     def elaborate(self, platform):
@@ -175,32 +175,32 @@ class CSRFile(Component):
         read_buf = Signal(32)
 
         m.d.comb += [
-            self.main.mstatus_r.eq(mstatus),
-            self.main.mip_r.eq(mip),
-            self.main.mie_r.eq(mie),
-            self.main.dat_r.eq(read_buf),
+            self.pub.mstatus_r.eq(mstatus),
+            self.pub.mip_r.eq(mip),
+            self.pub.mie_r.eq(mie),
+            self.pub.dat_r.eq(read_buf),
 
-            self.to_gp.adr.eq(self.main.adr),
-            self.to_gp.dat_w.eq(self.main.dat_w),
-            self.to_gp.op.eq(self.main.ctrl.op)
+            self.priv.adr.eq(self.pub.adr),
+            self.priv.dat_w.eq(self.pub.dat_w),
+            self.priv.op.eq(self.pub.ctrl.op)
         ]
 
-        with m.If(self.main.ctrl.op == CSROp.WRITE_CSR):
-            with m.If(self.main.adr == self.MSTATUS):
-                mstatus_in = View(MStatus, self.main.dat_w)
+        with m.If(self.pub.ctrl.op == CSROp.WRITE_CSR):
+            with m.If(self.pub.adr == self.MSTATUS):
+                mstatus_in = View(MStatus, self.pub.dat_w)
                 m.d.sync += [
                     mstatus.mie.eq(mstatus_in.mie),
                     mstatus.mpie.eq(mstatus_in.mpie),
                 ]
-            with m.If(self.main.adr == self.MIE):
-                mie_in = View(MIE, self.main.dat_w)
+            with m.If(self.pub.adr == self.MIE):
+                mie_in = View(MIE, self.pub.dat_w)
                 m.d.sync += mie.meie.eq(mie_in.meie)
-            with m.If(self.main.adr == self.MIP):
-                mip_in = View(MIP, self.main.dat_w)
+            with m.If(self.pub.adr == self.MIP):
+                mip_in = View(MIP, self.pub.dat_w)
                 m.d.sync += mip.meip.eq(mip_in.meip)
 
-        with m.If(self.main.ctrl.op == CSROp.READ_CSR):
-            with m.If(self.main.adr == self.MSTATUS):
+        with m.If(self.pub.ctrl.op == CSROp.READ_CSR):
+            with m.If(self.pub.adr == self.MSTATUS):
                 mstatus_buf = View(MStatus, read_buf)
                 m.d.sync += [
                     read_buf.eq(0),
@@ -208,28 +208,28 @@ class CSRFile(Component):
                     mstatus_buf.mpie.eq(mstatus.mpie),
                     mstatus_buf.mpp.eq(mstatus.mpp),
                 ]
-            with m.If(self.main.adr == self.MIE):
+            with m.If(self.pub.adr == self.MIE):
                 mie_buf = View(MIE, read_buf)
                 m.d.sync += [
                     read_buf.eq(0),
                     mie_buf.meie.eq(mie.meie)
                 ]
-            with m.If(self.main.adr == self.MIP):
+            with m.If(self.pub.adr == self.MIP):
                 mip_buf = View(MIP, read_buf)
                 m.d.sync += [
                     read_buf.eq(0),
                     mip_buf.meip.eq(mip.meip)
                 ]
 
-        prev_csr_adr = Signal.like(self.main.adr)
-        m.d.sync += prev_csr_adr.eq(self.main.adr)
+        prev_csr_adr = Signal.like(self.pub.adr)
+        m.d.sync += prev_csr_adr.eq(self.pub.adr)
 
         # Some CSRs are stored in block RAM. Always write to the block RAM,
         # but preempt reads from CSRs which can't be block RAM.
         with m.If(~((prev_csr_adr == CSRFile.MSTATUS) |
                   (prev_csr_adr == CSRFile.MIP) |
                   (prev_csr_adr == CSRFile.MIE))):
-            m.d.comb += self.main.dat_r.eq(self.to_gp.dat_r)
+            m.d.comb += self.pub.dat_r.eq(self.priv.dat_r)
 
         # For MTVEC, only Direct Mode is supported, and field is WARL,
         # so honor that.
@@ -237,22 +237,22 @@ class CSRFile(Component):
         # only-IALIGN=32.
         # By contrast, MCAUSE is WLRL ("anything goes if illegal value is
         # written"), and MSCRATCH can hold anything.
-        with m.If((self.main.adr == CSRFile.MTVEC) |
-                  (self.main.adr == CSRFile.MEPC)):
-            m.d.comb += self.to_gp.dat_w[0:2].eq(0)
+        with m.If((self.pub.adr == CSRFile.MTVEC) |
+                  (self.pub.adr == CSRFile.MEPC)):
+            m.d.comb += self.priv.dat_w[0:2].eq(0)
 
         # Make sure we don't lose interrupts.
-        with m.If(self.main.mip_w.meip):
+        with m.If(self.pub.mip_w.meip):
             m.d.sync += mip.meip.eq(1)
 
         # This stack is probably rather difficult to orchestrate in
         # microcode for little gain.
-        with m.If(self.main.ctrl.exception == ExceptCtl.ENTER_INT):
+        with m.If(self.pub.ctrl.exception == ExceptCtl.ENTER_INT):
             m.d.sync += [
                 mstatus.mpie.eq(mstatus.mie),
                 mstatus.mie.eq(0)
             ]
-        with m.Elif(self.main.ctrl.exception == ExceptCtl.LEAVE_INT):
+        with m.Elif(self.pub.ctrl.exception == ExceptCtl.LEAVE_INT):
             m.d.sync += [
                 mstatus.mie.eq(mstatus.mpie),
                 mstatus.mpie.eq(1)
@@ -280,9 +280,9 @@ class DataPath(Component):
         m.submodules.regfile = self.regfile
         m.submodules.csrfile = self.csrfile
 
-        connect(m, self.regfile.main, flipped(self.gp))
+        connect(m, self.regfile.pub, flipped(self.gp))
         connect(m, self.pc_mod, flipped(self.pc))
-        connect(m, self.csrfile.main, flipped(self.csr))
-        connect(m, self.regfile.from_csr, self.csrfile.to_gp)
+        connect(m, self.csrfile.pub, flipped(self.csr))
+        connect(m, self.regfile.priv, self.csrfile.priv)
 
         return m
