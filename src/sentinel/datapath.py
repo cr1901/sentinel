@@ -122,16 +122,16 @@ class RegFile(Component):
 
         m.d.comb += [
             self.priv.dat_r.eq(rdport.data),
-            self.pub.dat_r.eq(rdport.data)
+            self.pub.dat_r.eq(rdport.data),
+            rdport.addr.eq(self.pub.adr_r),
+            wrport.addr.eq(self.pub.adr_w),
+            wrport.data.eq(self.pub.dat_w),
         ]
 
         with m.Switch(self.priv.op):
             with m.Case(CSROp.NONE):
                 m.d.comb += [
                     rdport.en.eq(self.pub.ctrl.reg_read),
-                    rdport.addr.eq(self.pub.adr_r),
-                    wrport.addr.eq(self.pub.adr_w),
-                    wrport.data.eq(self.pub.dat_w),
                     wrport.en.eq(self.pub.ctrl.reg_write &
                                  (self.pub.adr_w != 0 |
                                   self.pub.ctrl.allow_zero_wr))
