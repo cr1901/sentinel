@@ -3,7 +3,9 @@ import pytest
 from itertools import repeat, chain
 from amaranth.sim import Passive
 
-from sentinel.soc import AttoSoC
+# FIXME: Eventually drop the need for SoC and simulate memory purely with
+# a process like in RISCOF tests? This will be pretty invasive.
+from examples.attosoc import AttoSoC
 
 from conftest import RV32Regs, CSRRegs
 

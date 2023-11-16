@@ -3,7 +3,10 @@ import pytest
 
 from enum import Enum, auto
 
-from sentinel.soc import AttoSoC
+# FIXME: Eventually go to RISCOF approach? Less invasive than test_top, and
+# avoids treating examples as a namespace package (hack? :()) but will it be
+# for much gain?
+from examples.attosoc import AttoSoC
 
 
 @pytest.fixture
