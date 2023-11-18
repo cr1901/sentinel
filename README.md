@@ -70,6 +70,9 @@ This command will generate a core with a Wishbone Classic bus, and `clk`,
 pdm gen > sentinel.v
 ```
 
+On reset, Sentinel begins execution at address `0``. See the [CSR](#csrs)
+section for information on exception handling (including interrupts).
+
 _The Wishbone bus uses a block xfer to do a back-to-back memory write an
 instruction fetch._ Otherwise, the wishbone bus will deassert CYC/STB the cycle
 after receipt of ACK. _I may neeed to interface to IP that can't handle block
@@ -204,3 +207,68 @@ from examining the microcode:
 * Entering an exception handler requires 5 clocks from the cycle at which
   the exception condition is detected.
   * `mret` has a latency and throughput of 8 CPI. 
+
+## CSRs
+
+Sentinel physically implements the following CSRs:
+
+* `mscratch`
+* `mcause`
+  * The core can only physically trigger a subset of defined exceptions:
+    * Machine external interrupt
+    * Instruction access misaligned
+    * Illegal instruction
+    * Breakpoint
+    * Load address misaligned
+    * Store address misaligned
+    * Environment call from M-mode
+
+    In particular worth noting:
+    * _Misaligned accesses are not implemented in hardware._
+    * There is no machine timer (a 64-bit counter is a bit too much to
+      ask for right now :(...).
+* `mip`
+  * Only the `MEIP` bit is implemented. The RISC-V Privileged Spec says:
+
+    > `MEIP` is read-only in `mip`, and is set and cleared by a
+    > platform-specific interrupt controller.
+
+    This core's "platform-specific interrupt controller" is to "allow writes to
+    the `MEIP` bit to clear it :).
+* `mie`
+  * Only the `MEIE` bit is implemented.
+* `mstatus`
+  * Only the `MPP`, `MPIE`, and `MIE` bits are implemented.
+* `mtvec`
+  * The `BASE` is writeable; only the Direct `MODE` setting is implemented.
+* `mepc`
+
+Additionally, the following CSRs are implemented as read-only zero (only the
+first 5 of the below registers trigger an exception on an attempt to write):
+
+* `mvendorid`
+* `marchid`
+* `mimpid`
+* `mhartid`
+* `mconfigptr`
+* `misa`
+* `mstatush`
+* `mcountinhibit`
+* `mtval`
+* `mcycle`
+* `minstret`
+* `mhpmcounter3-31`
+* `mhpmevent3-31`
+
+All remaining machine-mode CSRs are unimplemented and trigger an exception on
+_any_ access:
+
+* `medeleg`
+* `mideleg`
+* `mcounteren`
+* `mtinst`
+* `mtval2`
+* `menvcfg`
+* `menvcfgh`
+* `mseccfg`
+* `mseccfgh`
