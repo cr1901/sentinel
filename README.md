@@ -1,14 +1,20 @@
 # `sentinel`
 
-Sentinel is a small RV32I_Zcsr CPU written in [Amaranth](https://amaranth-lang.org/).
-It is designed to fit into 1000 4-input LUTs or less on an FPGA, and isa good
-candidate for control tasks where a programmable state machine or custom
-size-tailored core would otherwise be used.
+Sentinel is a small RISC-V CPU (`RV32I_Zcsr`) written in [Amaranth](https://amaranth-lang.org/).
+It implements the Machine Mode privileged spec, and is designed to fit into
+~1000 4-input LUTs or less on an FPGA. It is a good candidate for control tasks
+where a programmable state machine or custom size-tailored core would otherwise
+be used.
 
 Unlike most RISC-V implementations, Sentinel is [microcoded](https://en.wikipedia.org/wiki/Microcode),
 not pipelined. Instructions require multiple clock cycles to execute. Sentinel
 is therefore not necessarily a good fit for applications where high throughput/
-IPC is required.
+IPC is required. See [below](#instruction-cycle-counts).
+
+Sentinel has been tested against RISC-V Formal and the RISCOF frameworks, and
+passes both. Once I have added [a few extra tests](https://github.com/YosysHQ/riscv-formal/blob/a5443540f965cc948c5cf63321c405474f34ced3/docs/procedure.md#other-checks),
+the core can be considered correct with respect to the RISC-V Formal model.
+The core is also _probably_ correct with respect to the SAIL golden model.
 
 ## Getting Started
 
@@ -29,8 +35,12 @@ Sentinel uses:
   desirable properties of Sentinel (such as "instructions write the correct
   destination") hold for all possible inputs over a bounded number of clock
   cycles after reset.
+* [RISCOF](https://github.com/riscv-software-src/riscof/), the unit test
+  framework that is maintained by RISC-V International themselves. This appears
+  to have originally been derived from the `riscv-tests`, but is much more
+  comprehensive.
 
-The latter four are only required for development. Additionally for
+The latter five are only required for development. Additionally for
 development, a user must provide:
 
 * `riscv64-unknown-elf-gcc` to compile tests from riscv-tests (I'm not sure
@@ -40,6 +50,11 @@ development, a user must provide:
 * [Boolector](https://github.com/Boolector/boolector), the SMT Solver that
   RISC-V Formal uses.
 
+RISCOF also requires the [SAIL RISC-V emulator](https://github.com/riscv/sail-riscv).
+This is a pain to compile, so I provide a Linux binary (and eventually Windows
+if I can get OCaml to behave long enough. I _used_ to be able to install it
+just fine :'D!).
+
 **A user must first run the following before anything else:**
 
 ```
@@ -48,11 +63,18 @@ pdm install -G dev -G examples
 
 ### Generate A Core
 
-To generate
+This command will generate a core with a Wishbone Classic bus, and `clk`,
+`rst`, and `irq` input pins (Sentinel uses a single clock domain):
 
 ```
 pdm gen > sentinel.v
 ```
+
+_The Wishbone bus uses a block xfer to do a back-to-back memory write an
+instruction fetch._ Otherwise, the wishbone bus will deassert CYC/STB the cycle
+after receipt of ACK. _I may neeed to interface to IP that can't handle block
+cycles, so I will probably relax the block cycle requirement in the future via
+an option._
 
 For help, run:
 
@@ -122,3 +144,63 @@ pdm doit list [--all] [task]
 `doit` tasks are documented as a courtesy, and to make sure developers/users
 don't get stuck. I am unsure about `doit` tasks' stability, so **prefer running
 `pdm` as a wrapper to `doit` rather than running `doit` directly.**
+
+## Block Diagram
+
+![Simplified block diagram of Sentinel. Black arrows are physical connections.
+Blue arrows represent microcode ROM outputs to Sentinel components, including
+feedback into the microcode ROM as inputs. Purple arrows represent microcode
+ROM inputs from the other components.](doc/blockdiag.png)
+
+## Instruction Cycle Counts
+
+**TODO**. I need to create a test that gets latency and throughput for each
+instruction type of the core. Some general observations (as of 11/18/2023),
+from examining the microcode:
+
+* _There is room for improvement, even without making the core bigger._
+* Fetch/Decode takes a _minimum_ of two cycles thanks to Wishbone classic's
+  REQ/ACK handshake taking two cycles.
+  * When Wishbone ACK is asserted, Decode is taking place.
+  * The GP file is a synchronous single read port, single write port. Sentinel
+    loads RS1 out of the register file during Decode.
+* All instructions share the same operation the cycle after ACK/Decode:
+  * Check for exceptions/interrupts, go to exception handler if so.
+  * Latch RS1 into the ALU.
+  * Load RS2 out of the register file, in anticipation for a "simple"
+    instruction.
+  * Jump to the instruction-specific microcode block.
+* At minimum, an instruction (`addi`, `or`, etc) takes 3 cycles to retire
+  after the initial shared cycles. This means Sentinel instructions have a
+  minimum latency of 6 cycles per instruction (CPI).
+* Sentinel instructions have a maximum throughput of 4 CPI by overlapping the
+  2 Fetch/Decode cycles of the _next_ instruction after the initial 3 shared
+  cycles of the _current_ instruction when possible ("pipelining").
+  * Some instructions overlap one of the Fetch/Decode cycles, some don't
+    overlap either of them. In particular, shift instructions with a nonzero
+    shift count don't pipeline Fetch/Decode. It may be possible to _always_ 
+    overlap at least one cycle, but I haven't tweaked the core yet to ensure
+    this is a sound optimization.
+* _Shift instructions need work_:
+  * For a shift of zero, shift-immediate latency is 10 CPI, throughtput 9 CPI.
+    Shift-register latency is 11 CPI, throughput 10 CPI.
+  * For a shift of nonzero `n`, shift-immediate _and_ shift-register latency
+    and throughput is 7 + 2*`n` CPI.
+* Branch-not-taken latency and throughput is 7 CPI. Branch-taken latency and
+  throughput is 8 CPI.
+* JAL/JALR latency is 9 CPI, throughput is 7 CPI.
+* Store latency and throughput is 8 CPI minimum. 2 cycles minimum are spent
+  waiting for Wishbone ACK.
+  * The core will not release STB/CYC between the store and fetch of the next
+    instruction.
+* Load latency is 10 CPI minimum, and throughput is 9 CPI. 2 cycles minimum
+  are spent waiting for Wishbone ACK.
+  * The core _will_ release STB/CYC before fetch of the next instruction.
+* CSR instructions require an extra Decode cycle compared to all other
+  instructions (to check for legality).
+  * At minimum, a read of a read-only zero CSR register has a latency of 7 CPI,
+    and a throughput of 6 CPI.
+  * At maximum, `csrrc` has a latency of 11 CPI, and a throughput of 10 CPI.
+* Entering an exception handler requires 5 clocks from the cycle at which
+  the exception condition is detected.
+  * `mret` has a latency and throughput of 8 CPI. 
