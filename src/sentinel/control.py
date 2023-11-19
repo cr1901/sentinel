@@ -157,7 +157,7 @@ class Sequencer(Elaboratable):
         self.opcode_adr = Signal.like(self.adr)
         self.vec_adr = Signal.like(self.adr)
         self.next_adr = Signal.like(self.adr)
-        self.rst_guard = Signal(reset=1)
+        self.ice40_rst_guard = Signal(reset=1)
 
         # If test succeeds, branch in target/vec_adr is taken, otherwise
         # next_adr.
@@ -167,7 +167,7 @@ class Sequencer(Elaboratable):
         m = Module()
 
         m.d.sync += self.next_adr.eq(self.adr + 1)
-        m.d.sync += self.rst_guard.eq(0)
+        m.d.sync += self.ice40_rst_guard.eq(0)
 
         with m.Switch(self.jmp_type):
             # Also handles JumpType.NOP
@@ -189,36 +189,77 @@ class Sequencer(Elaboratable):
                 with m.Else():
                     m.d.comb += self.adr.eq(0)
 
-        # self.adr is combinational, and is directly influenced by the value
-        # on the read outputs of the block RAM holding the ucode. Ensure while
-        # we are in reset that self.adr isn't modified by transient block RAM
-        # contents. Instead, output the block RAM data at the correct reset
-        # address (2) during reset so it's immediately available after reset
-        # ends.
+        # self.adr is combinational, and indirectly gets its value from the
+        # read outputs (latches) of the block RAM holding the ucode
+        # (particularly the JumpType and CondTest fields); the read latches are
+        # reset_less. We don't want self.adr to take on random transient values
+        # in read latches after POR because we need address 2 to be the first
+        # ucode ROM location read after sync reset ends. Feeding self.adr with
+        # the reset value of self.next_adr works fine.
         #
-        # In simulation, removing this line does not fail thanks to Amaranth
-        # giving read ports a default value of 0:
+        # In principle this line is not needed, but iCE40 has a BRAM bug that
+        # prevents the intended logic self.adr logic from firing without this
+        # line. Read below for more info.
+        #
+        # Detailed background:
+        #
+        # This line is not needed in principle because Amaranth/yosys forces
+        # the read value of a block RAM to 0 for the first cycle after POR ends
+        # ("plugging in the board", "resetting the board", or otherwise):
         # https://github.com/amaranth-lang/amaranth/blob/f9da3c0d166dd2be189945dca5a94e781e74afeb/amaranth/hdl/mem.py#L153  # noqa: E501
-        # "0" in the relevant fields corresponds to JmpType.CONT, which is
-        # equivalent to the below code.
         #
-        # Observed behavior on iCE40 is interesting, probably due to the BRAM
-        # bug where BRAM doesn't properly initialize until 3us after internal
-        # reset. iCE40 tends to settle on JmpType.DIRECT as the "reset" value
-        # of self.jmp_type. This in turn forces self.adr to 0, because the
-        # default reset value of self.test is true. This behavior is not
-        # consistent, but happens very often after resets triggered by e.g.
-        # "iceprog -t", and not so much for resets triggered by "plugging the
-        # board in".
+        # 0 in the relevant ucode BRAM field corresponds to JmpType.CONT,
+        # which is equivalent to the below code. 0 in the other ucode fields
+        # are mostly no-ops as well, and don't affect anything we care about.
+        # So on subsequent clock cycles until reset of self.next_adr ends, the
+        # block RAM latches will hold the value of ucode address 2, which
+        # "conveniently" also sets the relevant ucode field to JumpType.CONT.
+        #
+        # However, on iCE40 there's a BRAM bug where BRAM doesn't initialize
+        # properly until ~3us after internal POR. This will be many clock
+        # cycles after POR is released by iCE40. By default, Amaranth will
+        # generate a POR circuit that accomodates this behavior by holding the
+        # sync domain in rst for 15 us after POR ends). But self.adr feeds
+        # back into the ucode BRAM, which in turns feeds the _reset-less_ read
+        # latches, without any intermediate storage elements. So the POR
+        # circuit does not apply.
+        #
+        # Without this line, observed behavior on iCE40 is interesting; for
+        # the first clock cycle after POR ends, self.adr is 2. This is the
+        # aforementioned Amaranth/yosys behavior correctly firing.
+        # However on subsequent clock cycles, the ucode outputs will take on
+        # _the values the read-latches had just before an internal POR was
+        # triggered_ by e.g. "iceprog -t". Without this line, if the jump_type
+        # ucode field from the read latches isn't JmpType.CONT, self.adr will
+        # read garbage.
+        #
+        # Once the iCE40 BRAM initializes properly, nothing except
+        # self.next_adr holds self.adr at its current position during rst.
+        # Thus, the ucode program will start executing until either:
+        #
+        # * The ucode program gets stuck waiting for insn memory at address 0.
+        # * The jmp_type ucode field of the current insn is JumpType.CONT,
+        #   which will stall the program at address 2 until sync reset is
+        #   released.
+        #
+        # If the ucode makes it back to address 2, running the ucode program
+        # during reset probably has no ill effects. Unfortunately, if we
+        # end at address 0, we then skip the initialization ucode that ensures
+        # x0 is actually 0, essentially breaking the core.
+        #
+        # This behavior is not consistent, but happens very often after resets
+        # triggered by e.g. "iceprog -t", and not so much for resets triggered
+        # by "plugging a board in".
+        #
+        # Speculation follows...
         #
         # Perhaps "rest values" of read latches are 0, but hysteresis causes
-        # initial values to change after initial POR? A target of "0" and
-        # jmp_type of 2 correspond neatly to the microcode instruction at
-        # address zero. This makes me believe that BRAM isn't necessarily
-        # reading 0 during those 3us, but rather is reading a stale entry at
-        # address 0/the read latches (when it should be reading the entry at
-        # address 2).
-        with m.If(self.rst_guard):
+        # initial values to change after POR from "plugging in the board"? The
+        # LA traces I've taken makes me believe that the BRAM bug is more
+        # correctly described as outputting stale values from the read latches
+        # for up to 3us after POR, rather than outputting 0 during those 3us,
+        # as the bug is usually described.
+        with m.If(self.ice40_rst_guard):
             m.d.comb += self.adr.eq(self.next_adr)
 
         return m
