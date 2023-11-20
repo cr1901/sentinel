@@ -98,7 +98,8 @@ def task__git_rev():
 
 def task__demo():
     "create a demo bitstream (for benchmarking)"
-    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
+    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")] + \
+              [Path("./examples/attosoc.py")]
 
     return {
         "actions": ["pdm demo -b build-bench"],
@@ -114,7 +115,8 @@ def task_luts():
     yosys_log = build_dir / "top.rpt"
     nextpnr_log = build_dir / "top.tim"
     luts_csv = Path("./LUTs.csv")
-    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")]
+    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")] + \
+              [Path("./examples/attosoc.py")]
 
     yield {
         "basename": "bench_luts",

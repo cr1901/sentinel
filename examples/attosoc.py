@@ -164,7 +164,7 @@ class AttoSoC(Elaboratable):
 
 
 def demo(args):
-    asoc = AttoSoC()
+    asoc = AttoSoC(depth=0x1000)
     # Primes test firmware from tests and nextpnr AttoSoC.
     asoc.rom = """
         li      s0,2
@@ -209,7 +209,8 @@ countdown:
         case "icestick":
             plat = icestick.ICEStickPlatform()
 
-    plan = plat.build(asoc, do_build=False, debug_verilog=True)
+    plan = plat.build(asoc, do_build=False, debug_verilog=True,
+                      synth_opts="-dff")
     plan.execute_local(args.b, run_script=not args.n)
 
 
