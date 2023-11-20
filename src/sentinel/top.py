@@ -4,11 +4,11 @@ from amaranth_soc import wishbone
 
 from .alu import ALU
 from .control import Control
-from .csr import MCause
 from .datapath import DataPath
 from .decode import Decode
+from .exception import ExceptionRouter
 from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
-    MemExtend, CSRSel, ExceptCtl
+    MemExtend, CSRSel
 
 
 class Top(Component):
@@ -46,6 +46,7 @@ class Top(Component):
         self.control = Control()
         self.datapath = DataPath(formal=formal)
         self.decode = Decode()
+        self.exception_router = ExceptionRouter()
 
         # ALU
         self.a_input = Signal(32)
@@ -62,51 +63,14 @@ class Top(Component):
         m.submodules.control = self.control
         m.submodules.datapath = self.datapath
         m.submodules.decode = self.decode
+        m.submodules.exception_router = self.exception_router
 
-        # Exception handling.
-        mcause_latch = Signal(MCause)
-        exception = Signal(1)
         data_adr = Signal.like(self.alu.data.o)
 
         m.d.comb += [
             self.datapath.csr.mip_w.meip.eq(self.irq),
             self.datapath.csr.ctrl.exception.eq(self.control.except_ctl)
         ]
-
-        with m.If(self.control.except_ctl == ExceptCtl.LATCH_DECODER):
-            with m.If(self.decode.exception):
-                m.d.comb += exception.eq(1)
-                m.d.sync += mcause_latch.cause.eq(self.decode.e_type)
-
-            with m.If(self.datapath.csr.mstatus_r.mie &
-                      self.datapath.csr.mip_r.meip &
-                      self.datapath.csr.mie_r.meie):
-                m.d.comb += exception.eq(1)
-                m.d.sync += [
-                    mcause_latch.cause.eq(11),
-                    mcause_latch.interrupt.eq(1)
-                ]
-        with m.Elif(self.control.except_ctl == ExceptCtl.LATCH_STORE_ADR):
-            with m.If((((self.control.mem_sel == MemSel.HWORD) &
-                        self.alu.data.o[0] == 1)) |
-                      ((self.control.mem_sel == MemSel.WORD) &
-                       ((self.alu.data.o[0] == 1) |
-                        (self.alu.data.o[1] == 1)))):
-                m.d.comb += exception.eq(1)
-                m.d.sync += mcause_latch.cause.eq(
-                    MCause.Cause.STORE_MISALIGNED)
-        with m.Elif(self.control.except_ctl == ExceptCtl.LATCH_LOAD_ADR):
-            with m.If((((self.control.mem_sel == MemSel.HWORD) &
-                        self.alu.data.o[0] == 1)) |
-                      ((self.control.mem_sel == MemSel.WORD) &
-                       ((self.alu.data.o[0] == 1) |
-                        (self.alu.data.o[1] == 1)))):
-                m.d.comb += exception.eq(1)
-                m.d.sync += mcause_latch.eq(MCause.Cause.LOAD_MISALIGNED)
-        with m.Elif(self.control.except_ctl == ExceptCtl.LATCH_JAL):
-            with m.If(self.alu.data.o[1] == 1):
-                m.d.comb += exception.eq(1)
-                m.d.sync += mcause_latch.cause.eq(MCause.Cause.INSN_MISALIGNED)
 
         # ALU conns
         connect(m, self.alu.ctrl, self.control.alu)
@@ -180,7 +144,8 @@ class Top(Component):
                 with m.Case(BSrc.CSR):
                     m.d.sync += self.b_input.eq(self.datapath.csr.dat_r)
                 with m.Case(BSrc.MCAUSE_LATCH):
-                    m.d.sync += self.b_input.eq(mcause_latch)
+                    m.d.sync += self.b_input.eq(
+                        self.exception_router.out.mcause)
 
         # Control conns
         m.d.comb += [
@@ -192,7 +157,7 @@ class Top(Component):
             self.control.mem_valid.eq(self.bus.ack),
 
             # TODO: Spin out into a register of exception sources.
-            self.control.exception.eq(self.decode.exception | exception)
+            self.control.exception.eq(self.exception_router.out.exception)
         ]
 
         # An ACK stops the request b/c the microcode's to avoid a 1-cycle delay
@@ -310,7 +275,23 @@ class Top(Component):
             with m.Case(CSRSel.TRG_CSR):
                 m.d.comb += self.datapath.csr.adr.eq(self.control.target[0:4])
 
+        # Exception Router sources
+        m.d.comb += [
+            self.exception_router.src.alu_lo.eq(self.alu.data.o[0:2]),
+            self.exception_router.src.csr.mstatus.eq(
+                self.datapath.csr.mstatus_r),
+            self.exception_router.src.csr.mip.eq(self.datapath.csr.mip_r),
+            self.exception_router.src.csr.mie.eq(self.datapath.csr.mie_r),
+            self.exception_router.src.ctrl.mem_sel.eq(self.control.mem_sel),
+            self.exception_router.src.ctrl.except_ctl.eq(
+                self.control.except_ctl),
+            self.exception_router.src.decode.exception.eq(
+                self.decode.exception),
+            self.exception_router.src.decode.e_type.eq(self.decode.e_type),
+        ]
+
         if self.formal:
-            m.d.comb += self.rvfi.exception.eq(exception)
+            m.d.comb += self.rvfi.exception.eq(
+                self.exception_router.out.exception)
 
         return m
