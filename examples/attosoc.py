@@ -3,7 +3,7 @@
 import argparse
 
 from bronzebeard.asm import assemble
-from amaranth import Module, Memory
+from amaranth import Module, Memory, Signal
 from amaranth_soc import wishbone
 from amaranth_soc.memory import MemoryMap
 from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
@@ -97,6 +97,48 @@ class Leds(Component):
         return m
 
 
+class Timer(Component):
+    bus: In(wishbone.Signature(addr_width=1, data_width=8, granularity=8))
+    irq: Out(1)
+
+    def __init__(self):
+        super().__init__()
+
+    def elaborate(self, plat):
+        m = Module()
+
+        prescalar = Signal(16)
+        cnt = Signal(8)
+        cmp = Signal(8)
+
+        m.d.sync += prescalar.eq(prescalar + 1)
+
+        with m.If(prescalar == 0xFFFF):
+            cnt.eq(cnt + 1)
+
+        with m.If(cnt == cmp):
+            m.d.sync += self.irq.eq(1)
+
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.ack & self.bus.we &
+                  self.bus.sel[0]):
+            with m.If(self.bus.adr[0] == 0):
+                m.d.sync += [
+                    cmp.eq(self.bus.dat_w),
+                    cnt.eq(0),
+                    prescalar.eq(0)
+                ]
+
+            with m.If(self.bus.adr[0] == 1):
+                m.d.sync += self.irq.eq(0)
+
+        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack):
+            m.d.sync += self.bus.ack.eq(1)
+        with m.Else():
+            m.d.sync += self.bus.ack.eq(0)
+
+        return m
+
+
 # Reimplementation of nextpnr-ice40's AttoSoC example (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
 # to exercise attaching Sentinel to amaranth-soc's wishbone components.
 class AttoSoC(Elaboratable):
@@ -104,6 +146,9 @@ class AttoSoC(Elaboratable):
         self.cpu = Top()
         self.mem = WBMemory(sim=sim, depth=depth)
         self.leds = Leds()
+        self.sim = sim
+        if not self.sim:
+            self.timer = Timer()
 
     @property
     def rom(self):
@@ -156,6 +201,17 @@ class AttoSoC(Elaboratable):
 
         decoder.add(mem_bus)
         decoder.add(led_bus, sparse=True)
+        if not self.sim:
+            m.submodules.timer = self.timer
+            timer_bus = wishbone.Interface(addr_width=1, data_width=8,
+                                           granularity=8,
+                                           memory_map=MemoryMap(addr_width=1,
+                                                                data_width=8),
+                                           path=("timer",))
+            decoder.add(timer_bus, sparse=True)
+            connect(m, timer_bus, self.timer.bus)
+            m.d.comb += self.cpu.irq.eq(self.timer.irq)
+
         connect(m, mem_bus, self.mem.bus)
         connect(m, led_bus, self.leds.bus)
         connect(m, self.cpu.bus, decoder.bus)
@@ -210,6 +266,7 @@ countdown:
             plat = icestick.ICEStickPlatform()
 
     plan = plat.build(asoc, do_build=False, debug_verilog=True,
+                      # This works wonders for optimizing for size.
                       synth_opts="-dff")
     plan.execute_local(args.b, run_script=not args.n)
 
