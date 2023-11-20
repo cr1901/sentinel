@@ -3,7 +3,7 @@
 import argparse
 
 from bronzebeard.asm import assemble
-from amaranth import Module, Memory, Signal
+from amaranth import Module, Memory, Signal, Cat, C
 from amaranth_soc import wishbone
 from amaranth_soc.memory import MemoryMap
 from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
@@ -139,6 +139,160 @@ class Timer(Component):
         return m
 
 
+# Taken from: https://github.com/amaranth-lang/amaranth/blob/f9da3c0d166dd2be189945dca5a94e781e74afeb/examples/basic/uart.py  # noqa: E501
+class UART(Elaboratable):
+    """
+    Parameters
+    ----------
+    divisor : int
+        Set to ``round(clk-rate / baud-rate)``.
+        E.g. ``12e6 / 115200`` = ``104``.
+    """
+    def __init__(self, divisor, data_bits=8):
+        assert divisor >= 4
+
+        self.data_bits = data_bits
+        self.divisor = divisor
+
+        self.tx_o = Signal()
+        self.rx_i = Signal()
+
+        self.tx_data = Signal(data_bits)
+        self.tx_rdy = Signal()
+        self.tx_ack = Signal()
+
+        self.rx_data = Signal(data_bits)
+        self.rx_err = Signal()
+        self.rx_ovf = Signal()
+        self.rx_rdy = Signal()
+        self.rx_ack = Signal()
+
+    def elaborate(self, platform):
+        m = Module()
+
+        tx_phase = Signal(range(self.divisor))
+        tx_shreg = Signal(1 + self.data_bits + 1, reset=-1)
+        tx_count = Signal(range(len(tx_shreg) + 1))
+
+        m.d.comb += self.tx_o.eq(tx_shreg[0])
+        with m.If(tx_count == 0):
+            m.d.comb += self.tx_ack.eq(1)
+            with m.If(self.tx_rdy):
+                m.d.sync += [
+                    tx_shreg.eq(Cat(C(0, 1), self.tx_data, C(1, 1))),
+                    tx_count.eq(len(tx_shreg)),
+                    tx_phase.eq(self.divisor - 1),
+                ]
+        with m.Else():
+            with m.If(tx_phase != 0):
+                m.d.sync += tx_phase.eq(tx_phase - 1)
+            with m.Else():
+                m.d.sync += [
+                    tx_shreg.eq(Cat(tx_shreg[1:], C(1, 1))),
+                    tx_count.eq(tx_count - 1),
+                    tx_phase.eq(self.divisor - 1),
+                ]
+
+        rx_phase = Signal(range(self.divisor))
+        rx_shreg = Signal(1 + self.data_bits + 1, reset=-1)
+        rx_count = Signal(range(len(rx_shreg) + 1))
+
+        m.d.comb += self.rx_data.eq(rx_shreg[1:-1])
+        with m.If(rx_count == 0):
+            m.d.comb += self.rx_err.eq(~(~rx_shreg[0] & rx_shreg[-1]))
+            with m.If(~self.rx_i):
+                with m.If(self.rx_ack | ~self.rx_rdy):
+                    m.d.sync += [
+                        self.rx_rdy.eq(0),
+                        self.rx_ovf.eq(0),
+                        rx_count.eq(len(rx_shreg)),
+                        rx_phase.eq(self.divisor // 2),
+                    ]
+                with m.Else():
+                    m.d.sync += self.rx_ovf.eq(1)
+            with m.If(self.rx_ack):
+                m.d.sync += self.rx_rdy.eq(0)
+        with m.Else():
+            with m.If(rx_phase != 0):
+                m.d.sync += rx_phase.eq(rx_phase - 1)
+            with m.Else():
+                m.d.sync += [
+                    rx_shreg.eq(Cat(rx_shreg[1:], self.rx_i)),
+                    rx_count.eq(rx_count - 1),
+                    rx_phase.eq(self.divisor - 1),
+                ]
+                with m.If(rx_count == 1):
+                    m.d.sync += self.rx_rdy.eq(1)
+
+        return m
+
+
+class WBSerial(Component):
+    bus: In(wishbone.Signature(addr_width=1, data_width=8, granularity=8))
+    rx: In(1)
+    tx: Out(1)
+    irq: Out(1)
+
+    def __init__(self):
+        super().__init__()
+        self.serial = UART(divisor=12000000 // 115200)
+
+    def elaborate(self, plat):
+        m = Module()
+        m.submodules.ser_internal = self.serial
+
+        rx_rdy_irq = Signal()
+        rx_rdy_prev = Signal()
+        tx_ack_irq = Signal()
+        tx_ack_prev = Signal()
+
+        m.d.comb += [
+            self.irq.eq(rx_rdy_irq),
+            self.tx.eq(self.serial.tx_o),
+            self.serial.rx_i.eq(self.rx)
+        ]
+
+        m.d.sync += [
+            rx_rdy_prev.eq(self.serial.rx_rdy),
+            tx_ack_prev.eq(self.serial.tx_rdy),
+        ]
+
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] &
+                  self.bus.adr == 0):
+            m.d.sync += self.bus.dat_r.eq(self.serial.rx_data)
+            with m.If(~self.bus.we):
+                m.d.comb += self.serial.rx_ack.eq(1)
+
+            with m.If(self.bus.ack & self.bus.we):
+                m.d.comb += [
+                    self.serial.tx_data.eq(self.bus.dat_w),
+                    self.serial.tx_rdy.eq(1)
+                ]
+
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] &
+                  self.bus.adr == 1):
+            m.d.sync += self.bus.dat_r.eq(Cat(rx_rdy_irq, tx_ack_irq))
+
+            with m.If(self.bus.ack & self.bus.we):
+                m.d.sync += [
+                    rx_rdy_irq.eq(self.bus.dat_w[0]),
+                    tx_ack_irq.eq(self.bus.dat_w[1]),
+                ]
+
+        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack):
+            m.d.sync += self.bus.ack.eq(1)
+        with m.Else():
+            m.d.sync += self.bus.ack.eq(0)
+
+        # Don't accidentally miss an IRQ
+        with m.If(self.serial.rx_rdy & ~rx_rdy_prev):
+            m.d.sync += rx_rdy_irq.eq(1)
+        with m.If(self.serial.tx_ack & ~tx_ack_prev):
+            m.d.sync += tx_ack_irq.eq(1)
+
+        return m
+
+
 # Reimplementation of nextpnr-ice40's AttoSoC example (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
 # to exercise attaching Sentinel to amaranth-soc's wishbone components.
 class AttoSoC(Elaboratable):
@@ -149,6 +303,7 @@ class AttoSoC(Elaboratable):
         self.sim = sim
         if not self.sim:
             self.timer = Timer()
+            self.serial = WBSerial()
 
     @property
     def rom(self):
@@ -198,6 +353,7 @@ class AttoSoC(Elaboratable):
                 except ResourceError:
                     break
                 m.d.comb += led.o.eq(self.leds.leds[i])
+            ser = plat.request("uart")
 
         decoder.add(mem_bus)
         decoder.add(led_bus, sparse=True)
@@ -210,7 +366,21 @@ class AttoSoC(Elaboratable):
                                            path=("timer",))
             decoder.add(timer_bus, sparse=True)
             connect(m, timer_bus, self.timer.bus)
-            m.d.comb += self.cpu.irq.eq(self.timer.irq)
+
+            m.submodules.serial = self.serial
+            serial_bus = wishbone.Interface(addr_width=1, data_width=8,
+                                            granularity=8,
+                                            memory_map=MemoryMap(addr_width=1,
+                                                                 data_width=8),
+                                            path=("serial",))
+            decoder.add(serial_bus, sparse=True)
+            connect(m, serial_bus, self.serial.bus)
+            m.d.comb += [
+                self.serial.rx.eq(ser.rx.i),
+                ser.tx.o.eq(self.serial.tx)
+            ]
+
+            m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
 
         connect(m, mem_bus, self.mem.bus)
         connect(m, led_bus, self.leds.bus)
@@ -266,7 +436,13 @@ countdown:
             plat = icestick.ICEStickPlatform()
 
     plan = plat.build(asoc, do_build=False, debug_verilog=True,
-                      # This works wonders for optimizing for size.
+                      # Optimize for area, not speed.
+                      # https://libera.irclog.whitequark.org/yosys/2023-11-20#1700497858-1700497760;  # noqa: E501
+                      script_after_read="\n".join([
+                          "scratchpad -set abc9.D 83333",
+                          "scratchpad -copy abc9.script.flow3 abc9.script"
+                      ]),
+                      # This also works wonders for optimizing for size.
                       synth_opts="-dff")
     plan.execute_local(args.b, run_script=not args.n)
 
