@@ -44,6 +44,7 @@ examples = [
     "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
     "bronzebeard>=0.2.1",
     "amaranth-boards @ git+https://github.com/amaranth-lang/amaranth-boards",
+    "makeelf @ git+https://github.com/v3l0c1r4pt0r/makeelf",
 ]
 riscof = [
     "riscof>=1.25.3",
@@ -60,7 +61,6 @@ gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
 demo = { cmd = "examples/attosoc.py", help="create AttoSoC Sentinel demo bitstream" }
 demo-rust = { composite = [
     "_rust-firmware",
-    "_rust-objcopy",
     "demo -g target/riscv32i-unknown-none-elf/release/examples/attosoc.bin {args:-b build-rust}"
 ], help = "create AttoSoC Sentinel demo bitstream (Rust version)"}
 # DoIt wrappers. Prefer using these over running DoIt directly.
@@ -91,13 +91,6 @@ cmd = "cargo build -p sentinel-rt --release --target=riscv32i-unknown-none-elf -
 # --threads=1 fixes Windows issue: https://github.com/rust-lang/rust/issues/115985
 env = { RUSTFLAGS="-C link-arg=--threads=1 -C link-arg=-Tsentinel-rt/examples/device.x" }
 help = "compile sentinel-rt demo firmware for AttoSoC"
-
-[tool.pdm.scripts._rust-objcopy]
-cmd = """
-riscv64-unknown-elf-objcopy -O binary target/riscv32i-unknown-none-elf/release/examples/attosoc \
-    target/riscv32i-unknown-none-elf/release/examples/attosoc.bin
-"""
-help = "create raw binary demo firmware for AttoSoC"
 
 [tool.pdm.scripts.rvformal-status]
 cmd = "doit list_sby_status:{args}"

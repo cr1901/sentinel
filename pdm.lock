@@ -5,7 +5,7 @@
 groups = ["default", "dev", "riscof", "examples"]
 strategy = ["cross_platform"]
 lock_version = "4.4"
-content_hash = "sha256:d2b28200fe8187ea4d10e17dc197f5de3b2bc965d19e8f100026d83c292b2626"
+content_hash = "sha256:eeec6eb0262251c7b189df9281a729bc0841dfca2ab40f8514cac7b7951de618"
 
 [[package]]
 name = "amaranth"
@@ -286,6 +286,13 @@ files = [
     {file = "m5pre-1.0.3-py3-none-any.whl", hash = "sha256:165996759b66f519eb533d40fca24cb5521208b6dd62dee540b29cfce520d208"},
     {file = "m5pre-1.0.3.tar.gz", hash = "sha256:61864ef4583d68069149873d30b5ef6d468c32328e1650da17542232dcc4d0eb"},
 ]
+
+[[package]]
+name = "makeelf"
+version = "0.3.5"
+git = "https://github.com/v3l0c1r4pt0r/makeelf"
+revision = "19d84181bf0b5d8b42099eaedf3628cd46bfe4d1"
+summary = "ELF reader-writer library"
 
 [[package]]
 name = "markupsafe"

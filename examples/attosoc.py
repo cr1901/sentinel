@@ -1,8 +1,10 @@
 # SoC components. This is more of a "utilities" module.
 
 import argparse
+from functools import reduce
 
 from bronzebeard.asm import assemble
+from makeelf.elf import ELF, SHF, SHT
 from amaranth import Module, Memory, Signal, Cat, C
 from amaranth_soc import wishbone
 from amaranth_soc.memory import MemoryMap
@@ -393,8 +395,35 @@ def demo(args):
     asoc = AttoSoC(depth=0x1000)
 
     if args.g:
+        # In-line objcopy -O binary implementation. Probably does not handle
+        # anything but basic cases well, but I think it's "good enough".
         with open(args.g, "rb") as fp:
-            asoc.rom = fp.read()
+            elf, _ = ELF.from_bytes(fp.read())
+
+            # First, look for the sections that are part of the executable
+            # (not metadata) _and_ take up space in the ELF file (basically
+            # everything except zero-init/uninitialized memory).
+            to_write = []
+            for i, shdr in enumerate(elf.Elf.Shdr_table):
+                if (shdr.sh_flags & int(SHF.SHF_ALLOC)) and \
+                        (shdr.sh_type & int(SHT.SHT_PROGBITS)):
+                    to_write.append(i)
+
+            def append_bytes(a, b):
+                return a + b
+
+            def section(i):
+                return elf.Elf.sections[i]
+
+            def section_addr(i):
+                return elf.Elf.Shdr_table[i].sh_addr
+
+            # Sort the sections in order of increasing load address (the final
+            # location from Sentinel's POV where the data is loaded), ger the
+            # contents of each section in that order, and concatenate them.
+            asoc.rom = reduce(append_bytes,
+                              map(section, sorted(to_write, key=section_addr)),
+                              b"")
     else:
         # Primes test firmware from tests and nextpnr AttoSoC.
         asoc.rom = """
