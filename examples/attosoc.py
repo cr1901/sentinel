@@ -391,43 +391,48 @@ class AttoSoC(Elaboratable):
 
 def demo(args):
     asoc = AttoSoC(depth=0x1000)
-    # Primes test firmware from tests and nextpnr AttoSoC.
-    asoc.rom = """
-        li      s0,2
-        lui     s1,0x2000  # IO port at 0x2000000
-        li      s3,256
-outer:
-        addi    s0,s0,1
-        blt     s0,s3,noinit
-        li      s0,2
-noinit:
-        li      s2,2
-next_int:
-        bge     s2,s0,write_io
-        mv      a0,s0
-        mv      a1,s2
-        call    prime?
-        beqz    a0,not_prime
-        addi    s2,s2,1
-        j       next_int
-write_io:
-        sw      s0,0(s1)
-        call    delay
-not_prime:
-        j       outer
-prime?:
-        li      t0,1
-submore:
-        sub     a0,a0,a1
-        bge     a0,t0,submore
-        ret
-delay:
-        li      t0,360000
-countdown:
-        addi    t0,t0,-1
-        bnez    t0,countdown
-        ret
-"""
+
+    if args.g:
+        with open(args.g, "rb") as fp:
+            asoc.rom = fp.read()
+    else:
+        # Primes test firmware from tests and nextpnr AttoSoC.
+        asoc.rom = """
+            li      s0,2
+            lui     s1,0x2000  # IO port at 0x2000000
+            li      s3,256
+    outer:
+            addi    s0,s0,1
+            blt     s0,s3,noinit
+            li      s0,2
+    noinit:
+            li      s2,2
+    next_int:
+            bge     s2,s0,write_io
+            mv      a0,s0
+            mv      a1,s2
+            call    prime?
+            beqz    a0,not_prime
+            addi    s2,s2,1
+            j       next_int
+    write_io:
+            sw      s0,0(s1)
+            call    delay
+    not_prime:
+            j       outer
+    prime?:
+            li      t0,1
+    submore:
+            sub     a0,a0,a1
+            bge     a0,t0,submore
+            ret
+    delay:
+            li      t0,360000
+    countdown:
+            addi    t0,t0,-1
+            bnez    t0,countdown
+            ret
+    """
 
     match args.p:
         case "ice40_hx8k_b_evn":
@@ -456,6 +461,8 @@ def main():
     parser.add_argument("-p", help="build platform",
                         choices=("icestick", "ice40_hx8k_b_evn"),
                         default="icestick")
+    parser.add_argument("-g", help="firmware override",
+                        default=None)
     args = parser.parse_args()
     demo(args)
 
