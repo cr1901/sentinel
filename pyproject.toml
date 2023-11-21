@@ -58,6 +58,11 @@ gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
 # PDM "does the right thing" here; specifying "python " interpreter not required:
 # https://github.com/pdm-project/pdm/blob/73651b7a948679d31f4d00e8b14c8a51009126e8/src/pdm/cli/commands/run.py#L179
 demo = { cmd = "examples/attosoc.py", help="create AttoSoC Sentinel demo bitstream" }
+demo-rust = { composite = [
+    "_rust-firmware",
+    "_rust-objcopy",
+    "demo -g target/riscv32i-unknown-none-elf/release/examples/attosoc.bin {args:-b build-rust}"
+], help = "create AttoSoC Sentinel demo bitstream (Rust version)"}
 # DoIt wrappers. Prefer using these over running DoIt directly.
 doit = { cmd = "doit", help="escape hatch to call doit directly" }
 ucode = { cmd = "doit ucode", help="generate supplementary microcode files" }
@@ -80,6 +85,19 @@ riscof-all = { cmd = "doit run_riscof", help="run all RISCOF tests"}
 [tool.pdm.scripts.test-quick]
 cmd = "pytest -k \"test_top or test_upstream or test_witness\""
 help = "run quick subset of pytest tests"
+
+[tool.pdm.scripts._rust-firmware]
+cmd = "cargo build -p sentinel-rt --release --target=riscv32i-unknown-none-elf --example=attosoc"
+# --threads=1 fixes Windows issue: https://github.com/rust-lang/rust/issues/115985
+env = { RUSTFLAGS="-C link-arg=--threads=1 -C link-arg=-Tsentinel-rt/examples/device.x" }
+help = "compile sentinel-rt demo firmware for AttoSoC"
+
+[tool.pdm.scripts._rust-objcopy]
+cmd = """
+riscv64-unknown-elf-objcopy -O binary target/riscv32i-unknown-none-elf/release/examples/attosoc \
+    target/riscv32i-unknown-none-elf/release/examples/attosoc.bin
+"""
+help = "create raw binary demo firmware for AttoSoC"
 
 [tool.pdm.scripts.rvformal-status]
 cmd = "doit list_sby_status:{args}"

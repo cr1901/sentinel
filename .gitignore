@@ -33,3 +33,8 @@ __pycache__/
 
 # RVFormal disassembled counterexamples
 *.s
+
+
+# Added by cargo
+
+/target
