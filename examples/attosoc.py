@@ -2,6 +2,8 @@
 
 import argparse
 from functools import reduce
+from random import randint
+from pathlib import Path
 
 from bronzebeard.asm import assemble
 from makeelf.elf import ELF, SHF, SHT
@@ -21,7 +23,7 @@ class WBMemory(Component):
     @property
     def signature(self):
         sig = Signature({
-            "bus": In(wishbone.Signature(addr_width=log2_int(self.depth) - 2,
+            "bus": In(wishbone.Signature(addr_width=log2_int(self.num_bytes) - 2,  # noqa: E501
                                          data_width=32,
                                          granularity=8)),
         })
@@ -32,9 +34,9 @@ class WBMemory(Component):
             }))
         return sig
 
-    def __init__(self, *, sim=False, depth=0x400):
+    def __init__(self, *, sim=False, num_bytes=0x400):
         self.sim = sim
-        self.depth = depth
+        self.num_bytes = num_bytes
         super().__init__()
 
     @property
@@ -47,7 +49,7 @@ class WBMemory(Component):
 
     def elaborate(self, plat):
         m = Module()
-        self.mem = Memory(width=32, depth=self.depth//4,
+        self.mem = Memory(width=32, depth=self.num_bytes//4,
                           init=self.mem_contents)
         m.submodules.rdport = rdport = self.mem.read_port(transparent=True)
         m.submodules.wrport = wrport = self.mem.write_port(granularity=8)
@@ -298,9 +300,9 @@ class WBSerial(Component):
 # Reimplementation of nextpnr-ice40's AttoSoC example (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
 # to exercise attaching Sentinel to amaranth-soc's wishbone components.
 class AttoSoC(Elaboratable):
-    def __init__(self, *, sim=False, depth=0x400):
+    def __init__(self, *, sim=False, num_bytes=0x400):
         self.cpu = Top()
-        self.mem = WBMemory(sim=sim, depth=depth)
+        self.mem = WBMemory(sim=sim, num_bytes=num_bytes)
         self.leds = Leds()
         self.sim = sim
         if not self.sim:
@@ -336,10 +338,10 @@ class AttoSoC(Elaboratable):
         m.submodules.leds = self.leds
         m.submodules.decoder = decoder
 
-        mem_bus = wishbone.Interface(addr_width=log2_int(self.mem.depth) - 2,
+        mem_bus = wishbone.Interface(addr_width=log2_int(self.mem.num_bytes) - 2,  # noqa: E501
                                      data_width=32,
                                      granularity=8,
-                                     memory_map=MemoryMap(addr_width=log2_int(self.mem.depth),  # noqa: E501
+                                     memory_map=MemoryMap(addr_width=log2_int(self.mem.num_bytes),  # noqa: E501
                                                           data_width=8),
                                      path=("mem",))
         led_bus = wishbone.Interface(addr_width=1, data_width=8,
@@ -392,7 +394,7 @@ class AttoSoC(Elaboratable):
 
 
 def demo(args):
-    asoc = AttoSoC(depth=0x1000)
+    asoc = AttoSoC(num_bytes=0x1000)
 
     if args.g:
         # In-line objcopy -O binary implementation. Probably does not handle
@@ -419,11 +421,13 @@ def demo(args):
                 return elf.Elf.Shdr_table[i].sh_addr
 
             # Sort the sections in order of increasing load address (the final
-            # location from Sentinel's POV where the data is loaded), ger the
+            # location from Sentinel's POV where the data is loaded), get the
             # contents of each section in that order, and concatenate them.
             asoc.rom = reduce(append_bytes,
                               map(section, sorted(to_write, key=section_addr)),
                               b"")
+    elif args.r:
+        asoc.rom = [randint(0, 0xffffffff) for _ in range(0x400)]
     else:
         # Primes test firmware from tests and nextpnr AttoSoC.
         asoc.rom = """
@@ -469,7 +473,8 @@ def demo(args):
         case "icestick":
             plat = icestick.ICEStickPlatform()
 
-    plan = plat.build(asoc, do_build=False, debug_verilog=True,
+    plan = plat.build(asoc, name="rand" if args.r else "top", do_build=False,
+                      debug_verilog=True,
                       # Optimize for area, not speed.
                       # https://libera.irclog.whitequark.org/yosys/2023-11-20#1700497858-1700497760;  # noqa: E501
                       script_after_read="\n".join([
@@ -479,6 +484,10 @@ def demo(args):
                       # This also works wonders for optimizing for size.
                       synth_opts="-dff")
     plan.execute_local(args.b, run_script=not args.n)
+
+    if args.x:
+        with open(Path(args.b) / Path(args.x).with_suffix(".hex"), "w") as fp:
+            fp.writelines(f"{i:08x}\n" for i in asoc.rom)
 
 
 def main():
@@ -490,7 +499,14 @@ def main():
     parser.add_argument("-p", help="build platform",
                         choices=("icestick", "ice40_hx8k_b_evn"),
                         default="icestick")
-    parser.add_argument("-g", help="firmware override",
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-g", help="firmware override",
+                       default=None)
+    group.add_argument("-r", help="use random numbers to fill firmware "
+                                  "(use with -x and -n)", action="store_true")
+    parser.add_argument("-x", help="generate a hex file of firmware in build "
+                                   "dir (use with {ice,ecp}bram)",
+                        metavar="BASENAME",
                         default=None)
     args = parser.parse_args()
     demo(args)

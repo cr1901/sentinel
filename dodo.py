@@ -580,3 +580,44 @@ def task_compile_upstream():
             "targets": [elf_file, bin_file, dump_file],
             "setup": ["compile_upstream:mkdir"]
         }
+
+
+# Rust firmware development
+def task__make_rand_firmware():
+    "create a baseline gateware for firmware development"
+    pyfiles = [s for s in Path("./src/sentinel").glob("*.py")] + \
+              [Path("./examples/attosoc.py")]
+    build_dir = Path("./build-rust")
+    rand_hex = build_dir / "rand.hex"
+    rand_asc = build_dir / "rand.asc"
+
+    return {
+        "actions": ["pdm demo -b build-rust -r -x rand"],
+        "targets": [rand_hex, rand_asc],
+        "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")]
+    }
+
+
+def task__replace_rust_firmware():
+    "compile rust firmware and replace image inside baseline gateware"
+    rs_files = [s for s in chain(Path("sentinel-rt/examples").glob("*.rs"),
+                                 Path("sentinel-rt/src").glob("*.rs"))] + \
+               [s for s in Path(".").glob("*/Cargo.toml")] + \
+               [Path("Cargo.toml")]
+    attosoc_elf = Path("target/riscv32i-unknown-none-elf/release/examples/attosoc")  # noqa: E501
+    build_dir = Path("./build-rust")
+    rand_asc = build_dir / "rand.asc"
+    rand_hex = build_dir / "rand.hex"
+    firmware_hex = build_dir / "firmware.hex"
+    top_asc = build_dir / "top.asc"
+    top_bin = build_dir / "top.bin"
+
+    return {
+        "actions": ["pdm _rust-firmware",
+                    f"pdm demo -b build-rust -n -g {attosoc_elf} -x firmware",
+                    f"icebram {rand_hex} {firmware_hex} < {rand_asc} > {top_asc}",  # noqa: E501
+                    f"icepack {top_asc} {top_bin}"],  # noqa: E501
+        "targets": [top_bin],
+        "setup": ["_make_rand_firmware"],
+        "file_dep": rs_files + [rand_asc]
+    }
