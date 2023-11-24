@@ -6,8 +6,8 @@ use riscv_rt::entry;
 use riscv::register::{mie, mstatus};
 use core::mem::MaybeUninit;
 use core::ptr::{write_volatile, read_volatile};
-use core::cell::{Cell, UnsafeCell};
-use critical_section::{self, Mutex};
+use core::cell::Cell;
+use critical_section::{self, Mutex, CriticalSection};
 use heapless::spsc::{Queue, Consumer};
 use portable_atomic::{AtomicBool, AtomicU8, Ordering::SeqCst};
 
@@ -21,15 +21,40 @@ static COUNT: AtomicU8 = AtomicU8::new(0);
 static mut TX_CONS: MaybeUninit<Consumer<'static, u8, 64>> = MaybeUninit::uninit();
 
 
-// `read/write_volatile` SAFETYs: Interrupts are disabled, valid I/O port
-// addresses.
+// `read/write_volatile` SAFETYs: We have a CriticalSection, which means we've
+// proven that we have exclusive access or have opted into unsafety previously.
+// These are all valid I/O port addresses.
+fn read_timer_int(_cs: CriticalSection) -> u8 {
+    unsafe { read_volatile(0x04000000 as *const u8) }
+}
+
+fn read_serial_int(_cs: CriticalSection) -> u8 {
+    unsafe { read_volatile(0x06000001 as *const u8) }
+}
+
+fn read_serial_rx(_cs: CriticalSection) -> u8 {
+    unsafe { read_volatile(0x06000000 as *const u8) }
+}
+
+fn write_serial_tx(_cs: CriticalSection, val: u8) {
+    unsafe { write_volatile(0x06000000 as *mut u8, val) }
+}
+
+fn read_inp_port(_cs: CriticalSection,) -> u8 {
+    unsafe { read_volatile(0x02000000 as *const u8) }
+}
+
+fn write_leds(_cs: CriticalSection, val: u8) {
+    unsafe { write_volatile(0x02000000 as *mut u8, val) }
+}
 
 #[no_mangle]
 #[allow(non_snake_case)]
 fn MachineExternal() {
-    let tim_int: u8 = unsafe { read_volatile(0x04000000 as *const u8) };
+    // SAFETY: Interrupts are disabled.
+    let cs = unsafe { CriticalSection::new() };
 
-    if (tim_int & 0x01) != 0 {
+    if (read_timer_int(cs) & 0x01) != 0 {
         let cnt = COUNT.fetch_add(1, SeqCst);
 
         // Interrupts 12000000/16834, or ~764 times per second. Tone it
@@ -40,27 +65,27 @@ fn MachineExternal() {
         }
     }
 
-    let ser_int = unsafe { read_volatile(0x06000001 as *const u8) };
+    let ser_int = read_serial_int(cs);
     if (ser_int & 0x01) != 0 {
-        let rx = unsafe { read_volatile(0x06000000 as *const u8) };
+        let rx = read_serial_rx(cs);
         critical_section::with(|cs| {
             RX.borrow(cs).set(Some(rx));
         });
     }
 
     if (ser_int & 0x02) != 0 {
-        let maybe_queue = critical_section::with(|cs| {
+        let maybe_queue = {
             // SAFETY: No other thread ever touches this. We cannot reach this
             // line before main finishes initializing this var. Thus, this
             // is the only &mut released to safe code.
-            let mut cons = unsafe { TX_CONS.assume_init_mut() };
+            let cons = unsafe { TX_CONS.assume_init_mut() };
             cons.dequeue()
-        });
+        };
 
         if TX_IN_PROGRESS.load(SeqCst) {
             match maybe_queue {
                 Some(tx) => {
-                    unsafe { write_volatile(0x06000000 as *mut u8, tx) };
+                    write_serial_tx(cs, tx);
                 }
                 None => {
                     TX_IN_PROGRESS.store(false, SeqCst) 
@@ -93,16 +118,19 @@ fn main() -> ! {
         mie::set_mext();
     }
 
-    unsafe { write_volatile(0x06000000 as *mut u8, 'A' as u8); }
+    critical_section::with(|cs| {
+        write_serial_tx(cs, 'A' as u8)
+    });
+
     // do something here
     loop {
        critical_section::with(|cs| {
             match RX.borrow(cs).get() {
                 Some(rx) => {
                     if TX_IN_PROGRESS.load(SeqCst) {
-                        tx_prod.enqueue(rx);
+                        let _ = tx_prod.enqueue(rx);
                     } else {
-                        unsafe { write_volatile(0x06000000 as *mut u8, rx) };
+                        write_serial_tx(cs, rx);
                         TX_IN_PROGRESS.store(true, SeqCst)
                     }
 
@@ -113,9 +141,9 @@ fn main() -> ! {
 
             if TIMER.load(SeqCst) {
                 if TX_IN_PROGRESS.load(SeqCst) {
-                    tx_prod.enqueue('T' as u8);
+                    let _ = tx_prod.enqueue('T' as u8);
                 } else {
-                    unsafe { write_volatile(0x06000000 as *mut u8, 'T' as u8) };
+                    write_serial_tx(cs, 'T' as u8);
                     TX_IN_PROGRESS.store(true, SeqCst)
                 }
 
@@ -123,8 +151,9 @@ fn main() -> ! {
             }
 
             // Mirror the input port to the LEDs.
-            let inp = unsafe { read_volatile(0x02000000 as *const u8) };
-            unsafe { write_volatile(0x02000000 as *mut u8, inp) };
+            let inp = read_inp_port(cs);
+            let tx_len = (tx_prod.len() as u8) << 2;
+            write_leds(cs, tx_len | inp);
         }); 
     }
 }
