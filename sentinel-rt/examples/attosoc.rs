@@ -128,6 +128,10 @@ fn main() -> ! {
 
                 TIMER.borrow(cs).set(false);
             }
+
+            // Mirror the input port to the LEDs.
+            let inp = unsafe { read_volatile(0x02000000 as *const u8) };
+            unsafe { write_volatile(0x02000000 as *mut u8, inp) };
         }); 
     }
 }

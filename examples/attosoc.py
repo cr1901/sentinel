@@ -12,7 +12,7 @@ from amaranth_soc import wishbone
 from amaranth_soc.memory import MemoryMap
 from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
     Signature
-from amaranth.build import ResourceError
+from amaranth.build import ResourceError, Resource, Pins
 from amaranth.utils import log2_int
 from amaranth_boards import icestick, ice40_hx8k_b_evn
 
@@ -82,6 +82,7 @@ class WBMemory(Component):
 class Leds(Component):
     bus: In(wishbone.Signature(addr_width=1, data_width=8, granularity=8))
     leds: Out(8)
+    inp: In(8)
 
     def __init__(self):
         super().__init__()
@@ -89,9 +90,13 @@ class Leds(Component):
     def elaborate(self, plat):
         m = Module()
 
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.ack
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.ack & self.bus.we
                   & self.bus.sel[0]):
             m.d.sync += self.leds.eq(self.bus.dat_w)
+
+        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack & ~self.bus.we
+                  & self.bus.sel[0]):
+            m.d.sync += self.bus.dat_r.eq(self.inp)
 
         with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack):
             m.d.sync += self.bus.ack.eq(1)
@@ -343,6 +348,18 @@ class AttoSoC(Elaboratable):
                     break
                 m.d.comb += led.o.eq(self.leds.leds[i])
             ser = plat.request("uart")
+
+            if isinstance(plat, icestick.ICEStickPlatform):
+                plat.add_resources([
+                    Resource("inp", 0, Pins("1 2 3 4", dir="i",
+                                            conn=("pmod", 0)))
+                ])
+                inp = plat.request("inp", 0)
+
+                for i in range(2):
+                    m.d.comb += [
+                        self.leds.inp[i].eq(inp.i[i])
+                    ]
 
         decoder.add(mem_bus)
         decoder.add(led_bus, sparse=True)
