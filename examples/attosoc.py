@@ -227,7 +227,7 @@ class WBSerial(Component):
 
     def __init__(self):
         super().__init__()
-        self.serial = UART(divisor=12000000 // 115200)
+        self.serial = UART(divisor=12000000 // 9600)
 
     def elaborate(self, plat):
         m = Module()
@@ -260,14 +260,13 @@ class WBSerial(Component):
                     self.serial.tx_rdy.eq(1)
                 ]
 
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[1]):
-            m.d.sync += self.bus.dat_r[8:10].eq(Cat(rx_rdy_irq, tx_ack_irq))
-
-            with m.If(self.bus.ack & self.bus.we):
-                m.d.sync += [
-                    rx_rdy_irq.eq(self.bus.dat_w[8]),
-                    tx_ack_irq.eq(self.bus.dat_w[9]),
-                ]
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[1] &
+                  ~self.bus.we & ~self.bus.ack):
+            m.d.sync += [
+                self.bus.dat_r[8:10].eq(Cat(rx_rdy_irq, tx_ack_irq)),
+                rx_rdy_irq.eq(0),
+                tx_ack_irq.eq(0)
+            ]
 
         with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack):
             m.d.sync += self.bus.ack.eq(1)
