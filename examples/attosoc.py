@@ -102,7 +102,7 @@ class Leds(Component):
 
 
 class Timer(Component):
-    bus: In(wishbone.Signature(addr_width=1, data_width=8, granularity=8))
+    bus: In(wishbone.Signature(addr_width=0, data_width=32, granularity=8))
     irq: Out(1)
 
     def __init__(self):
@@ -111,29 +111,17 @@ class Timer(Component):
     def elaborate(self, plat):
         m = Module()
 
-        prescalar = Signal(16)
-        cnt = Signal(8)
-        cmp = Signal(8)
+        prescalar = Signal(15)
 
         m.d.sync += prescalar.eq(prescalar + 1)
+        m.d.comb += self.irq.eq(prescalar[14])
 
-        with m.If(prescalar == 0xFFFF):
-            cnt.eq(cnt + 1)
+        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.we):
+            with m.If(self.bus.sel[0] == 1):
+                m.d.sync += self.bus.dat_r.eq(self.irq)
 
-        with m.If(cnt == cmp):
-            m.d.sync += self.irq.eq(1)
-
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.ack & self.bus.we &
-                  self.bus.sel[0]):
-            with m.If(self.bus.adr[0] == 0):
-                m.d.sync += [
-                    cmp.eq(self.bus.dat_w),
-                    cnt.eq(0),
-                    prescalar.eq(0)
-                ]
-
-            with m.If(self.bus.adr[0] == 1):
-                m.d.sync += self.irq.eq(0)
+                with m.If(self.irq):
+                    m.d.sync += prescalar[14].eq(0)
 
         with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack):
             m.d.sync += self.bus.ack.eq(1)
@@ -361,12 +349,12 @@ class AttoSoC(Elaboratable):
         decoder.add(led_bus, sparse=True)
         if not self.sim:
             m.submodules.timer = self.timer
-            timer_bus = wishbone.Interface(addr_width=1, data_width=8,
+            timer_bus = wishbone.Interface(addr_width=0, data_width=32,
                                            granularity=8,
-                                           memory_map=MemoryMap(addr_width=1,
+                                           memory_map=MemoryMap(addr_width=2,
                                                                 data_width=8),
                                            path=("timer",))
-            decoder.add(timer_bus, sparse=True)
+            decoder.add(timer_bus)
             connect(m, timer_bus, self.timer.bus)
 
             m.submodules.serial = self.serial
@@ -382,8 +370,7 @@ class AttoSoC(Elaboratable):
                 ser.tx.o.eq(self.serial.tx)
             ]
 
-            # m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
-            m.d.comb += self.cpu.irq.eq(self.serial.irq)
+            m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
 
         connect(m, mem_bus, self.mem.bus)
         connect(m, led_bus, self.leds.bus)

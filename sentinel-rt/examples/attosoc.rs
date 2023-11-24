@@ -10,9 +10,30 @@ use critical_section::{self, Mutex};
 
 
 static INTERRUPT: Mutex<Cell<bool>> = Mutex::new(Cell::new(false));
+static TIMER: Mutex<Cell<bool>> = Mutex::new(Cell::new(false));
+static COUNT: Mutex<Cell<u8>> = Mutex::new(Cell::new(0));
+
 
 #[no_mangle]
 fn MachineExternal() {
+    let tim_int: u8 = unsafe { read_volatile(0x04000000 as *const u8) };
+
+    if (tim_int & 0x01) != 0 {
+        critical_section::with(|cs| {
+            let mut cnt = COUNT.borrow(cs).get();
+            cnt += 1;
+
+            // Interrupts 12000000/16834, or ~732 times per second. Tone it
+            // down to 1/10th of a second.
+            if cnt == 73 {
+                cnt = 0;
+                TIMER.borrow(cs).set(true);
+            }
+
+            COUNT.borrow(cs).set(cnt);
+        });
+    }
+
     let ser_int = unsafe { read_volatile(0x06000001 as *const u8) };
 
     if (ser_int & 0x01) != 0 {
@@ -50,6 +71,11 @@ fn main() -> ! {
             if INTERRUPT.borrow(cs).get() {
                 unsafe { write_volatile(0x06000000 as *mut u8, 'I' as u8); }
                 INTERRUPT.borrow(cs).set(false)
+            }
+
+            if TIMER.borrow(cs).get() {
+                unsafe { write_volatile(0x06000000 as *mut u8, 'T' as u8); }
+                TIMER.borrow(cs).set(false)
             }
         }); 
     }
