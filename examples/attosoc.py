@@ -232,7 +232,7 @@ class UART(Elaboratable):
 
 
 class WBSerial(Component):
-    bus: In(wishbone.Signature(addr_width=1, data_width=8, granularity=8))
+    bus: In(wishbone.Signature(addr_width=0, data_width=32, granularity=8))
     rx: In(1)
     tx: Out(1)
     irq: Out(1)
@@ -251,18 +251,17 @@ class WBSerial(Component):
         tx_ack_prev = Signal()
 
         m.d.comb += [
-            self.irq.eq(rx_rdy_irq),
+            self.irq.eq(rx_rdy_irq | tx_ack_irq),
             self.tx.eq(self.serial.tx_o),
             self.serial.rx_i.eq(self.rx)
         ]
 
         m.d.sync += [
             rx_rdy_prev.eq(self.serial.rx_rdy),
-            tx_ack_prev.eq(self.serial.tx_rdy),
+            tx_ack_prev.eq(self.serial.tx_ack),
         ]
 
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] &
-                  self.bus.adr == 0):
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0]):
             m.d.sync += self.bus.dat_r.eq(self.serial.rx_data)
             with m.If(~self.bus.we):
                 m.d.comb += self.serial.rx_ack.eq(1)
@@ -273,14 +272,13 @@ class WBSerial(Component):
                     self.serial.tx_rdy.eq(1)
                 ]
 
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] &
-                  self.bus.adr == 1):
-            m.d.sync += self.bus.dat_r.eq(Cat(rx_rdy_irq, tx_ack_irq))
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[1]):
+            m.d.sync += self.bus.dat_r[8:10].eq(Cat(rx_rdy_irq, tx_ack_irq))
 
             with m.If(self.bus.ack & self.bus.we):
                 m.d.sync += [
-                    rx_rdy_irq.eq(self.bus.dat_w[0]),
-                    tx_ack_irq.eq(self.bus.dat_w[1]),
+                    rx_rdy_irq.eq(self.bus.dat_w[8]),
+                    tx_ack_irq.eq(self.bus.dat_w[9]),
                 ]
 
         with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack):
@@ -372,19 +370,20 @@ class AttoSoC(Elaboratable):
             connect(m, timer_bus, self.timer.bus)
 
             m.submodules.serial = self.serial
-            serial_bus = wishbone.Interface(addr_width=1, data_width=8,
+            serial_bus = wishbone.Interface(addr_width=0, data_width=32,
                                             granularity=8,
-                                            memory_map=MemoryMap(addr_width=1,
+                                            memory_map=MemoryMap(addr_width=2,
                                                                  data_width=8),
                                             path=("serial",))
-            decoder.add(serial_bus, sparse=True)
+            decoder.add(serial_bus)
             connect(m, serial_bus, self.serial.bus)
             m.d.comb += [
                 self.serial.rx.eq(ser.rx.i),
                 ser.tx.o.eq(self.serial.tx)
             ]
 
-            m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
+            # m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
+            m.d.comb += self.cpu.irq.eq(self.serial.irq)
 
         connect(m, mem_bus, self.mem.bus)
         connect(m, led_bus, self.leds.bus)

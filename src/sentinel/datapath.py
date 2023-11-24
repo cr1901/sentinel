@@ -195,9 +195,9 @@ class CSRFile(Component):
             with m.If(self.pub.adr == self.MIE):
                 mie_in = View(MIE, self.pub.dat_w)
                 m.d.sync += mie.meie.eq(mie_in.meie)
-            with m.If(self.pub.adr == self.MIP):
-                mip_in = View(MIP, self.pub.dat_w)
-                m.d.sync += mip.meip.eq(mip_in.meip)
+            # with m.If(self.pub.adr == self.MIP):
+            #     mip_in = View(MIP, self.pub.dat_w)
+            #     m.d.sync += mip.meip.eq(mip_in.meip)
 
         with m.If(self.pub.ctrl.op == CSROp.READ_CSR):
             with m.If(self.pub.adr == self.MSTATUS):
@@ -242,8 +242,8 @@ class CSRFile(Component):
             m.d.comb += self.priv.dat_w[0:2].eq(0)
 
         # Make sure we don't lose interrupts.
-        with m.If(self.pub.mip_w.meip):
-            m.d.sync += mip.meip.eq(1)
+        # with m.If(self.pub.mip_w.meip):
+        m.d.comb += mip.meip.eq(self.pub.mip_w.meip)
 
         # This stack is probably rather difficult to orchestrate in
         # microcode for little gain.

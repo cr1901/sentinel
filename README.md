@@ -233,8 +233,14 @@ Sentinel physically implements the following CSRs:
     > `MEIP` is read-only in `mip`, and is set and cleared by a
     > platform-specific interrupt controller.
 
-    This core's "platform-specific interrupt controller" is to "allow writes to
-    the `MEIP` bit to clear it :).
+    The user must provide their own interrupt controller. One simple
+    implementation is to `OR` all external interrupt sources together, and
+    query each peripheral when `MEIP` is pending to find which peripherals
+    need attention. This is implemented for the serial and timer peripherals
+    in the [attosoc](examples/attosoc.py) example.
+
+    In the future, I may implement the high (platform-specific) 16-bits of
+    `mip`/`mie` to make interrupt-handling quicker.
 * `mie`
   * Only the `MEIE` bit is implemented.
 * `mstatus`
