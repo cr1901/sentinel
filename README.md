@@ -1,6 +1,6 @@
 # `sentinel`
 
-Sentinel is a small RISC-V CPU (`RV32I_Zcsr`) written in [Amaranth](https://amaranth-lang.org/).
+Sentinel is a small RISC-V CPU (`RV32I_Zicsr`) written in [Amaranth](https://amaranth-lang.org/).
 It implements the Machine Mode privileged spec, and is designed to fit into
 ~1000 4-input LUTs or less on an FPGA. It is a good candidate for control tasks
 where a programmable state machine or custom size-tailored core would otherwise
