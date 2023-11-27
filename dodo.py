@@ -68,7 +68,7 @@ def git_init(repo_dir):
     return {
         "basename": "_git_init",
         "name": repo_dir.stem,
-        "actions": [CmdAction("git submodule update --init --recursive",
+        "actions": [CmdAction("git submodule update --init --recursive -- .",
                               cwd=repo_dir)],
         "targets": [submod],
         "uptodate": [run_once],
@@ -474,6 +474,26 @@ def task_run_sby():
     disasm_py = formal_tests / "disasm.py"
     checks_cfg = formal_tests / "checks.cfg"
 
+    # Expose this until I can figure out how to serialize the setup for
+    # all the sby tasks when they run in parallel. If this line isn't
+    # present, default behavior will try to initialize riscv-formal repo
+    # twice (as well as the other submodules, if "-- ." on end of "_git_init"
+    # tasks isn't present). This results in a failed checkout that doit thinks
+    # succeeded (thanks to only having the ".git" file as a target), which
+    # then causes dependent files like genchecks.py to never appear.
+    #
+    # Idk if the other two tasks in this setup can meaningfully race (I think
+    # they're idempotent), but just in case, use separate task for now.
+    yield {
+        "name": "setup",
+        "actions": [],
+        "setup": ["_git_init:riscv-formal",
+                  "_formal_gen_sentinel",
+                  "_formal_gen_files"],
+        "doc": "run sby initialization once, mostly used to avoid doit "
+               "parallel race conditions"
+    }
+
     for c in SBY_TESTS:
         sby_file = (sentinel_dir / "checks" / c).with_suffix(".sby")
         yield {
@@ -488,9 +508,7 @@ def task_run_sby():
             "file_dep": pyfiles + [genchecks, disasm_py, checks_cfg,
                                    Path("./src/sentinel/microcode.asm")],
             "verbosity": 2,
-            "setup": ["_git_init:riscv-formal",
-                      "_formal_gen_sentinel",
-                      "_formal_gen_files"],
+            "setup": ["run_sby:setup"],
         }
 
 

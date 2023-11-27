@@ -30,6 +30,7 @@ addopts="--ignore=tests/upstream/binaries"
 
 [tool.pdm.dev-dependencies]
 dev = [
+    "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
     "bronzebeard>=0.2.1",
     "flake8>=6.1.0",
     "pytest>=7.4.2",
@@ -79,7 +80,10 @@ rvformal-force = { composite = [
     "doit forget run_sby:{args}",
     "rvformal {args}"
 ], help="force-run a single RISC-V Formal test"}
-rvformal-all = { cmd = "doit {args:-n 2} run_sby", help="run all RISC-V Formal tests" }
+rvformal-all = { composite = [
+    "doit run_sby:setup",  # serially generate RISC-V Formal files to avoid race condition
+    "doit {args:-n 2} run_sby"
+], help="run all RISC-V Formal tests" }
 # RISCOF
 riscof-all = { cmd = "doit run_riscof", help="run all RISCOF tests"}
 
