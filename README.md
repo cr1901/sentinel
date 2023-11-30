@@ -1,4 +1,4 @@
-<p style="text-align: center;">
+<p align="center">
   <img src="doc/White Background Ver.png" 
   alt="Sentinel Logo. A lighthouse is shining its light on a PCB and computer
   chip. The silicon die of the computer chip is visible. The text &quot;Sentinel&quot;
@@ -6,7 +6,7 @@
   The text covers the base of the lighthouse and is below the chip.">
 </p>
 
-<p style="text-align: center;">
+<p align="center">
   <strong>Logo by <a href="https://keidavt.carrd.co/">keidaVT</a></strong>.
 </p>
 
