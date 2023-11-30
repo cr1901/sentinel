@@ -1,3 +1,17 @@
+<p style="text-align: center;">
+  <img src="doc/White Background Ver.png" 
+  alt="Sentinel Logo. A lighthouse is shining its light on a PCB and computer
+  chip. The silicon die of the computer chip is visible. The text &quot;Sentinel&quot;
+  in a black and gray gradient stretches in parallel with the lighthouse's beam.
+  The text covers the base of the lighthouse and is below the chip.">
+</p>
+
+<p style="text-align: center;">
+  <strong>Logo by <a href="https://keidavt.carrd.co/">keidaVT</a></strong>.
+</p>
+
+[![CI](https://github.com/cr1901/sentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cr1901/sentinel/actions/workflows/ci.yml)
+
 # `sentinel`
 
 Sentinel is a small RISC-V CPU (`RV32I_Zicsr`) written in [Amaranth](https://amaranth-lang.org/).
@@ -119,16 +133,27 @@ minimal.
 ### Run RISC-V Formal Flow
 
 ```
-pdm rvformal-gen
 pdm rvformal-all [-n num_cores]
 ```
 
-See [README.md](tests/formal/README.md) in `tests/formal` for more information.
+or
+
+```
+pdm rvformal test-name
+```
+
+See [README.md](tests/formal/README.md) in `tests/formal` for more information,
+including valid/available test names.
 
 ### Run RISCOF Flow
 
 ```
 pdm riscof-all
+```
+
+or
+
+```
 pdm riscof-override /path/to/test_list.yaml
 ```
 
