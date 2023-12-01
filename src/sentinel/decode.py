@@ -1,4 +1,4 @@
-from amaranth import Signal, Module, Cat, Value, C, Elaboratable
+from amaranth import Signal, Module, Cat, Value, C
 from amaranth.lib import enum
 from amaranth.lib.wiring import Component, Signature, In, Out
 
@@ -29,97 +29,77 @@ class OpcodeType(enum.Enum):
     SYSTEM = 0b11100
 
 
-DecodeSignature = Signature({
-    "do_decode": Out(1),
-    "insn": Out(32),
-    "src_a": In(5),
-    "src_b": In(5),
-    "imm": In(32),
-    "dst": In(5),
-    "width": In(1),
-    "custom": In(1),
-    "opcode": In(OpcodeType),
-    "exception": In(1),
-    "e_type": In(MCause.Cause),
-})
-
-
 class Decode(Component):
-    signature = DecodeSignature.flip()
-
-    def __init__(self):
-        # Shared with data bus- use do_decode to ignore.
-        self.do_decode = Signal()
-        self.insn = Signal(32)
-        self.src_a = Signal(5)
-        self.src_b = Signal(5)
-        self.reg_or_imm = Signal()
-        self.imm = Signal(32)
-        self.dst = Signal(5)
-        self.shift = Signal()
-        self.width = Signal()
-        self.exception = Signal()
-        self.e_type = Signal(MCause.Cause)
-        self.custom = Signal()
-
+    signature = Signature({
+        "do_decode": Out(1),
+        "insn": Out(32),
+        "src_a_unreg": In(5),
+        "src_a": In(5),
+        "src_b": In(5),
+        "imm": In(32),
+        "dst": In(5),
+        "opcode": In(OpcodeType),
+        "exception": In(1),
+        "e_type": In(MCause.Cause),
         # Map from opcode, funct3, and funct7, and funct12 bits to a 8-bit
         # ID to index into ucode ROM. Chosen through trial and error.
-        self.requested_op = Signal(8)
-
+        "requested_op": In(8),
         # Squash CSR encoding down to only bits that vary between
         # the 7 implemented CSRs.
-        self.csr_encoding = Signal(4)
+        "csr_encoding": In(4)
+    }).flip()
 
-        ###
-
-        self.opcode = Signal(OpcodeType, reset=0)
-        self.rd = Signal(5)
-        self.funct3 = Signal(3)
-        self.rs1 = Signal(5)
-        self.rs2 = Signal(5)
-        self.funct7 = Signal(7)
-        self.funct12 = Signal(12)
+    def __init__(self):
+        super().__init__()
 
     def elaborate(self, platform):
         m = Module()
 
+        rd = Signal(5)
+        rs1 = Signal(5)
+        rs2 = Signal(5)
+        funct3 = Signal(3)
+        funct7 = Signal(7)
+        funct12 = Signal(12)
+
         m.d.comb += [
             self.opcode.eq(self.insn[2:7]),
-            self.rd.eq(self.insn[7:12]),
-            self.funct3.eq(self.insn[12:15]),
-            self.rs1.eq(self.insn[15:20]),
-            self.rs2.eq(self.insn[20:25]),
-            self.funct7.eq(self.insn[25:32]),
-            self.funct12.eq(self.insn[20:32])
+            rd.eq(self.insn[7:12]),
+            funct3.eq(self.insn[12:15]),
+            rs1.eq(self.insn[15:20]),
+            rs2.eq(self.insn[20:25]),
+            funct7.eq(self.insn[25:32]),
+            funct12.eq(self.insn[20:32]),
+            self.src_a_unreg.eq(rs1)
         ]
 
         csr_map = Signal(2)
-        with m.Switch(Cat(self.funct12[0:8], self.funct12[10:12])):
+        with m.Switch(Cat(funct12[0:8], funct12[10:12])):
             for i, v in enumerate(self.mmode_csr_quadrant_init()):
                 with m.Case(i):
                     m.d.sync += csr_map.eq(v)
 
         forward_csr = Signal()
         csr_quadrant = Signal(2)
-        csr_op = Signal.like(self.funct3)
+        csr_op = Signal.like(funct3)
         csr_ro_space = Signal()
 
         m.d.sync += [
             forward_csr.eq(0),
             self.e_type.eq(MCause.Cause.ILLEGAL_INSN),
             self.exception.eq(0),
-            csr_quadrant.eq(self.funct12[8:10]),
-            csr_op.eq(self.funct3),
-            csr_ro_space.eq(self.funct12[10:12] == 0b11)
+            csr_quadrant.eq(funct12[8:10]),
+            csr_op.eq(funct3),
+            csr_ro_space.eq(funct12[10:12] == 0b11)
         ]
 
         with m.If(self.do_decode):
             m.d.sync += [
                 # For now, unconditionally propogate these and rely on
                 # microcode program to ignore when necessary.
-                self.src_a.eq(self.rs1),
-                self.src_b.eq(self.rs2),
-                self.dst.eq(self.rd),
+                self.src_a.eq(rs1),
+                self.src_b.eq(rs2),
+                self.dst.eq(rd),
             ]
 
             # TODO: Might be worth hoisting comb statements out of m.If?
@@ -127,20 +107,18 @@ class Decode(Component):
                 with m.Case(OpcodeType.OP_IMM):
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.I))
 
-                    with m.If((self.funct3 == 1) | (self.funct3 == 5)):
-                        with m.If(self.funct3 == 1):
-                            with m.If(self.funct7 != 0):
+                    with m.If((funct3 == 1) | (funct3 == 5)):
+                        op_map = Cat(funct3, funct7[-2], C(4))
+                        with m.If(funct3 == 1):
+                            with m.If(funct7 != 0):
                                 m.d.sync += self.exception.eq(1)
                         with m.Else():
-                            with m.If((self.funct7 != 0) &
-                                      (self.funct7 != 0b0100000)):
+                            with m.If((funct7 != 0) & (funct7 != 0b0100000)):
                                 m.d.sync += self.exception.eq(1)
-                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
-                                                             self.funct7[-2],
-                                                             C(4)))
+                        m.d.sync += self.requested_op.eq(op_map)
                     with m.Else():
-                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
-                                                             C(8)))
+                        op_map = Cat(funct3, 0, C(4))
+                        m.d.sync += self.requested_op.eq(op_map)
                 with m.Case(OpcodeType.LUI):
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.U))
                     m.d.sync += self.requested_op.eq(0xD0)
@@ -148,19 +126,15 @@ class Decode(Component):
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.U))
                     m.d.sync += self.requested_op.eq(0x50)
                 with m.Case(OpcodeType.OP):
-                    with m.If((self.funct3 == 0) | (self.funct3 == 5)):
-                        with m.If((self.funct7 != 0) &
-                                  (self.funct7 != 0b0100000)):
+                    op_map = Cat(funct3, funct7[-2], C(0xC))
+                    with m.If((funct3 == 0) | (funct3 == 5)):
+                        with m.If((funct7 != 0) & (funct7 != 0b0100000)):
                             m.d.sync += self.exception.eq(1)
-                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
-                                                             self.funct7[-2],
-                                                             C(0xC)))
+                        m.d.sync += self.requested_op.eq(op_map)
                     with m.Else():
-                        with m.If(self.funct7 != 0):
+                        with m.If(funct7 != 0):
                             m.d.sync += self.exception.eq(1)
-                        m.d.sync += self.requested_op.eq(Cat(self.funct3,
-                                                             self.funct7[-2],
-                                                             C(0xC)))
+                        m.d.sync += self.requested_op.eq(op_map)
                 with m.Case(OpcodeType.JAL):
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.J))
                     m.d.sync += self.requested_op.eq(0xB0)
@@ -168,26 +142,27 @@ class Decode(Component):
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.I))
                     m.d.sync += self.requested_op.eq(0x98)
 
-                    with m.If(self.funct3 != 0):
+                    with m.If(funct3 != 0):
                         m.d.sync += self.exception.eq(1)
                 with m.Case(OpcodeType.BRANCH):
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.B))
-                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x11)))
+                    m.d.sync += self.requested_op.eq(Cat(funct3, C(0x11)))
 
-                    with m.If((self.funct3 == 2) | (self.funct3 == 3)):
+                    with m.If((funct3 == 2) | (funct3 == 3)):
                         m.d.sync += self.exception.eq(1)
                 with m.Case(OpcodeType.LOAD):
+                    op_map = Cat(funct3, C(1))
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.I))
-                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(1)))
+                    m.d.sync += self.requested_op.eq(op_map)
 
-                    with m.If((self.funct3 == 3) | (self.funct3 == 6) |
-                              (self.funct3 == 7)):
+                    with m.If((funct3 == 3) | (funct3 == 6) | (funct3 == 7)):
                         m.d.sync += self.exception.eq(1)
                 with m.Case(OpcodeType.STORE):
+                    op_map = Cat(funct3, C(0x10))
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.S))
-                    m.d.sync += self.requested_op.eq(Cat(self.funct3, C(0x10)))
+                    m.d.sync += self.requested_op.eq(op_map)
 
-                    with m.If(self.funct3 >= 3):
+                    with m.If(funct3 >= 3):
                         m.d.sync += self.exception.eq(1)
                 with m.Case(OpcodeType.CUSTOM_0):
                     m.d.sync += self.exception.eq(1)
@@ -196,28 +171,26 @@ class Decode(Component):
                     # impl.
                     m.d.sync += self.requested_op.eq(0x30)
 
-                    with m.If(self.funct3 != 0):
+                    with m.If(funct3 != 0):
                         m.d.sync += self.exception.eq(1)
                 with m.Case(OpcodeType.SYSTEM):
                     m.d.sync += self.exception.eq(1)
-                    with m.Switch(self.funct3):
-                        zeroes = (self.rs1 == 0) & (self.rd == 0)
+                    with m.Switch(funct3):
+                        zeroes = (rs1 == 0) & (rd == 0)
                         with m.Case(0):
-                            with m.If((self.funct12 == 0) & zeroes):
+                            with m.If((funct12 == 0) & zeroes):
                                 # ecall
                                 m.d.sync += self.e_type.eq(MCause.Cause.ECALL_MMODE)  # noqa: E501
-                            with m.Elif((self.funct12 == 1) & zeroes):
+                            with m.Elif((funct12 == 1) & zeroes):
                                 # ebreak
                                 m.d.sync += self.e_type.eq(MCause.Cause.BREAKPOINT)  # noqa: E501
-                            with m.Elif((self.funct12 == 0b001100000010) &
-                                        zeroes):
+                            with m.Elif((funct12 == 0b001100000010) & zeroes):
                                 # mret
                                 m.d.sync += [
                                     self.requested_op.eq(248),
                                     self.exception.eq(0)
                                 ]
-                            with m.Elif((self.funct12 == 0b000100000101) &
-                                        zeroes):
+                            with m.Elif((funct12 == 0b000100000101) & zeroes):
                                 # wfi
                                 m.d.sync += [
                                     self.requested_op.eq(0x30),
@@ -232,12 +205,12 @@ class Decode(Component):
                             # jump to a temporary location. The next cycle
                             # will have the microcode jump to the _real_ CSR
                             # routine.
+                            csr_encode = Cat(funct12[0:3], funct12[6])
                             m.d.sync += [
                                 self.requested_op.eq(0x24),
                                 forward_csr.eq(1),
                                 self.exception.eq(0),
-                                self.csr_encoding.eq(Cat(self.funct12[0:3],
-                                                         self.funct12[6]))
+                                self.csr_encoding.eq(csr_encode)
                             ]
 
                 with m.Default():
@@ -248,6 +221,7 @@ class Decode(Component):
             with m.If(self.insn[0:2] != 0b11):
                 m.d.sync += self.exception.eq(1)
 
+        # Second decode cycle if this is a CSR access.
         with m.If(forward_csr):
             ro0 = Signal()
             illegal = Signal()
@@ -413,8 +387,3 @@ class Decode(Component):
         init[idx(0x7B3)] = 1  # dscratch1
 
         return init
-
-
-class MinorOpcodeMapper(Elaboratable):
-    def __init__(self):
-        pass

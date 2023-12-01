@@ -252,7 +252,7 @@ class Top(Component):
         with m.Switch(self.control.reg_r_sel):
             with m.Case(RegRSel.INSN_RS1):
                 with m.If(self.control.insn_fetch):
-                    m.d.comb += self.reg_r_adr.eq(self.decode.rs1)
+                    m.d.comb += self.reg_r_adr.eq(self.decode.src_a_unreg)
                 with m.Else():
                     m.d.comb += self.reg_r_adr.eq(self.decode.src_a)
             with m.Case(RegRSel.INSN_RS2):
