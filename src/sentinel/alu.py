@@ -61,30 +61,19 @@ AluCtrlSignature = Signature({
     "op": Out(OpType),
     "imod": Out(ALUIMod),
     "omod": Out(ALUOMod),
-    "lsbs_5_zero": In(1),
     "zero": In(1)
 })
-
-
-def alu_data_signature(width):
-    return Signature({
-        "a": Out(width),
-        "b": Out(width),
-        "o": In(width),
-    })
-
-
-def alu_signature(width):
-    return Signature({
-        "ctrl": In(AluCtrlSignature),
-        "data": In(alu_data_signature(width))
-    })
 
 
 class ALU(Component):
     @property
     def signature(self):
-        return alu_signature(self.width)
+        return Signature({
+            "a": Out(self.width),
+            "b": Out(self.width),
+            "o": In(self.width),
+            "ctrl": Out(AluCtrlSignature),
+        }).flip()
 
     # Assumes: op is held steady for duration of op.
     def __init__(self, width: int):
@@ -115,18 +104,18 @@ class ALU(Component):
         m.submodules.srl = self.srl
         m.submodules.sal = self.sar
 
-        mod_a = Signal.like(self.data.a)
-        mod_b = Signal.like(self.data.b)
+        mod_a = Signal.like(self.a)
+        mod_b = Signal.like(self.b)
 
         m.d.comb += [
-            mod_a.eq(self.data.a),
-            mod_b.eq(self.data.b)
+            mod_a.eq(self.a),
+            mod_b.eq(self.b)
         ]
 
         with m.If(self.ctrl.imod == ALUIMod.INV_MSB_A_B):
             m.d.comb += [
-                mod_a[-1].eq(~self.data.a[-1]),
-                mod_b[-1].eq(~self.data.b[-1]),
+                mod_a[-1].eq(~self.a[-1]),
+                mod_b[-1].eq(~self.b[-1]),
             ]
 
         for submod in [self.add, self.sub, self.and_, self.or_, self.xor,
@@ -156,13 +145,13 @@ class ALU(Component):
             with m.Case(OpType.CMP_LTU):
                 m.d.comb += self.o_mux.eq(self.sub.o[32])
 
-        m.d.sync += self.data.o.eq(self.o_mux)
+        m.d.sync += self.o.eq(self.o_mux)
         with m.If(self.ctrl.omod == ALUOMod.INV_LSB_O):
-            m.d.sync += self.data.o[0].eq(~self.o_mux[0])
+            m.d.sync += self.o[0].eq(~self.o_mux[0])
         with m.Elif(self.ctrl.omod == ALUOMod.CLEAR_LSB_O):
-            m.d.sync += self.data.o[0].eq(0)
+            m.d.sync += self.o[0].eq(0)
 
         # TODO: LSBS_2_ZERO for JALR/JAL misaligned exceptions?
-        m.d.comb += self.ctrl.zero.eq(self.data.o == 0)
+        m.d.comb += self.ctrl.zero.eq(self.o == 0)
 
         return m

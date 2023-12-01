@@ -65,8 +65,8 @@ def basic_ports(sim_mod):
             m.cpu.control.ucoderom.addr,
             m.cpu.control.ucoderom.fields.as_value(),
 
-            m.cpu.alu.ctrl.op, m.cpu.alu.data.a, m.cpu.alu.data.b,
-            m.cpu.alu.data.o]
+            m.cpu.alu.ctrl.op, m.cpu.alu.a, m.cpu.alu.b,
+            m.cpu.alu.o]
 
 
 # This test is a handwritten exercise of going through all RV32I insns. If

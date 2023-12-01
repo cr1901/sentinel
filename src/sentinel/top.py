@@ -65,7 +65,7 @@ class Top(Component):
         m.submodules.decode = self.decode
         m.submodules.exception_router = self.exception_router
 
-        data_adr = Signal.like(self.alu.data.o)
+        data_adr = Signal.like(self.alu.o)
 
         m.d.comb += [
             self.datapath.csr.mip_w.meip.eq(self.irq),
@@ -77,8 +77,8 @@ class Top(Component):
 
         # ALU conns
         m.d.comb += [
-            self.alu.data.a.eq(self.a_input),
-            self.alu.data.b.eq(self.b_input),
+            self.alu.a.eq(self.a_input),
+            self.alu.b.eq(self.b_input),
         ]
 
         # Connect ALU sources
@@ -91,7 +91,7 @@ class Top(Component):
                 with m.Case(ASrc.ZERO):
                     m.d.sync += self.a_input.eq(0)
                 with m.Case(ASrc.ALU_O):
-                    m.d.sync += self.a_input.eq(self.alu.data.o)
+                    m.d.sync += self.a_input.eq(self.alu.o)
                 with m.Case(ASrc.FOUR):
                     m.d.sync += self.a_input.eq(4)
                 with m.Case(ASrc.NEG_ONE):
@@ -184,34 +184,34 @@ class Top(Component):
             with m.Switch(self.control.mem_sel):
                 with m.Case(MemSel.BYTE):
                     with m.If(data_adr[0:2] == 0):
-                        m.d.sync += write_data[0:8].eq(self.alu.data.o[0:8])
+                        m.d.sync += write_data[0:8].eq(self.alu.o[0:8])
                     with m.Elif(data_adr[0:2] == 1):
-                        m.d.sync += write_data[8:16].eq(self.alu.data.o[0:8])
+                        m.d.sync += write_data[8:16].eq(self.alu.o[0:8])
                     with m.Elif(data_adr[0:2] == 2):
-                        m.d.sync += write_data[16:24].eq(self.alu.data.o[0:8])
+                        m.d.sync += write_data[16:24].eq(self.alu.o[0:8])
                     with m.Else():
-                        m.d.sync += write_data[24:].eq(self.alu.data.o[0:8])
+                        m.d.sync += write_data[24:].eq(self.alu.o[0:8])
                 with m.Case(MemSel.HWORD):
                     with m.If(data_adr[1] == 0):
-                        m.d.sync += write_data[0:16].eq(self.alu.data.o[0:16])
+                        m.d.sync += write_data[0:16].eq(self.alu.o[0:16])
                     with m.Else():
-                        m.d.sync += write_data[16:].eq(self.alu.data.o[0:16])
+                        m.d.sync += write_data[16:].eq(self.alu.o[0:16])
                 with m.Case(MemSel.WORD):
-                    m.d.sync += write_data.eq(self.alu.data.o)
+                    m.d.sync += write_data.eq(self.alu.o)
 
         m.d.comb += [
             self.bus.we.eq(self.control.write_mem),
             self.bus.dat_w.eq(write_data),
-            self.datapath.gp.dat_w.eq(self.alu.data.o),
+            self.datapath.gp.dat_w.eq(self.alu.o),
             self.datapath.gp.adr_r.eq(self.reg_r_adr),
             self.datapath.gp.adr_w.eq(self.reg_w_adr),
             # FIXME: Compressed insns.
-            self.datapath.pc.dat_w.eq(self.alu.data.o[2:]),
-            self.datapath.csr.dat_w.eq(self.alu.data.o)
+            self.datapath.pc.dat_w.eq(self.alu.o[2:]),
+            self.datapath.csr.dat_w.eq(self.alu.o)
         ]
 
         with m.If(self.control.latch_adr):
-            m.d.sync += data_adr.eq(self.alu.data.o)
+            m.d.sync += data_adr.eq(self.alu.o)
 
         # DataPath.dat_w constantly has traffic. We only want to latch
         # the address once per mem access, and we want it the address to be
@@ -277,7 +277,7 @@ class Top(Component):
 
         # Exception Router sources
         m.d.comb += [
-            self.exception_router.src.alu_lo.eq(self.alu.data.o[0:2]),
+            self.exception_router.src.alu_lo.eq(self.alu.o[0:2]),
             self.exception_router.src.csr.mstatus.eq(
                 self.datapath.csr.mstatus_r),
             self.exception_router.src.csr.mip.eq(self.datapath.csr.mip_r),
