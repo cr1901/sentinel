@@ -152,7 +152,6 @@ class Top(Component):
         m.d.comb += [
             self.control.opcode.eq(self.decode.opcode),
             self.control.requested_op.eq(self.decode.requested_op),
-            self.control.e_type.eq(self.decode.e_type),
             self.req_next.eq(self.control.mem_req),
             self.insn_fetch_next.eq(self.control.insn_fetch),
             self.control.mem_valid.eq(self.bus.ack),
@@ -286,9 +285,7 @@ class Top(Component):
             self.exception_router.src.ctrl.mem_sel.eq(self.control.mem_sel),
             self.exception_router.src.ctrl.except_ctl.eq(
                 self.control.except_ctl),
-            self.exception_router.src.decode.exception.eq(
-                self.decode.exception),
-            self.exception_router.src.decode.e_type.eq(self.decode.e_type),
+            self.exception_router.src.decode.eq(self.decode.exception),
         ]
 
         if self.formal:

@@ -1,5 +1,6 @@
-from amaranth import Signal, Module, Cat, Value, C
+from amaranth import Signal, Module, Cat, Value, C, unsigned
 from amaranth.lib import enum
+from amaranth.lib.data import Struct
 from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .csr import MCause
@@ -29,6 +30,11 @@ class OpcodeType(enum.Enum):
     SYSTEM = 0b11100
 
 
+class DecodeException(Struct):
+    valid: unsigned(1)
+    e_type: MCause.Cause
+
+
 class Decode(Component):
     @property
     def signature(self):
@@ -41,8 +47,7 @@ class Decode(Component):
             "imm": In(32),
             "dst": In(5),
             "opcode": In(OpcodeType),
-            "exception": In(1),
-            "e_type": In(MCause.Cause),
+            "exception": In(DecodeException),
             # Map from opcode, funct3, and funct7, and funct12 bits to a 8-bit
             # ID to index into ucode ROM. Chosen through trial and error.
             "requested_op": In(8),
@@ -113,8 +118,8 @@ class Decode(Component):
 
         m.d.sync += [
             forward_csr.eq(0),
-            self.e_type.eq(MCause.Cause.ILLEGAL_INSN),
-            self.exception.eq(0),
+            self.exception.e_type.eq(MCause.Cause.ILLEGAL_INSN),
+            self.exception.valid.eq(0),
             csr_quadrant.eq(funct12[8:10]),
             csr_op.eq(funct3),
             csr_ro_space.eq(funct12[10:12] == 0b11)
@@ -138,10 +143,10 @@ class Decode(Component):
                         op_map = Cat(funct3, funct7[-2], C(4))
                         with m.If(funct3 == 1):
                             with m.If(funct7 != 0):
-                                m.d.sync += self.exception.eq(1)
+                                m.d.sync += self.exception.valid.eq(1)
                         with m.Else():
                             with m.If((funct7 != 0) & (funct7 != 0b0100000)):
-                                m.d.sync += self.exception.eq(1)
+                                m.d.sync += self.exception.valid.eq(1)
                         m.d.sync += self.requested_op.eq(op_map)
                     with m.Else():
                         op_map = Cat(funct3, 0, C(4))
@@ -156,11 +161,11 @@ class Decode(Component):
                     op_map = Cat(funct3, funct7[-2], C(0xC))
                     with m.If((funct3 == 0) | (funct3 == 5)):
                         with m.If((funct7 != 0) & (funct7 != 0b0100000)):
-                            m.d.sync += self.exception.eq(1)
+                            m.d.sync += self.exception.valid.eq(1)
                         m.d.sync += self.requested_op.eq(op_map)
                     with m.Else():
                         with m.If(funct7 != 0):
-                            m.d.sync += self.exception.eq(1)
+                            m.d.sync += self.exception.valid.eq(1)
                         m.d.sync += self.requested_op.eq(op_map)
                 with m.Case(OpcodeType.JAL):
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.J))
@@ -170,58 +175,58 @@ class Decode(Component):
                     m.d.sync += self.requested_op.eq(0x98)
 
                     with m.If(funct3 != 0):
-                        m.d.sync += self.exception.eq(1)
+                        m.d.sync += self.exception.valid.eq(1)
                 with m.Case(OpcodeType.BRANCH):
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.B))
                     m.d.sync += self.requested_op.eq(Cat(funct3, C(0x11)))
 
                     with m.If((funct3 == 2) | (funct3 == 3)):
-                        m.d.sync += self.exception.eq(1)
+                        m.d.sync += self.exception.valid.eq(1)
                 with m.Case(OpcodeType.LOAD):
                     op_map = Cat(funct3, C(1))
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.I))
                     m.d.sync += self.requested_op.eq(op_map)
 
                     with m.If((funct3 == 3) | (funct3 == 6) | (funct3 == 7)):
-                        m.d.sync += self.exception.eq(1)
+                        m.d.sync += self.exception.valid.eq(1)
                 with m.Case(OpcodeType.STORE):
                     op_map = Cat(funct3, C(0x10))
                     m.d.sync += self.imm.eq(self.imm_bits(InsnImmFormat.S))
                     m.d.sync += self.requested_op.eq(op_map)
 
                     with m.If(funct3 >= 3):
-                        m.d.sync += self.exception.eq(1)
+                        m.d.sync += self.exception.valid.eq(1)
                 with m.Case(OpcodeType.CUSTOM_0):
-                    m.d.sync += self.exception.eq(1)
+                    m.d.sync += self.exception.valid.eq(1)
                 with m.Case(OpcodeType.MISC_MEM):
                     # RS1 and RD should be ignored for FENCE insn in a base
                     # impl.
                     m.d.sync += self.requested_op.eq(0x30)
 
                     with m.If(funct3 != 0):
-                        m.d.sync += self.exception.eq(1)
+                        m.d.sync += self.exception.valid.eq(1)
                 with m.Case(OpcodeType.SYSTEM):
-                    m.d.sync += self.exception.eq(1)
+                    m.d.sync += self.exception.valid.eq(1)
                     with m.Switch(funct3):
                         zeroes = (rs1 == 0) & (rd == 0)
                         with m.Case(0):
                             with m.If((funct12 == 0) & zeroes):
                                 # ecall
-                                m.d.sync += self.e_type.eq(MCause.Cause.ECALL_MMODE)  # noqa: E501
+                                m.d.sync += self.exception.e_type.eq(MCause.Cause.ECALL_MMODE)  # noqa: E501
                             with m.Elif((funct12 == 1) & zeroes):
                                 # ebreak
-                                m.d.sync += self.e_type.eq(MCause.Cause.BREAKPOINT)  # noqa: E501
+                                m.d.sync += self.exception.e_type.eq(MCause.Cause.BREAKPOINT)  # noqa: E501
                             with m.Elif((funct12 == 0b001100000010) & zeroes):
                                 # mret
                                 m.d.sync += [
                                     self.requested_op.eq(248),
-                                    self.exception.eq(0)
+                                    self.exception.valid.eq(0)
                                 ]
                             with m.Elif((funct12 == 0b000100000101) & zeroes):
                                 # wfi
                                 m.d.sync += [
                                     self.requested_op.eq(0x30),
-                                    self.exception.eq(0)
+                                    self.exception.valid.eq(0)
                                 ]
 
                         with m.Case(4):
@@ -236,17 +241,17 @@ class Decode(Component):
                             m.d.sync += [
                                 self.requested_op.eq(0x24),
                                 forward_csr.eq(1),
-                                self.exception.eq(0),
+                                self.exception.valid.eq(0),
                                 self.csr_encoding.eq(csr_encode)
                             ]
 
                 with m.Default():
                     # Catch-all for all ones.
-                    m.d.sync += self.exception.eq(1)
+                    m.d.sync += self.exception.valid.eq(1)
 
             # Catch-all for compressed insns, zero insn.
             with m.If(self.insn[0:2] != 0b11):
-                m.d.sync += self.exception.eq(1)
+                m.d.sync += self.exception.valid.eq(1)
 
         # Second decode cycle if this is a CSR access.
         with m.If(forward_csr):
@@ -255,15 +260,15 @@ class Decode(Component):
 
             m.d.comb += illegal.eq(csr_map[0])
             m.d.comb += ro0.eq(csr_map[1])
-            m.d.sync += self.e_type.eq(MCause.Cause.ILLEGAL_INSN)
-            m.d.sync += self.exception.eq(0)
+            m.d.sync += self.exception.e_type.eq(MCause.Cause.ILLEGAL_INSN)
+            m.d.sync += self.exception.valid.eq(0)
 
             with m.Switch(csr_quadrant):
                 # Machine Mode CSRs.
                 with m.Case(0b11):
                     # Most CSR accesses.
                     with m.If(illegal):
-                        m.d.sync += self.exception.eq(1)
+                        m.d.sync += self.exception.valid.eq(1)
 
                     # Read-only Zero CSRs. Includes CSRs that are in actually
                     # read-only space (top 2 bits set), all of which are 0
@@ -281,7 +286,7 @@ class Decode(Component):
                             with m.If((csr_op == 1) |
                                       (csr_op == 5) |
                                       (self.src_a != 0)):
-                                m.d.sync += self.exception.eq(1)
+                                m.d.sync += self.exception.valid.eq(1)
 
                     with m.Else():
                         # Jump to microcode routines for actual, implemented
@@ -331,7 +336,7 @@ class Decode(Component):
 
                 # Other Modes (User, Supervisor).
                 with m.Default():
-                    m.d.sync += self.exception.eq(1)
+                    m.d.sync += self.exception.valid.eq(1)
 
         if self.formal:
             m.d.comb += [

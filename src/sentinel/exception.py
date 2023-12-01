@@ -2,36 +2,32 @@ from amaranth import Signal, Module
 from amaranth.lib.wiring import Component, Signature, Out, In
 
 from .csr import MCause, MStatus, MIP, MIE
+from .decode import DecodeException
 from .ucodefields import MemSel, ExceptCtl
 
 
-ExceptionSourcesSignature = Signature({
-    "alu_lo": Out(2),
-    "csr": Out(Signature({
-        "mstatus": Out(MStatus),
-        "mip": Out(MIP),
-        "mie": Out(MIE)
-    })),
-    "ctrl": Out(Signature({
-        "mem_sel": Out(MemSel),
-        "except_ctl": Out(ExceptCtl)
-    })),
-    "decode": Out(Signature({
-        "exception": Out(1),
-        "e_type": Out(MCause.Cause)
-    })),
-})
-
-
-ExceptionResultSignature = Signature({
-    "exception": Out(1),
-    "mcause": Out(MCause)
-})
-
-
 class ExceptionRouter(Component):
-    src: In(ExceptionSourcesSignature)
-    out: Out(ExceptionResultSignature)
+    @property
+    def signature(self):
+        return Signature({
+            "src": In(Signature({
+                "alu_lo": Out(2),
+                "csr": Out(Signature({
+                    "mstatus": Out(MStatus),
+                    "mip": Out(MIP),
+                    "mie": Out(MIE)
+                })),
+                "ctrl": Out(Signature({
+                    "mem_sel": Out(MemSel),
+                    "except_ctl": Out(ExceptCtl)
+                })),
+                "decode": Out(DecodeException),
+            })),
+            "out": Out(Signature({
+                "exception": Out(1),
+                "mcause": Out(MCause)
+            }))
+        })
 
     def elaborate(self, platform):
         m = Module()
@@ -45,7 +41,7 @@ class ExceptionRouter(Component):
         ]
 
         with m.If(self.src.ctrl.except_ctl == ExceptCtl.LATCH_DECODER):
-            with m.If(self.src.decode.exception):
+            with m.If(self.src.decode.valid):
                 m.d.comb += exception.eq(1)
                 m.d.sync += mcause_latch.cause.eq(self.src.decode.e_type)
 
