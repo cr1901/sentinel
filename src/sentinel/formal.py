@@ -5,7 +5,6 @@ from amaranth_soc import wishbone
 
 from .top import Top
 from .datapath import CSRFile
-from .decode import OpcodeType
 from .ucodefields import CSROp
 
 
@@ -148,10 +147,10 @@ class FormalTop(Component):
             # insn data.
             m.d.sync += [
                 self.rvfi.trap.eq(0),
-                self.rvfi.insn.eq(self.cpu.decode.insn),
-                self.rvfi.rs1_addr.eq(self.cpu.decode.rs1),
-                self.rvfi.rs2_addr.eq(self.cpu.decode.rs2),
-                self.rvfi.rd_addr.eq(self.cpu.decode.rd),
+                self.rvfi.insn.eq(self.cpu.rvfi.decode.insn),
+                self.rvfi.rs1_addr.eq(self.cpu.rvfi.decode.rs1),
+                self.rvfi.rs2_addr.eq(self.cpu.rvfi.decode.rs2),
+                self.rvfi.rd_addr.eq(self.cpu.rvfi.decode.rd),
                 # The just-retired insn's PC. Overwrite with the fetched PC,
                 # the nominal PC_WDATA.
                 self.rvfi.pc_rdata.eq(self.cpu.datapath.pc.dat_r << 2),
@@ -159,9 +158,7 @@ class FormalTop(Component):
 
             # For an instruction that writes no rd register, this output must
             # always be zero.
-            with m.If((self.cpu.decode.opcode == OpcodeType.BRANCH) |
-                      (self.cpu.decode.opcode == OpcodeType.MISC_MEM) |
-                      (self.cpu.decode.opcode == OpcodeType.STORE)):
+            with m.If(~self.cpu.rvfi.decode.rd_valid):
                 m.d.sync += self.rvfi.rd_addr.eq(0)
 
             # If write of prev insn is happening while we've committed to a
@@ -188,8 +185,8 @@ class FormalTop(Component):
             m.d.comb += [
                 rs1_port.en.eq(1),
                 rs2_port.en.eq(1),
-                rs1_port.addr.eq(self.cpu.decode.rs1),
-                rs2_port.addr.eq(self.cpu.decode.rs2)
+                rs1_port.addr.eq(self.cpu.rvfi.decode.rs1),
+                rs2_port.addr.eq(self.cpu.rvfi.decode.rs2)
             ]
 
             # If either mask is non-zero, and the insn is not a load or store,
@@ -373,10 +370,10 @@ class FormalTop(Component):
         # sync, since uPC points one ahead of currently executing insn :).
         m.d.sync += doing_csr_decode.eq(self.cpu.control.ucoderom.addr ==
                                         self.CSR_DECODE_VALIDITY_ADDR)
-        with m.If(self.cpu.decode.do_decode):
+        with m.If(self.cpu.rvfi.decode.do_decode):
             m.d.sync += [
-                csr_addr_shadow.eq(self.cpu.decode.funct12),
-                csr_op_shadow.eq(self.cpu.decode.funct3)
+                csr_addr_shadow.eq(self.cpu.rvfi.decode.funct12),
+                csr_op_shadow.eq(self.cpu.rvfi.decode.funct3)
             ]
 
         for addr, csr_name, hiword in [

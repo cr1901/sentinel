@@ -1,5 +1,5 @@
 from amaranth import Signal, Module, Cat, C
-from amaranth.lib.wiring import Component, Signature, Out, In, connect
+from amaranth.lib.wiring import Component, Signature, Out, In, connect, flipped
 from amaranth_soc import wishbone
 
 from .alu import ALU
@@ -21,7 +21,8 @@ class Top(Component):
                 # Helper internal signals for RVFI that are not otherwise
                 # exposed.
                 "rvfi": Out(Signature({
-                    "exception": Out(1)
+                    "exception": Out(1),
+                    "decode": Out(self.decode.rvfi.signature)
                 })),
                 "irq": In(1)
             })
@@ -34,7 +35,6 @@ class Top(Component):
 
     def __init__(self, *, formal=False):
         self.formal = formal
-        super().__init__()
 
         self.req_next = Signal()
         self.insn_fetch_curr = Signal()
@@ -45,7 +45,7 @@ class Top(Component):
         self.alu = ALU(32)
         self.control = Control()
         self.datapath = DataPath(formal=formal)
-        self.decode = Decode()
+        self.decode = Decode(formal=formal)
         self.exception_router = ExceptionRouter()
 
         # ALU
@@ -55,6 +55,7 @@ class Top(Component):
         # Decode
         self.reg_r_adr = Signal(6)
         self.reg_w_adr = Signal(6)
+        super().__init__()
 
     def elaborate(self, platform):
         m = Module()
@@ -293,5 +294,6 @@ class Top(Component):
         if self.formal:
             m.d.comb += self.rvfi.exception.eq(
                 self.exception_router.out.exception)
+            connect(m, flipped(self.rvfi.decode), self.decode.rvfi)
 
         return m

@@ -30,26 +30,53 @@ class OpcodeType(enum.Enum):
 
 
 class Decode(Component):
-    signature = Signature({
-        "do_decode": Out(1),
-        "insn": Out(32),
-        "src_a_unreg": In(5),
-        "src_a": In(5),
-        "src_b": In(5),
-        "imm": In(32),
-        "dst": In(5),
-        "opcode": In(OpcodeType),
-        "exception": In(1),
-        "e_type": In(MCause.Cause),
-        # Map from opcode, funct3, and funct7, and funct12 bits to a 8-bit
-        # ID to index into ucode ROM. Chosen through trial and error.
-        "requested_op": In(8),
-        # Squash CSR encoding down to only bits that vary between
-        # the 7 implemented CSRs.
-        "csr_encoding": In(4)
-    }).flip()
+    @property
+    def signature(self):
+        base = {
+            "do_decode": Out(1),
+            "insn": Out(32),
+            "src_a_unreg": In(5),
+            "src_a": In(5),
+            "src_b": In(5),
+            "imm": In(32),
+            "dst": In(5),
+            "opcode": In(OpcodeType),
+            "exception": In(1),
+            "e_type": In(MCause.Cause),
+            # Map from opcode, funct3, and funct7, and funct12 bits to a 8-bit
+            # ID to index into ucode ROM. Chosen through trial and error.
+            "requested_op": In(8),
+            # Squash CSR encoding down to only bits that vary between
+            # the 7 implemented CSRs.
+            "csr_encoding": In(4)
+        }
 
-    def __init__(self):
+        if self.formal:
+            rvfi = Signature({
+                "rs1": Out(5),
+                "rs2": Out(5),
+                "rd": Out(5),
+                "rd_valid": Out(1),
+                "do_decode": Out(1),
+                "funct12": Out(12),
+                "funct3": Out(3),
+                "insn": Out(32),
+            })
+
+            # Base part of signature is from peripheral/responder POV
+            sig = Signature(base).flip()
+            # But RVFI is from initiator POV, extending sig is easier to read
+            # than doing In(Out(rvfi)) to cancel out flip.
+            sig.members += {
+                "rvfi": Out(rvfi)
+            }
+
+            return sig
+        else:
+            return Signature(base).flip()
+
+    def __init__(self, *, formal=False):
+        self.formal = formal
         super().__init__()
 
     def elaborate(self, platform):
@@ -305,6 +332,22 @@ class Decode(Component):
                 # Other Modes (User, Supervisor).
                 with m.Default():
                     m.d.sync += self.exception.eq(1)
+
+        if self.formal:
+            m.d.comb += [
+                self.rvfi.rs1.eq(rs1),
+                self.rvfi.rs2.eq(rs2),
+                self.rvfi.rd.eq(rd),
+                self.rvfi.do_decode.eq(self.do_decode),
+                self.rvfi.funct12.eq(funct12),
+                self.rvfi.funct3.eq(funct3),
+                self.rvfi.insn.eq(self.insn),
+            ]
+
+            m.d.comb += self.rvfi.rd_valid.eq(
+                ~((self.opcode == OpcodeType.BRANCH) |
+                  (self.opcode == OpcodeType.MISC_MEM) |
+                  (self.opcode == OpcodeType.STORE)))
 
         return m
 
