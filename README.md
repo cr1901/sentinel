@@ -30,6 +30,19 @@ passes both. Once I have added [a few extra tests](https://github.com/YosysHQ/ri
 the core can be considered correct with respect to the RISC-V Formal model.
 The core is also _probably_ correct with respect to the SAIL golden model.
 
+## Why The Name `sentinel`?
+
+I've like the way the word "sentinel" sounds ever since I first learned of the
+word, either from the title of [a book on NJ lighthouses](http://www.down-the-shore.com/sentinl.html),
+or on an [enemy](https://shining.fandom.com/wiki/Sentinel_(Shining_in_the_Darkness))
+from an [old Sega Genesis RPG](https://en.wikipedia.org/wiki/Shining_in_the_Darkness).
+The term has always stuck with me since then, albeit in a much more positive
+light than "the soldier golems of the forces of Darkness" :). Since "sentinel"
+means "one who stands watch", I think it's an apt name for a CPU intended to
+watch over the rest of your silicon, but otherwise stay out of the way. Also,
+since lighthouses are indeed "Sentinels Of The Shore", I wanted to shoehorn a
+lighthouse into the logo :).
+
 ## Getting Started
 
 Sentinel uses:
