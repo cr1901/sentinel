@@ -51,7 +51,8 @@ riscof = [
     "riscof>=1.25.3",
 ]
 remote = [
-    "paramiko>=3.3.1",
+    "amaranth[remote-build] @ git+https://github.com/amaranth-lang/amaranth",
+    "paramiko~=2.7"
 ]
 
 [tool.pdm.scripts]
