@@ -29,7 +29,7 @@ fn read_timer_int(_cs: CriticalSection) -> u8 {
 }
 
 fn read_serial_int(_cs: CriticalSection) -> u8 {
-    unsafe { read_volatile(0x80000001 as *const u8) }
+    unsafe { read_volatile(0x80000004 as *const u8) }
 }
 
 fn read_serial_rx(_cs: CriticalSection) -> u8 {
