@@ -23,7 +23,7 @@ class WBMemory(Component):
     @property
     def signature(self):
         sig = Signature({
-            "bus": In(wishbone.Signature(addr_width=log2_int(self.num_bytes) - 2,  # noqa: E501
+            "bus": In(wishbone.Signature(addr_width=23,  # noqa: E501
                                          data_width=32,
                                          granularity=8)),
         })
@@ -80,7 +80,7 @@ class WBMemory(Component):
 
 
 class Leds(Component):
-    bus: In(wishbone.Signature(addr_width=1, data_width=8, granularity=8))
+    bus: In(wishbone.Signature(addr_width=25, data_width=8, granularity=8))
     leds: Out(8)
     inp: In(8)
 
@@ -107,7 +107,7 @@ class Leds(Component):
 
 
 class Timer(Component):
-    bus: In(wishbone.Signature(addr_width=0, data_width=32, granularity=8))
+    bus: In(wishbone.Signature(addr_width=28, data_width=32, granularity=8))
     irq: Out(1)
 
     def __init__(self):
@@ -225,7 +225,7 @@ class UART(Elaboratable):
 
 
 class WBSerial(Component):
-    bus: In(wishbone.Signature(addr_width=0, data_width=32, granularity=8))
+    bus: In(wishbone.Signature(addr_width=28, data_width=32, granularity=8))
     rx: In(1)
     tx: Out(1)
     irq: Out(1)
@@ -328,15 +328,15 @@ class AttoSoC(Elaboratable):
         m.submodules.leds = self.leds
         m.submodules.decoder = decoder
 
-        mem_bus = wishbone.Interface(addr_width=log2_int(self.mem.num_bytes) - 2,  # noqa: E501
+        mem_bus = wishbone.Interface(addr_width=23,  # noqa: E501
                                      data_width=32,
                                      granularity=8,
-                                     memory_map=MemoryMap(addr_width=log2_int(self.mem.num_bytes),  # noqa: E501
+                                     memory_map=MemoryMap(addr_width=25,  # noqa: E501
                                                           data_width=8),
                                      path=("mem",))
-        led_bus = wishbone.Interface(addr_width=1, data_width=8,
+        led_bus = wishbone.Interface(addr_width=25, data_width=8,
                                      granularity=8,
-                                     memory_map=MemoryMap(addr_width=1,
+                                     memory_map=MemoryMap(addr_width=25,
                                                           data_width=8),
                                      path=("led",))
 
@@ -365,18 +365,18 @@ class AttoSoC(Elaboratable):
         decoder.add(led_bus, sparse=True)
         if not self.sim:
             m.submodules.timer = self.timer
-            timer_bus = wishbone.Interface(addr_width=0, data_width=32,
+            timer_bus = wishbone.Interface(addr_width=28, data_width=32,
                                            granularity=8,
-                                           memory_map=MemoryMap(addr_width=2,
+                                           memory_map=MemoryMap(addr_width=30,
                                                                 data_width=8),
                                            path=("timer",))
             decoder.add(timer_bus)
             connect(m, timer_bus, self.timer.bus)
 
             m.submodules.serial = self.serial
-            serial_bus = wishbone.Interface(addr_width=0, data_width=32,
+            serial_bus = wishbone.Interface(addr_width=28, data_width=32,
                                             granularity=8,
-                                            memory_map=MemoryMap(addr_width=2,
+                                            memory_map=MemoryMap(addr_width=30,
                                                                  data_width=8),
                                             path=("serial",))
             decoder.add(serial_bus)

@@ -25,19 +25,19 @@ static mut TX_CONS: MaybeUninit<Consumer<'static, u8, 64>> = MaybeUninit::uninit
 // proven that we have exclusive access or have opted into unsafety previously.
 // These are all valid I/O port addresses.
 fn read_timer_int(_cs: CriticalSection) -> u8 {
-    unsafe { read_volatile(0x04000000 as *const u8) }
+    unsafe { read_volatile(0x40000000 as *const u8) }
 }
 
 fn read_serial_int(_cs: CriticalSection) -> u8 {
-    unsafe { read_volatile(0x06000001 as *const u8) }
+    unsafe { read_volatile(0x80000001 as *const u8) }
 }
 
 fn read_serial_rx(_cs: CriticalSection) -> u8 {
-    unsafe { read_volatile(0x06000000 as *const u8) }
+    unsafe { read_volatile(0x80000000 as *const u8) }
 }
 
 fn write_serial_tx(_cs: CriticalSection, val: u8) {
-    unsafe { write_volatile(0x06000000 as *mut u8, val) }
+    unsafe { write_volatile(0x80000000 as *mut u8, val) }
 }
 
 fn read_inp_port(_cs: CriticalSection,) -> u8 {
