@@ -11,9 +11,8 @@ from amaranth import Module, Memory, Signal, Cat, C
 from amaranth_soc import wishbone
 from amaranth_soc.memory import MemoryMap
 from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
-    Signature
+    Signature, flipped
 from amaranth.build import ResourceError, Resource, Pins
-from amaranth.utils import log2_int
 from amaranth_boards import icestick, ice40_hx8k_b_evn
 
 from sentinel.top import Top
@@ -22,19 +21,21 @@ from sentinel.top import Top
 class WBMemory(Component):
     @property
     def signature(self):
-        sig = Signature({
-            "bus": In(wishbone.Signature(addr_width=23,  # noqa: E501
-                                         data_width=32,
-                                         granularity=8)),
-        })
-
-        if self.sim:
-            sig.members["ctrl"] = Out(Signature({
-                "force_ws": Out(1)  # noqa: F821
-            }))
-        return sig
+        return self._signature
 
     def __init__(self, *, sim=False, num_bytes=0x400):
+        bus_signature = wishbone.Signature(addr_width=23, data_width=32,
+                                           granularity=8)
+        bus_signature.memory_map = MemoryMap(addr_width=25, data_width=8)
+        self._signature = Signature({
+            "bus": In(bus_signature)
+        })
+
+        if sim:
+            self._signature.members["ctrl"] = Out(Signature({
+                "force_ws": Out(1)  # noqa: F821
+            }))
+
         self.sim = sim
         self.num_bytes = num_bytes
         super().__init__()
@@ -80,11 +81,20 @@ class WBMemory(Component):
 
 
 class Leds(Component):
-    bus: In(wishbone.Signature(addr_width=25, data_width=8, granularity=8))
-    leds: Out(8)
-    inp: In(8)
+    @property
+    def signature(self):
+        return self._signature
 
     def __init__(self):
+        bus_signature = wishbone.Signature(addr_width=25, data_width=8,
+                                           granularity=8)
+        bus_signature.memory_map = MemoryMap(addr_width=25, data_width=8)
+        self._signature = Signature({
+            "bus": In(bus_signature),
+            "leds": Out(8),
+            "inp": In(8)
+        })
+
         super().__init__()
 
     def elaborate(self, plat):
@@ -107,10 +117,19 @@ class Leds(Component):
 
 
 class Timer(Component):
-    bus: In(wishbone.Signature(addr_width=30, data_width=8, granularity=8))
-    irq: Out(1)
+    @property
+    def signature(self):
+        return self._signature
 
     def __init__(self):
+        bus_signature = wishbone.Signature(addr_width=30, data_width=8,
+                                           granularity=8)
+        bus_signature.memory_map = MemoryMap(addr_width=30, data_width=8)
+        self._signature = Signature({
+            "bus": In(bus_signature),
+            "irq": Out(1),
+        })
+
         super().__init__()
 
     def elaborate(self, plat):
@@ -225,12 +244,21 @@ class UART(Elaboratable):
 
 
 class WBSerial(Component):
-    bus: In(wishbone.Signature(addr_width=30, data_width=8, granularity=8))
-    rx: In(1)
-    tx: Out(1)
-    irq: Out(1)
+    @property
+    def signature(self):
+        return self._signature
 
     def __init__(self):
+        bus_signature = wishbone.Signature(addr_width=30, data_width=8,
+                                           granularity=8)
+        bus_signature.memory_map = MemoryMap(addr_width=30, data_width=8)
+        self._signature = Signature({
+            "bus": In(bus_signature),
+            "rx": In(1),
+            "tx": Out(1),
+            "irq": Out(1),
+        })
+
         super().__init__()
         self.serial = UART(divisor=12000000 // 9600)
 
@@ -329,18 +357,6 @@ class AttoSoC(Elaboratable):
         m.submodules.leds = self.leds
         m.submodules.decoder = decoder
 
-        mem_bus = wishbone.Interface(addr_width=23,  # noqa: E501
-                                     data_width=32,
-                                     granularity=8,
-                                     memory_map=MemoryMap(addr_width=25,  # noqa: E501
-                                                          data_width=8),
-                                     path=("mem",))
-        led_bus = wishbone.Interface(addr_width=25, data_width=8,
-                                     granularity=8,
-                                     memory_map=MemoryMap(addr_width=25,
-                                                          data_width=8),
-                                     path=("led",))
-
         if plat:
             for i in range(8):
                 try:
@@ -362,26 +378,14 @@ class AttoSoC(Elaboratable):
                         self.leds.inp[i].eq(inp.i[i])
                     ]
 
-        decoder.add(mem_bus)
-        decoder.add(led_bus, sparse=True)
+        decoder.add(flipped(self.mem.bus))
+        decoder.add(flipped(self.leds.bus), sparse=True)
         if not self.sim:
             m.submodules.timer = self.timer
-            timer_bus = wishbone.Interface(addr_width=30, data_width=8,
-                                           granularity=8,
-                                           memory_map=MemoryMap(addr_width=30,
-                                                                data_width=8),
-                                           path=("timer",))
-            decoder.add(timer_bus, sparse=True)
-            connect(m, timer_bus, self.timer.bus)
+            decoder.add(flipped(self.timer.bus), sparse=True)
 
             m.submodules.serial = self.serial
-            serial_bus = wishbone.Interface(addr_width=30, data_width=8,
-                                            granularity=8,
-                                            memory_map=MemoryMap(addr_width=30,
-                                                                 data_width=8),
-                                            path=("serial",))
-            decoder.add(serial_bus, sparse=True)
-            connect(m, serial_bus, self.serial.bus)
+            decoder.add(flipped(self.serial.bus), sparse=True)
             m.d.comb += [
                 self.serial.rx.eq(ser.rx.i),
                 ser.tx.o.eq(self.serial.tx)
@@ -389,8 +393,6 @@ class AttoSoC(Elaboratable):
 
             m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
 
-        connect(m, mem_bus, self.mem.bus)
-        connect(m, led_bus, self.leds.bus)
         connect(m, self.cpu.bus, decoder.bus)
 
         return m
