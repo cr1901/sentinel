@@ -97,23 +97,42 @@ class Leds(Component):
         self._signature = Signature({
             "bus": In(bus_signature),
             "leds": Out(8),
-            "inp": In(8)
+            "gpio": In(Signature({
+                 "i": In(1),
+                 "o": Out(1),
+                 "oe": Out(1)
+            })).array(8)
         })
 
         super().__init__()
-        bus_signature.memory_map.add_resource((self.leds, self.inp),
-                                              name="gpio", size=1)
+        bus_signature.memory_map.add_resource(self.leds,
+                                              name="leds", size=1)
+        bus_signature.memory_map.add_resource(((g.o for g in self.gpio),
+                                               (g.i for g in self.gpio)),
+                                              name="inout", size=1)
+        bus_signature.memory_map.add_resource((g.oe for g in self.gpio),
+                                              name="oe", size=1)
 
     def elaborate(self, plat):
         m = Module()
 
         with m.If(self.bus.stb & self.bus.cyc & self.bus.ack & self.bus.we
-                  & self.bus.sel[0]):
+                  & (self.bus.adr[0:2] == 0) & self.bus.sel[0]):
             m.d.sync += self.leds.eq(self.bus.dat_w)
 
-        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack & ~self.bus.we
-                  & self.bus.sel[0]):
-            m.d.sync += self.bus.dat_r.eq(self.inp)
+        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack &
+                  (self.bus.adr[0:2] == 1) & self.bus.sel[0]):
+            with m.If(~self.bus.we):
+                for i in range(8):
+                    m.d.sync += self.bus.dat_r[i].eq(self.gpio[i].i)
+            with m.Else():
+                for i in range(8):
+                    m.d.sync += self.gpio[i].o.eq(self.bus.dat_w[i])
+
+        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack & self.bus.we
+                  & (self.bus.adr[0:2] == 2) & self.bus.sel[0]):
+            for i in range(8):
+                m.d.sync += self.gpio[i].oe.eq(self.bus.dat_w[i])
 
         with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack):
             m.d.sync += self.bus.ack.eq(1)
@@ -379,17 +398,17 @@ class AttoSoC(Elaboratable):
                 m.d.comb += led.o.eq(self.leds.leds[i])
             ser = plat.request("uart")
 
-            if isinstance(plat, icestick.ICEStickPlatform):
-                plat.add_resources([
-                    Resource("inp", 0, Pins("1 2 3 4", dir="i",
-                                            conn=("pmod", 0)))
-                ])
-                inp = plat.request("inp", 0)
+            for i in range(8):
+                try:
+                    gpio = plat.request("gpio", i)
+                except ResourceError:
+                    break
 
-                for i in range(2):
-                    m.d.comb += [
-                        self.leds.inp[i].eq(inp.i[i])
-                    ]
+                m.d.comb += [
+                    self.leds.gpio[i].i.eq(gpio.i),
+                    gpio.oe.eq(self.leds.gpio[i].oe),
+                    gpio.o.eq(self.leds.gpio[i].o)
+                ]
 
         decoder.add(flipped(self.mem.bus))
         decoder.add(flipped(self.leds.bus), sparse=True)
@@ -497,6 +516,17 @@ def demo(args):
             plat = ice40_hx8k_b_evn.ICE40HX8KBEVNPlatform()
         case "icestick":
             plat = icestick.ICEStickPlatform()
+            plat.add_resources([
+                # Cutting a bit close to 1280 LCs. Right now, just expose
+                # enough to bitbang I2C based on PMOD spec pins:
+                # https://digilent.com/blog/new-i2c-standard-for-pmods/
+                # Resource("gpio", 0, Pins("1", dir="io", conn=("pmod", 0))),
+                # Resource("gpio", 1, Pins("2", dir="io", conn=("pmod", 0))),
+                # Resource("gpio", 2, Pins("3", dir="io", conn=("pmod", 0))),
+                # Resource("gpio", 3, Pins("4", dir="io", conn=("pmod", 0)))
+                Resource("gpio", 0, Pins("3", dir="io", conn=("pmod", 0))),
+                Resource("gpio", 1, Pins("4", dir="io", conn=("pmod", 0)))
+            ])
 
     plan = plat.build(asoc, name="rand" if args.r else "top", do_build=False,
                       debug_verilog=True,

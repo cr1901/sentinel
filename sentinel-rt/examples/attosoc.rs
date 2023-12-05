@@ -41,7 +41,7 @@ fn write_serial_tx(_cs: CriticalSection, val: u8) {
 }
 
 fn read_inp_port(_cs: CriticalSection,) -> u8 {
-    unsafe { read_volatile(0x02000000 as *const u8) }
+    unsafe { read_volatile(0x02000004 as *const u8) }
 }
 
 fn write_leds(_cs: CriticalSection, val: u8) {
@@ -123,6 +123,9 @@ fn main() -> ! {
     });
 
     // do something here
+    let mut i = 0;
+    let mut toggle = false;
+
     loop {
        critical_section::with(|cs| {
             match RX.borrow(cs).get() {
@@ -147,13 +150,20 @@ fn main() -> ! {
                     TX_IN_PROGRESS.store(true, SeqCst)
                 }
 
+                i += 1;
                 TIMER.store(false, SeqCst);
+                if i >= 5 {
+                    toggle = !toggle;
+                    i = 0;
+                }
             }
 
-            // Mirror the input port to the LEDs.
-            let inp = read_inp_port(cs);
-            let tx_len = (tx_prod.len() as u8) << 2;
-            write_leds(cs, tx_len | inp);
+            // Mirror the low 2 bits of the I/O to the LEDs. Defaults to
+            // in at reset.
+            let inp = read_inp_port(cs) & 0x03;
+            let toggle_led = (toggle as u8) << 2;
+            let tx_len = (tx_prod.len() as u8) << 3;
+            write_leds(cs, tx_len | toggle_led | inp);
         }); 
     }
 }
