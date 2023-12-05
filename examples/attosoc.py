@@ -2,11 +2,12 @@
 
 import argparse
 from functools import reduce
+import itertools
 from random import randint
 from pathlib import Path
 
 from bronzebeard.asm import assemble
-from makeelf.elf import ELF, SHF, SHT
+from elftools.elf.elffile import ELFFile
 from amaranth import Module, Memory, Signal, Cat, C
 from amaranth_soc import wishbone
 from amaranth_soc.memory import MemoryMap
@@ -444,31 +445,16 @@ def demo(args):
         # In-line objcopy -O binary implementation. Probably does not handle
         # anything but basic cases well, but I think it's "good enough".
         with open(args.g, "rb") as fp:
-            elf, _ = ELF.from_bytes(fp.read())
-
-            # First, look for the sections that are part of the executable
-            # (not metadata) _and_ take up space in the ELF file (basically
-            # everything except zero-init/uninitialized memory).
-            to_write = []
-            for i, shdr in enumerate(elf.Elf.Shdr_table):
-                if (shdr.sh_flags & int(SHF.SHF_ALLOC)) and \
-                        (shdr.sh_type & int(SHT.SHT_PROGBITS)):
-                    to_write.append(i)
-
             def append_bytes(a, b):
                 return a + b
 
-            def section(i):
-                return elf.Elf.sections[i]
+            def seg_data(seg):
+                return seg.data()
 
-            def section_addr(i):
-                return elf.Elf.Shdr_table[i].sh_addr
-
-            # Sort the sections in order of increasing load address (the final
-            # location from Sentinel's POV where the data is loaded), get the
-            # contents of each section in that order, and concatenate them.
+            segs = ELFFile(fp).iter_segments()
+            text_ro_and_data_segs = itertools.islice(segs, 2)
             asoc.rom = reduce(append_bytes,
-                              map(section, sorted(to_write, key=section_addr)),
+                              map(seg_data, text_ro_and_data_segs),
                               b"")
     elif args.r:
         asoc.rom = [randint(0, 0xffffffff) for _ in range(0x400)]
