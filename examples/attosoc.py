@@ -14,6 +14,7 @@ from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
     Signature, flipped
 from amaranth.build import ResourceError, Resource, Pins
 from amaranth_boards import icestick, ice40_hx8k_b_evn
+from tabulate import tabulate
 
 from sentinel.top import Top
 
@@ -38,7 +39,10 @@ class WBMemory(Component):
 
         self.sim = sim
         self.num_bytes = num_bytes
+
         super().__init__()
+        bus_signature.memory_map.add_resource(self.bus, name="ram",
+                                              size=num_bytes)
 
     @property
     def init_mem(self):
@@ -88,7 +92,8 @@ class Leds(Component):
     def __init__(self):
         bus_signature = wishbone.Signature(addr_width=25, data_width=8,
                                            granularity=8)
-        bus_signature.memory_map = MemoryMap(addr_width=25, data_width=8)
+        bus_signature.memory_map = MemoryMap(addr_width=25, data_width=8,
+                                             name="leds")
         self._signature = Signature({
             "bus": In(bus_signature),
             "leds": Out(8),
@@ -96,6 +101,8 @@ class Leds(Component):
         })
 
         super().__init__()
+        bus_signature.memory_map.add_resource((self.leds, self.inp),
+                                              name="gpio", size=1)
 
     def elaborate(self, plat):
         m = Module()
@@ -124,13 +131,15 @@ class Timer(Component):
     def __init__(self):
         bus_signature = wishbone.Signature(addr_width=30, data_width=8,
                                            granularity=8)
-        bus_signature.memory_map = MemoryMap(addr_width=30, data_width=8)
+        bus_signature.memory_map = MemoryMap(addr_width=30, data_width=8,
+                                             name="timer")
         self._signature = Signature({
             "bus": In(bus_signature),
             "irq": Out(1),
         })
 
         super().__init__()
+        bus_signature.memory_map.add_resource(self.irq, name="irq", size=1)
 
     def elaborate(self, plat):
         m = Module()
@@ -251,7 +260,8 @@ class WBSerial(Component):
     def __init__(self):
         bus_signature = wishbone.Signature(addr_width=30, data_width=8,
                                            granularity=8)
-        bus_signature.memory_map = MemoryMap(addr_width=30, data_width=8)
+        bus_signature.memory_map = MemoryMap(addr_width=30, data_width=8,
+                                             name="serial")
         self._signature = Signature({
             "bus": In(bus_signature),
             "rx": In(1),
@@ -260,6 +270,9 @@ class WBSerial(Component):
         })
 
         super().__init__()
+        bus_signature.memory_map.add_resource((self.tx, self.rx), name="rxtx",
+                                              size=1)
+        bus_signature.memory_map.add_resource(self.irq, name="irq", size=1)
         self.serial = UART(divisor=12000000 // 9600)
 
     def elaborate(self, plat):
@@ -393,6 +406,13 @@ class AttoSoC(Elaboratable):
 
             m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
 
+        def destruct_res(res):
+            return ("/".join(res.name), res.start, res.end, res.width)
+
+        print(tabulate(map(destruct_res,
+                           decoder.bus.memory_map.all_resources()),
+                       intfmt=("", "#010x", "#010x", ""),
+                       headers=["name", "start", "end", "width"]))
         connect(m, self.cpu.bus, decoder.bus)
 
         return m
