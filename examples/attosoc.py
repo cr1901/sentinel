@@ -427,7 +427,7 @@ class AttoSoC(Elaboratable):
             m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
 
         def destruct_res(res):
-            return ("/".join(res.name), res.start, res.end, res.width)
+            return ("/".join(res.path), res.start, res.end, res.width)
 
         print(tabulate(map(destruct_res,
                            decoder.bus.memory_map.all_resources()),
