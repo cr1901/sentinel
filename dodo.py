@@ -604,8 +604,20 @@ def task_compile_upstream():
         }
 
 
+def save_last_platform(platform):
+    return {"last_platform": platform}
+
+
+def last_platform(task, values, platform):
+    task.value_savers.append(partial(save_last_platform, platform))
+    return values.get("last_platform") == platform
+
+
 # Rust firmware development
-def task__make_rand_firmware():
+@task_params([{"name": "platform", "short": "p",
+               "default": "icestick",
+               "help": "platform to build baseline gateware"}])
+def task__make_rand_firmware(platform):
     "create a baseline gateware for firmware development"
     pyfiles = [s for s in Path("./src/sentinel").glob("*.py")] + \
               [Path("./examples/attosoc.py")]
@@ -614,9 +626,10 @@ def task__make_rand_firmware():
     rand_asc = build_dir / "rand.asc"
 
     return {
-        "actions": ["pdm demo -b build-rust -r -x rand"],
+        "actions": ["pdm demo -b build-rust -r -x rand -p {platform}"],
         "targets": [rand_hex, rand_asc],
-        "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")]
+        "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")],
+        "uptodate": [partial(last_platform, platform=platform)],
     }
 
 
