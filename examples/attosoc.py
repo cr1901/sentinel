@@ -500,6 +500,16 @@ def demo(args):
     match args.p:
         case "ice40_hx8k_b_evn":
             plat = ice40_hx8k_b_evn.ICE40HX8KBEVNPlatform()
+            plat.add_resources([
+                Resource("gpio", 0, Pins("4", dir="io", conn=("j", 2))),
+                Resource("gpio", 1, Pins("5", dir="io", conn=("j", 2))),
+                Resource("gpio", 2, Pins("6", dir="io", conn=("j", 2))),
+                Resource("gpio", 3, Pins("9", dir="io", conn=("j", 2))),
+                Resource("gpio", 4, Pins("10", dir="io", conn=("j", 2))),
+                Resource("gpio", 5, Pins("11", dir="io", conn=("j", 2))),
+                Resource("gpio", 6, Pins("12", dir="io", conn=("j", 2))),
+                Resource("gpio", 7, Pins("13", dir="io", conn=("j", 2)))
+            ])
         case "icestick":
             plat = icestick.ICEStickPlatform()
             plat.add_resources([

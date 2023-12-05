@@ -64,7 +64,7 @@ gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
 demo = { cmd = "examples/attosoc.py", help="create AttoSoC Sentinel demo bitstream" }
 demo-rust = { composite = [
     "_rust-firmware",
-    "demo -g target/riscv32i-unknown-none-elf/release/examples/attosoc {args:-b build-rust}"
+    "demo -g target/riscv32i-unknown-none-elf/release/examples/attosoc -b build-rust {args}"
 ], help = "create AttoSoC Sentinel demo bitstream (Rust version)"}
 # DoIt wrappers. Prefer using these over running DoIt directly.
 doit = { cmd = "doit", help="escape hatch to call doit directly" }
