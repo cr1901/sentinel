@@ -4,7 +4,9 @@ import argparse
 from functools import reduce
 import itertools
 from random import randint
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import importlib
+import shutil
 
 from bronzebeard.asm import assemble
 from elftools.elf.elffile import ELFFile
@@ -534,23 +536,62 @@ def demo(args):
                       ]),
                       # This also works wonders for optimizing for size.
                       synth_opts="-dff")
-    plan.execute_local(args.b, run_script=not args.n)
+
+    if args.s:
+        if not args.b:
+            args.b = PurePosixPath("/tmp/build-remote")
+
+        paramiko = importlib.import_module("paramiko")
+        cfg_path = Path("~/.ssh/config").expanduser()
+        config = paramiko.config.SSHConfig.from_path(cfg_path)
+        host_cfg = config.lookup(args.s)
+
+        connect_to_dict = {
+            "hostname": host_cfg["hostname"],
+            "username": host_cfg["user"]
+        }
+
+        products = plan.execute_remote_ssh(connect_to=connect_to_dict,
+                                           root=str(args.b),
+                                           run_script=not args.n)
+
+        local_path = (Path(".") / Path(args.b).stem)
+        local_path.mkdir(exist_ok=True)
+        if not args.n:
+            for prod in ("top.bin", "top.asc"):
+                with products.extract(prod) as fn:
+                    shutil.copy2(fn, local_path / prod)
+    else:
+        if not args.b:
+            args.b = "build"
+        plan.execute_local(Path(args.b), run_script=not args.n)
+        local_path = Path(args.b)
 
     if args.x:
-        with open(Path(args.b) / Path(args.x).with_suffix(".hex"), "w") as fp:
+        # Although probably not that useful, it's easier to let this work
+        # with remote as well as local builds than to use mutually-exclusive
+        # groups to gate it.
+        with open(Path(local_path) / Path(args.x).with_suffix(".hex"), "w") as fp:  # noqa: E501
             fp.writelines(f"{i:08x}\n" for i in asoc.rom)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Sentinel AttoSoC Demo generator")  # noqa: E501
-    parser.add_argument("-n", help="dry run",
-                        action="store_true")
-    parser.add_argument("-b", help="build directory",
-                        default="build")
+    parser.add_argument("-n", help="dry run", action="store_true")
+    parser.add_argument("-b", help="build directory (default build if local, "
+                        "/tmp/build-remote if remote, and also extract "
+                        "products locally)")
     parser.add_argument("-p", help="build platform",
                         choices=("icestick", "ice40_hx8k_b_evn"),
                         default="icestick")
     group = parser.add_mutually_exclusive_group()
+    # Remote firmware override/random file generation is not supported;
+    # Amaranth does not have provisions for supporting adding your own build
+    # products remotely, and I don't feel like adding it using paramiko.
+    # -x is supported remotely (after extracting from remote) to keep the CLI
+    # simple.
+    group.add_argument("-s", help="remote (SSH) build host from ~/.ssh/config, "  # noqa: E501
+                       "keys loaded from ~/.ssh/id_*", metavar="HOST")
     group.add_argument("-g", help="firmware override",
                        default=None)
     group.add_argument("-r", help="use random numbers to fill firmware "
