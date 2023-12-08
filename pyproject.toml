@@ -24,7 +24,8 @@ pythonpath = [
 ]
 markers = [
   "clks: tuple of clocks to register for simulator.",
-  "module: top-level module to simulate."
+  "module: top-level module to simulate.",
+  "soc: run SoC simulations."
 ]
 addopts="--ignore=tests/upstream/binaries"
 

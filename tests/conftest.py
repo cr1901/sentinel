@@ -15,16 +15,24 @@ def pytest_addoption(parser):
     parser.addoption(
         "--runbench", action="store_true", default=False, help="run benchmarks"
     )
+    parser.addoption(
+        "--runsoc", action="store_true", default=False,
+        help="run SoC simulation"
+    )
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--runbench"):
-        # --runslow given in cli: do not skip slow tests
-        return
-    skip_bench = pytest.mark.skip(reason="need --runbench option to run")
-    for item in items:
-        if "bench" in item.keywords:
-            item.add_marker(skip_bench)
+    if not config.getoption("--runbench"):
+        skip_bench = pytest.mark.skip(reason="need --runbench option to run")
+        for item in items:
+            if "bench" in item.keywords:
+                item.add_marker(skip_bench)
+
+    if not config.getoption("--runsoc"):
+        skip_soc = pytest.mark.skip(reason="need --runsoc option to run")
+        for item in items:
+            if "soc" in item.keywords:
+                item.add_marker(skip_soc)
 
 
 class SimulatorFixture:

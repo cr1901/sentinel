@@ -399,7 +399,6 @@ class AttoSoC(Elaboratable):
                 except ResourceError:
                     break
                 m.d.comb += led.o.eq(self.leds.leds[i])
-            ser = plat.request("uart")
 
             for i in range(8):
                 try:
@@ -413,6 +412,12 @@ class AttoSoC(Elaboratable):
                     gpio.o.eq(self.leds.gpio[i].o)
                 ]
 
+            ser = plat.request("uart")
+            m.d.comb += [
+                self.serial.rx.eq(ser.rx.i),
+                ser.tx.o.eq(self.serial.tx)
+            ]
+
         decoder.add(flipped(self.mem.bus))
         decoder.add(flipped(self.leds.bus), sparse=True)
         if not self.sim:
@@ -421,10 +426,6 @@ class AttoSoC(Elaboratable):
 
             m.submodules.serial = self.serial
             decoder.add(flipped(self.serial.bus), sparse=True)
-            m.d.comb += [
-                self.serial.rx.eq(ser.rx.i),
-                ser.tx.o.eq(self.serial.tx)
-            ]
 
             m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
 

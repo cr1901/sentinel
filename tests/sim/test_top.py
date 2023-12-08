@@ -1,7 +1,11 @@
+from pathlib import Path
 import pytest
 
-from itertools import repeat, chain
+from itertools import repeat, chain, islice
+from functools import reduce
 from amaranth.sim import Passive
+from elftools.elf.elffile import ELFFile
+
 
 # FIXME: Eventually drop the need for SoC and simulate memory purely with
 # a process like in RISCOF tests? This will be pretty invasive.
@@ -612,3 +616,40 @@ handler:
 
     sim.ports = basic_ports
     sim.run(sync_processes=[cpu_proc, ucode_panic])
+
+
+# Infrequently-used test mostly for testing address decoding. Should not cause
+# failure if user does not have Rust installed.
+@pytest.mark.module(AttoSoC(sim=False, num_bytes=0x1000))
+@pytest.mark.clks((1.0 / 12e6,))
+@pytest.mark.soc
+def test_rust(sim_mod, ucode_panic, request):
+    sim, m = sim_mod
+
+    firmware_dir = request.config.rootdir / \
+        Path("target/riscv32i-unknown-none-elf/release/examples")
+    firmware_bin = firmware_dir / "attosoc"
+
+    if not firmware_bin.isfile():
+        pytest.skip("attosoc binary not present")
+
+    with open(firmware_bin, "rb") as fp:  # noqa: E501
+        def append_bytes(a, b):
+            return a + b
+
+        def seg_data(seg):
+            return seg.data()
+
+        segs = ELFFile(fp).iter_segments()
+        text_ro_and_data_segs = islice(segs, 2)
+        m.rom = reduce(append_bytes,
+                       map(seg_data, text_ro_and_data_segs),
+                       b"")
+
+    def io_proc():
+        for _ in range(2000):
+            yield
+
+        assert (yield m.serial.tx) == 0
+
+    sim.run(sync_processes=[io_proc, ucode_panic])
