@@ -7,11 +7,15 @@ from random import randint
 from pathlib import Path, PurePosixPath
 import importlib
 import shutil
+import enum
+from enum import auto
 
 from bronzebeard.asm import assemble
 from elftools.elf.elffile import ELFFile
 from amaranth import Module, Memory, Signal, Cat, C
 from amaranth_soc import wishbone
+from amaranth_soc import csr
+from amaranth_soc.csr.wishbone import WishboneCSRBridge
 from amaranth_soc.memory import MemoryMap
 from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
     Signature, flipped
@@ -87,7 +91,7 @@ class WBMemory(Component):
         return m
 
 
-class Leds(Component):
+class WBLeds(Component):
     @property
     def signature(self):
         return self._signature
@@ -145,7 +149,56 @@ class Leds(Component):
         return m
 
 
-class Timer(Component):
+class CSRLeds(Component):
+    @property
+    def signature(self):
+        return self._signature
+
+    def __init__(self):
+        self.mux = csr.bus.Multiplexer(addr_width=4, data_width=8, name="gpio")
+        self._signature = self.mux.signature
+        self._signature.members += {
+            "leds": Out(8),
+            "gpio": In(Signature({
+                 "i": In(1),
+                 "o": Out(1),
+                 "oe": Out(1)
+            })).array(8)
+        }
+
+        self.leds_reg = csr.Element(8, "w", path=("leds",))
+        self.inout_reg = csr.Element(8, "rw", path=("inout",))
+        self.oe_reg = csr.Element(8, "rw", path=("oe",))
+        self.mux.add(self.leds_reg, name="leds")
+        self.mux.add(self.inout_reg, name="inout", addr=4)
+        self.mux.add(self.oe_reg, name="oe", addr=8)
+
+        super().__init__()
+
+    def elaborate(self, plat):
+        m = Module()
+        m.submodules.mux = self.mux
+
+        connect(m, flipped(self.bus), self.mux.bus)
+
+        with m.If(self.leds_reg.w_stb):
+            m.d.sync += self.leds.eq(self.leds_reg.w_data)
+
+        with m.If(self.inout_reg.w_stb):
+            for i in range(8):
+                m.d.sync += self.gpio[i].o.eq(self.leds_reg.w_data[i])
+
+        for i in range(8):
+            m.d.comb += self.inout_reg.r_data[i].eq(self.gpio[i].i)
+
+        with m.If(self.oe_reg.w_stb):
+            for i in range(8):
+                m.d.sync += self.gpio[i].oe.eq(self.oe_reg.w_data[i])
+
+        return m
+
+
+class WBTimer(Component):
     @property
     def signature(self):
         return self._signature
@@ -182,6 +235,45 @@ class Timer(Component):
             m.d.sync += self.bus.ack.eq(1)
         with m.Else():
             m.d.sync += self.bus.ack.eq(0)
+
+        return m
+
+
+class CSRTimer(Component):
+    @property
+    def signature(self):
+        return self._signature
+
+    def __init__(self):
+        self.mux = csr.bus.Multiplexer(addr_width=3, data_width=8,
+                                       name="timer")
+        self._signature = self.mux.signature
+        self._signature.members += {
+            "irq": Out(1)
+        }
+
+        self.irq_reg = csr.Element(8, "r", path=("irq",))
+        self.mux.add(self.irq_reg, name="irq")
+
+        super().__init__()
+
+    def elaborate(self, plat):
+        m = Module()
+        m.submodules.mux = self.mux
+
+        connect(m, flipped(self.bus), self.mux.bus)
+
+        prescaler = Signal(15)
+
+        m.d.sync += prescaler.eq(prescaler + 1)
+        m.d.comb += [
+            self.irq.eq(prescaler[14]),
+            self.irq_reg.r_data.eq(prescaler[14])
+        ]
+
+        with m.If(self.irq_reg.r_stb):
+            with m.If(self.irq):
+                m.d.sync += prescaler[14].eq(0)
 
         return m
 
@@ -301,6 +393,8 @@ class WBSerial(Component):
         m = Module()
         m.submodules.ser_internal = self.serial
 
+        # rx_rdy_prev having reset of 0 will deliberately will trigger IRQ at
+        # reset. We use this to detect WB vs CSR bus.
         rx_rdy_irq = Signal()
         rx_rdy_prev = Signal()
         tx_ack_irq = Signal()
@@ -351,17 +445,111 @@ class WBSerial(Component):
         return m
 
 
+class CSRSerial(Component):
+    @property
+    def signature(self):
+        return self._signature
+
+    def __init__(self):
+        self.mux = csr.bus.Multiplexer(addr_width=3, data_width=8, alignment=0,
+                                       name="serial")
+        self._signature = self.mux.signature
+        self._signature.members += {
+            "rx": In(1),
+            "tx": Out(1),
+            "irq": Out(1)
+        }
+
+        self.txrx_reg = csr.Element(8, "rw", path=("txrx",))
+        self.mux.add(self.txrx_reg, name="txrx")
+        self.irq_reg = csr.Element(8, "r", path=("irq",))
+        self.mux.add(self.irq_reg, name="irq", addr=4)
+
+        super().__init__()
+        self.serial = UART(divisor=12000000 // 9600)
+
+    def elaborate(self, plat):
+        m = Module()
+        m.submodules.ser_internal = self.serial
+        m.submodules.mux = self.mux
+
+        connect(m, flipped(self.bus), self.mux.bus)
+
+        # rx_rdy_prev having reset of 1 will suppress IRQ at reset. We use this
+        # to detect WB vs CSR bus.
+        rx_rdy_irq = Signal()
+        rx_rdy_prev = Signal(reset=1)
+        tx_ack_irq = Signal()
+        tx_ack_prev = Signal(reset=1)
+
+        m.d.comb += [
+            self.irq.eq(rx_rdy_irq | tx_ack_irq),
+            self.tx.eq(self.serial.tx_o),
+            self.serial.rx_i.eq(self.rx)
+        ]
+
+        m.d.sync += [
+            rx_rdy_prev.eq(self.serial.rx_rdy),
+            tx_ack_prev.eq(self.serial.tx_ack),
+        ]
+
+        m.d.comb += [
+            self.serial.tx_data.eq(self.txrx_reg.w_data),
+            self.txrx_reg.r_data.eq(self.serial.rx_data),
+            self.irq_reg.r_data.eq(Cat(rx_rdy_irq, tx_ack_irq))
+        ]
+
+        with m.If(self.txrx_reg.w_stb):
+            m.d.comb += self.serial.tx_rdy.eq(1)
+        with m.If(self.txrx_reg.r_stb):
+            m.d.comb += self.serial.rx_ack.eq(1)
+
+        with m.If(self.irq_reg.r_stb):
+            m.d.sync += [
+                rx_rdy_irq.eq(0),
+                tx_ack_irq.eq(0)
+            ]
+
+        # Don't accidentally miss an IRQ
+        with m.If(self.serial.rx_rdy & ~rx_rdy_prev):
+            m.d.sync += rx_rdy_irq.eq(1)
+        with m.If(self.serial.tx_ack & ~tx_ack_prev):
+            m.d.sync += tx_ack_irq.eq(1)
+
+        return m
+
+
+class BusType(enum.Enum):
+    WB = auto()
+    CSR = auto()
+
+
 # Reimplementation of nextpnr-ice40's AttoSoC example (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
 # to exercise attaching Sentinel to amaranth-soc's wishbone components.
 class AttoSoC(Elaboratable):
-    def __init__(self, *, sim=False, num_bytes=0x400):
+    # CSR is the default because it's what's encouraged. However, the default
+    # for the demo is WB because that's what fits on the ICE40HX1K!
+    def __init__(self, *, sim=False, num_bytes=0x400, bus_type=BusType.CSR):
         self.cpu = Top()
         self.mem = WBMemory(sim=sim, num_bytes=num_bytes)
-        self.leds = Leds()
+        self.decoder = wishbone.Decoder(addr_width=30, data_width=32,
+                                        granularity=8, alignment=25)
         self.sim = sim
-        if not self.sim:
-            self.timer = Timer()
-            self.serial = WBSerial()
+        self.bus_type = bus_type
+
+        match bus_type:
+            case BusType.WB:
+                self.leds = WBLeds()
+
+                if not self.sim:
+                    self.timer = WBTimer()
+                    self.serial = WBSerial()
+            case BusType.CSR:
+                self.leds = CSRLeds()
+
+                if not self.sim:
+                    self.timer = CSRTimer()
+                    self.serial = CSRSerial()
 
     @property
     def rom(self):
@@ -384,13 +572,10 @@ class AttoSoC(Elaboratable):
     def elaborate(self, plat):
         m = Module()
 
-        decoder = wishbone.Decoder(addr_width=30, data_width=32, granularity=8,
-                                   alignment=25)
-
         m.submodules.cpu = self.cpu
         m.submodules.mem = self.mem
         m.submodules.leds = self.leds
-        m.submodules.decoder = decoder
+        m.submodules.decoder = self.decoder
 
         if plat:
             for i in range(8):
@@ -414,14 +599,38 @@ class AttoSoC(Elaboratable):
                     gpio.o.eq(self.leds.gpio[i].o)
                 ]
 
-        decoder.add(flipped(self.mem.bus))
-        decoder.add(flipped(self.leds.bus), sparse=True)
-        if not self.sim:
-            m.submodules.timer = self.timer
-            decoder.add(flipped(self.timer.bus), sparse=True)
+        self.decoder.add(flipped(self.mem.bus))
 
-            m.submodules.serial = self.serial
-            decoder.add(flipped(self.serial.bus), sparse=True)
+        if self.bus_type == BusType.WB:
+            self.decoder.add(flipped(self.leds.bus), sparse=True)
+
+            if not self.sim:
+                m.submodules.timer = self.timer
+                self.decoder.add(flipped(self.timer.bus), sparse=True)
+
+                m.submodules.serial = self.serial
+                self.decoder.add(flipped(self.serial.bus), sparse=True)
+
+        elif self.bus_type == BusType.CSR:
+            # CSR (has to be done first other mem map "frozen" errors?)
+            periph_decode = csr.Decoder(addr_width=25, data_width=8,
+                                        alignment=23, name="periph")
+            periph_decode.add(self.leds.bus, addr=0)
+
+            if not self.sim:
+                periph_decode.add(self.timer.bus)
+                periph_decode.add(self.serial.bus)
+                m.submodules.timer = self.timer
+                m.submodules.serial = self.serial
+
+            # Connect peripherals to Wishbone
+            periph_wb = WishboneCSRBridge(periph_decode.bus, data_width=32)
+            self.decoder.add(flipped(periph_wb.wb_bus))
+
+            m.submodules.periph_bus = periph_decode
+            m.submodules.periph_wb = periph_wb
+
+        if not self.sim:
             if plat:
                 m.d.comb += [
                     self.serial.rx.eq(ser.rx.i),
@@ -434,16 +643,20 @@ class AttoSoC(Elaboratable):
             return ("/".join(res.path), res.start, res.end, res.width)
 
         print(tabulate(map(destruct_res,
-                           decoder.bus.memory_map.all_resources()),
+                           self.decoder.bus.memory_map.all_resources()),
                        intfmt=("", "#010x", "#010x", ""),
                        headers=["name", "start", "end", "width"]))
-        connect(m, self.cpu.bus, decoder.bus)
+        connect(m, self.cpu.bus, self.decoder.bus)
 
         return m
 
 
 def demo(args):
-    asoc = AttoSoC(num_bytes=0x1000)
+    match args.i:
+        case "wishbone":
+            asoc = AttoSoC(num_bytes=0x1000, bus_type=BusType.WB)
+        case "csr":
+            asoc = AttoSoC(num_bytes=0x1000, bus_type=BusType.CSR)
 
     if args.g:
         # In-line objcopy -O binary implementation. Probably does not handle
@@ -586,6 +799,9 @@ def main():
     parser.add_argument("-p", help="build platform",
                         choices=("icestick", "ice40_hx8k_b_evn"),
                         default="icestick")
+    parser.add_argument("-i", help="peripheral interconnect type",
+                        choices=("wishbone", "csr"),
+                        default="wishbone")
     group = parser.add_mutually_exclusive_group()
     # Remote firmware override/random file generation is not supported;
     # Amaranth does not have provisions for supporting adding your own build

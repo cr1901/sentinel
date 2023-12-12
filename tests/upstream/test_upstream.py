@@ -1,4 +1,4 @@
-
+import functools
 import pytest
 
 from enum import Enum, auto
@@ -89,7 +89,7 @@ RV32UI_TESTS = [
 ]
 
 
-@pytest.mark.module(AttoSoC(sim=True, num_bytes=4096))
+@pytest.mark.module(functools.partial(AttoSoC, sim=True, num_bytes=4096))
 @pytest.mark.clks((1.0 / 12e6,))
 @pytest.mark.parametrize("test_bin", RV32UI_TESTS, indirect=True)
 def test_rv32ui(sim_mod, ucode_panic, test_bin, wait_for_host_write):
@@ -106,7 +106,7 @@ RV32MI_TESTS = [
 ]
 
 
-@pytest.mark.module(AttoSoC(sim=True, num_bytes=4096))
+@pytest.mark.module(functools.partial(AttoSoC, sim=True, num_bytes=4096))
 @pytest.mark.clks((1.0 / 12e6,))
 @pytest.mark.parametrize("test_bin", RV32MI_TESTS, indirect=True)
 def test_rv32mi(sim_mod, ucode_panic, test_bin, wait_for_host_write):

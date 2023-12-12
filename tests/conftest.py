@@ -1,3 +1,4 @@
+import functools
 import pytest
 
 from amaranth import Value
@@ -37,7 +38,22 @@ def pytest_collection_modifyitems(config, items):
 
 class SimulatorFixture:
     def __init__(self, req, cfg):
-        self.mod = req.node.get_closest_marker("module").args[0]
+        mod = req.node.get_closest_marker("module").args[0]
+        # FIXME: Depending on module contents, some amaranth code, such as
+        # amaranth_soc.csr classes don't interact well with elaborating
+        # the same object multiple times. This happens during parametrized
+        # tests. Therefore, provide an escape hatch to create a fresh object
+        # for all arguments of a parameterized test.
+        #
+        # Ideally, I should figure out the exact conditions under where it's
+        # safe to reuse an already-elaborated object (if ever); the tests
+        # didn't break until I started using amaranth_soc.csr. But this will
+        # do for now.
+        if isinstance(mod, functools.partial):
+            self.mod = mod()
+        else:
+            self.mod = mod
+
         self.name = req.node.name
         self.vcds = cfg.getoption("vcds")
         self.clks = req.node.get_closest_marker("clks").args[0]
