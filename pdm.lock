@@ -5,15 +5,14 @@
 groups = ["default", "examples", "riscof", "dev", "remote"]
 strategy = ["cross_platform"]
 lock_version = "4.4"
-content_hash = "sha256:acb317ceb289a4bbbb759009499a8c0c3bfed6ff9426605596eb3d477cbeaa4f"
+content_hash = "sha256:4cf4f2ebb094e42d7d4b74afaae7f8816b964d4d15732123dddce4c1ebfbe5dc"
 
 [[package]]
 name = "amaranth"
-version = "0.4.dev251+gef5cfa7"
+version = "0.4.1.dev6+g8cd8cdd"
 requires_python = "~=3.8"
 git = "https://github.com/amaranth-lang/amaranth"
-ref = "ef5cfa7"
-revision = "ef5cfa72bc4c3edbbdcc4c38b35e8e756a27bb8c"
+revision = "8cd8cdde2b62527a655cc4e374ab28ac6b3f4822"
 summary = "Amaranth hardware definition language"
 dependencies = [
     "Jinja2~=3.0",
@@ -22,21 +21,21 @@ dependencies = [
 
 [[package]]
 name = "amaranth-boards"
-version = "0.1.dev239+g54000b0"
+version = "0.1.dev241+g1706758"
 requires_python = "~=3.8"
 git = "https://github.com/amaranth-lang/amaranth-boards"
-revision = "54000b09498080706152bbb8782f68b8efa0ad33"
+revision = "170675812b71ee722bcf8ccdb88409a9ad97ffe2"
 summary = "Board and connector definitions for Amaranth HDL"
 dependencies = [
-    "amaranth<0.5,>=0.3",
+    "amaranth<0.5,>=0.4",
 ]
 
 [[package]]
 name = "amaranth-soc"
-version = "0.1.dev76+gdff6abd"
+version = "0.1.dev79+g622c7ac"
 requires_python = "~=3.8"
 git = "https://github.com/amaranth-lang/amaranth-soc"
-revision = "dff6abd7b366625e71684b2e436897190f9d5d2c"
+revision = "622c7ac415abe744a6fccb8d1cb3b06cb4f1ce35"
 summary = "System on Chip toolkit for Amaranth HDL"
 dependencies = [
     "amaranth @ git+https://github.com/amaranth-lang/amaranth",
@@ -44,11 +43,11 @@ dependencies = [
 
 [[package]]
 name = "amaranth"
-version = "0.4.dev257+g120375d"
+version = "0.4.1.dev6+g8cd8cdd"
 extras = ["remote-build"]
 requires_python = "~=3.8"
 git = "https://github.com/amaranth-lang/amaranth"
-revision = "120375dabeceaeeb1cf3fcaff2d9217b3e513cb3"
+revision = "8cd8cdde2b62527a655cc4e374ab28ac6b3f4822"
 summary = "Amaranth hardware definition language"
 dependencies = [
     "amaranth @ git+https://github.com/amaranth-lang/amaranth",

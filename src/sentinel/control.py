@@ -22,8 +22,6 @@ ControlSignature = Signature({
 
 
 class Control(Component):
-    signature = ControlSignature
-
     def __init__(self, ucode: Optional[TextIO] = None):
         self.ucoderom = UCodeROM(main_file=ucode)
         # Enums from microcode ROM.
@@ -73,7 +71,13 @@ class Control(Component):
         self.mem_extend = Signal.like(self.ucoderom.fields.mem_extend)
         self.except_ctl = Signal.like(self.ucoderom.fields.except_ctl)
 
-        super().__init__()
+        super().__init__({
+            "alu": Out(AluCtrlSignature),
+            "decode": In(1),
+            "gp": Out(GPControlSignature),
+            "pc": Out(PCControlSignature),
+            "csr": Out(CSRControlSignature)
+        })
 
     def elaborate(self, platform):
         m = Module()

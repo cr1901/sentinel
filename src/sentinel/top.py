@@ -12,27 +12,6 @@ from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
 
 
 class Top(Component):
-    @property
-    def signature(self):
-        if self.formal:
-            return Signature({
-                "bus": Out(wishbone.Signature(addr_width=30, data_width=32,
-                                              granularity=8)),
-                # Helper internal signals for RVFI that are not otherwise
-                # exposed.
-                "rvfi": Out(Signature({
-                    "exception": Out(1),
-                    "decode": Out(self.decode.rvfi.signature)
-                })),
-                "irq": In(1)
-            })
-        else:
-            return Signature({
-                "bus": Out(wishbone.Signature(addr_width=30, data_width=32,
-                                              granularity=8)),
-                "irq": In(1)
-            })
-
     def __init__(self, *, formal=False):
         self.formal = formal
 
@@ -55,7 +34,19 @@ class Top(Component):
         # Decode
         self.reg_r_adr = Signal(6)
         self.reg_w_adr = Signal(6)
-        super().__init__()
+
+        sig = {
+                "bus": Out(wishbone.Signature(addr_width=30, data_width=32,
+                                              granularity=8)),
+                "irq": In(1)
+        }
+        if self.formal:
+            sig["rvfi"] = Out(Signature({
+                    "exception": Out(1),
+                    "decode": Out(self.decode.rvfi.signature)
+            }))
+
+        super().__init__(sig)
 
     def elaborate(self, platform):
         m = Module()

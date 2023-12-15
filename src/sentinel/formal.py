@@ -8,78 +8,70 @@ from .datapath import CSRFile
 from .ucodefields import CSROp
 
 
-RVFISignature = Signature({
-    "valid": Out(1),
-    "order": Out(64),
-    "insn": Out(32),
-    "trap": Out(1),
-    "halt": Out(1),
-    "intr":  Out(1),
-    "mode": Out(2),
-    "ixl": Out(2),
-    "rs1_addr": Out(5),
-    "rs2_addr": Out(5),
-    "rs1_rdata": Out(32),
-    "rs2_rdata": Out(32),
-    "rd_addr": Out(5),
-    "rd_wdata": Out(32),
-    "pc_rdata": Out(32),
-    "pc_wdata": Out(32),
-    "mem_addr": Out(32),
-    "mem_rmask": Out(4),
-    "mem_wmask": Out(4),
-    "mem_rdata": Out(32),
-    "mem_wdata": Out(32)
-})
-
-
 class FormalTop(Component):
     CHECK_INT_ADDR = 1
     CSR_DECODE_VALIDITY_ADDR = 0x24
     EXCEPTION_HANDLER_ADDR = 240
 
-    @property
-    def signature(self):
-        return Signature({
+    def __init__(self):
+        rvfi_sig = {
+            "valid": Out(1),
+            "order": Out(64),
+            "insn": Out(32),
+            "trap": Out(1),
+            "halt": Out(1),
+            "intr":  Out(1),
+            "mode": Out(2),
+            "ixl": Out(2),
+            "rs1_addr": Out(5),
+            "rs2_addr": Out(5),
+            "rs1_rdata": Out(32),
+            "rs2_rdata": Out(32),
+            "rd_addr": Out(5),
+            "rd_wdata": Out(32),
+            "pc_rdata": Out(32),
+            "pc_wdata": Out(32),
+            "mem_addr": Out(32),
+            "mem_rmask": Out(4),
+            "mem_wmask": Out(4),
+            "mem_rdata": Out(32),
+            "mem_wdata": Out(32)
+        }
+
+        csrs = {}
+        for name in ("mscratch", "mcause", "mip", "mie", "mstatus", "mtvec",
+                     "mepc", "misa", "mvendorid", "marchid", "mimpid",
+                     "mhartid", "mconfigptr", "mstatush", "mcountinhibit",
+                     "mtval", "mcycle", "minstret", "mhpmcounter3",
+                     "mhpmevent3"):
+            # Per RVFI: Always 64-bit wide, even on pure RV32 processors.
+            if name in ("mcycle", "minstret", "mhpmcounter3"):
+                csr_ports = Signature({
+                    "rmask": Out(64),
+                    "wmask": Out(64),
+                    "rdata": Out(64),
+                    "wdata": Out(64)
+                })
+            else:
+                csr_ports = Signature({
+                    "rmask": Out(32),
+                    "wmask": Out(32),
+                    "rdata": Out(32),
+                    "wdata": Out(32)
+                })
+
+            csrs[name] = Out(csr_ports)
+        rvfi_sig["csr"] = Out(Signature(csrs))
+
+        sig = {
             "bus": Out(wishbone.Signature(addr_width=30, data_width=32,
                                           granularity=8)),
-            "rvfi": Out(self.rvfi_sig),
+            "rvfi": Out(Signature(rvfi_sig)),
             "irq": In(1)
-        })
+        }
 
-    def __init__(self):
-        self.rvfi_sig = RVFISignature
-        self.csrs = Signature({})
-
-        for csr in ("mscratch", "mcause", "mip", "mie", "mstatus", "mtvec",
-                    "mepc", "misa", "mvendorid", "marchid", "mimpid",
-                    "mhartid", "mconfigptr", "mstatush", "mcountinhibit",
-                    "mtval", "mcycle", "minstret", "mhpmcounter3",
-                    "mhpmevent3"):
-            self.add_csr(csr)
-        self.rvfi_sig.members["csr"] = Out(self.csrs)
-
-        super().__init__()
+        super().__init__(sig)
         self.cpu = Top(formal=True)
-
-    def add_csr(self, name):
-        # Per RVFI: Always 64-bit wide, even on pure RV32 processors.
-        if name in ("mcycle", "minstret", "mhpmcounter3"):
-            csr_ports = Signature({
-                "rmask": Out(64),
-                "wmask": Out(64),
-                "rdata": Out(64),
-                "wdata": Out(64)
-            })
-        else:
-            csr_ports = Signature({
-                "rmask": Out(32),
-                "wmask": Out(32),
-                "rdata": Out(32),
-                "wdata": Out(32)
-            })
-
-        self.csrs.members[name] = Out(csr_ports)
 
     def elaborate(self, plat):
         m = Module()

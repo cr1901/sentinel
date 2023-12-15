@@ -27,29 +27,28 @@ from sentinel.top import Top
 
 
 class WBMemory(Component):
-    @property
-    def signature(self):
-        return self._signature
-
     def __init__(self, *, sim=False, num_bytes=0x400):
         bus_signature = wishbone.Signature(addr_width=23, data_width=32,
                                            granularity=8)
-        bus_signature.memory_map = MemoryMap(addr_width=25, data_width=8)
-        self._signature = Signature({
+        sig = {
             "bus": In(bus_signature)
-        })
+        }
 
         if sim:
-            self._signature.members["ctrl"] = Out(Signature({
+            sig["ctrl"] = Out(Signature({
                 "force_ws": Out(1)  # noqa: F821
             }))
 
         self.sim = sim
         self.num_bytes = num_bytes
 
-        super().__init__()
-        bus_signature.memory_map.add_resource(self.bus, name="ram",
-                                              size=num_bytes)
+        super().__init__(sig)
+
+        # Allocate a bunch of address space for RAM
+        self.bus.memory_map = MemoryMap(addr_width=25, data_width=8)
+        # But only actually _use_ a small chunk of it.
+        self.bus.memory_map.add_resource(self.bus, name="ram",
+                                         size=num_bytes)
 
     @property
     def init_mem(self):
@@ -92,16 +91,11 @@ class WBMemory(Component):
 
 
 class WBLeds(Component):
-    @property
-    def signature(self):
-        return self._signature
-
     def __init__(self):
         bus_signature = wishbone.Signature(addr_width=25, data_width=8,
                                            granularity=8)
-        bus_signature.memory_map = MemoryMap(addr_width=25, data_width=8,
-                                             name="leds")
-        self._signature = Signature({
+
+        super().__init__({
             "bus": In(bus_signature),
             "leds": Out(8),
             "gpio": In(Signature({
@@ -111,14 +105,14 @@ class WBLeds(Component):
             })).array(8)
         })
 
-        super().__init__()
-        bus_signature.memory_map.add_resource(self.leds,
-                                              name="leds", size=1)
-        bus_signature.memory_map.add_resource(((g.o for g in self.gpio),
-                                               (g.i for g in self.gpio)),
-                                              name="inout", size=1)
-        bus_signature.memory_map.add_resource((g.oe for g in self.gpio),
-                                              name="oe", size=1)
+        self.bus.memory_map = MemoryMap(addr_width=25, data_width=8,
+                                        name="leds")
+        self.bus.memory_map.add_resource(self.leds, name="leds", size=1)
+        self.bus.memory_map.add_resource(((g.o for g in self.gpio),
+                                         (g.i for g in self.gpio)),
+                                         name="inout", size=1)
+        self.bus.memory_map.add_resource((g.oe for g in self.gpio),
+                                         name="oe", size=1)
 
     def elaborate(self, plat):
         m = Module()
@@ -150,14 +144,10 @@ class WBLeds(Component):
 
 
 class CSRLeds(Component):
-    @property
-    def signature(self):
-        return self._signature
-
     def __init__(self):
         self.mux = csr.bus.Multiplexer(addr_width=4, data_width=8, name="gpio")
-        self._signature = self.mux.signature
-        self._signature.members += {
+        sig = {
+            "bus": Out(self.mux.signature.members["bus"].signature),
             "leds": Out(8),
             "gpio": In(Signature({
                  "i": In(1),
@@ -173,7 +163,8 @@ class CSRLeds(Component):
         self.mux.add(self.inout_reg, name="inout", addr=4)
         self.mux.add(self.oe_reg, name="oe", addr=8)
 
-        super().__init__()
+        super().__init__(sig)
+        self.bus.memory_map = self.mux.bus.memory_map
 
     def elaborate(self, plat):
         m = Module()
@@ -199,22 +190,18 @@ class CSRLeds(Component):
 
 
 class WBTimer(Component):
-    @property
-    def signature(self):
-        return self._signature
-
     def __init__(self):
         bus_signature = wishbone.Signature(addr_width=30, data_width=8,
                                            granularity=8)
-        bus_signature.memory_map = MemoryMap(addr_width=30, data_width=8,
-                                             name="timer")
-        self._signature = Signature({
+
+        super().__init__({
             "bus": In(bus_signature),
             "irq": Out(1),
         })
 
-        super().__init__()
-        bus_signature.memory_map.add_resource(self.irq, name="irq", size=1)
+        self.bus.memory_map = MemoryMap(addr_width=30, data_width=8,
+                                        name="timer")
+        self.bus.memory_map.add_resource(self.irq, name="irq", size=1)
 
     def elaborate(self, plat):
         m = Module()
@@ -247,15 +234,16 @@ class CSRTimer(Component):
     def __init__(self):
         self.mux = csr.bus.Multiplexer(addr_width=3, data_width=8,
                                        name="timer")
-        self._signature = self.mux.signature
-        self._signature.members += {
+        sig = {
+            "bus": Out(self.mux.signature.members["bus"].signature),
             "irq": Out(1)
         }
 
         self.irq_reg = csr.Element(8, "r", path=("irq",))
         self.mux.add(self.irq_reg, name="irq")
 
-        super().__init__()
+        super().__init__(sig)
+        self.bus.memory_map = self.mux.bus.memory_map
 
     def elaborate(self, plat):
         m = Module()
@@ -367,26 +355,21 @@ class UART(Elaboratable):
 
 
 class WBSerial(Component):
-    @property
-    def signature(self):
-        return self._signature
-
     def __init__(self):
         bus_signature = wishbone.Signature(addr_width=30, data_width=8,
                                            granularity=8)
-        bus_signature.memory_map = MemoryMap(addr_width=30, data_width=8,
-                                             name="serial")
-        self._signature = Signature({
+
+        super().__init__({
             "bus": In(bus_signature),
             "rx": In(1),
             "tx": Out(1),
             "irq": Out(1),
         })
-
-        super().__init__()
-        bus_signature.memory_map.add_resource((self.tx, self.rx), name="rxtx",
-                                              size=1)
-        bus_signature.memory_map.add_resource(self.irq, name="irq", size=1)
+        self.bus.memory_map = MemoryMap(addr_width=30, data_width=8,
+                                        name="serial")
+        self.bus.memory_map.add_resource((self.tx, self.rx), name="rxtx",
+                                         size=1)
+        self.bus.memory_map.add_resource(self.irq, name="irq", size=1)
         self.serial = UART(divisor=12000000 // 9600)
 
     def elaborate(self, plat):
@@ -446,15 +429,11 @@ class WBSerial(Component):
 
 
 class CSRSerial(Component):
-    @property
-    def signature(self):
-        return self._signature
-
     def __init__(self):
         self.mux = csr.bus.Multiplexer(addr_width=3, data_width=8, alignment=0,
                                        name="serial")
-        self._signature = self.mux.signature
-        self._signature.members += {
+        sig = {
+            "bus": Out(self.mux.signature.members["bus"].signature),
             "rx": In(1),
             "tx": Out(1),
             "irq": Out(1)
@@ -465,8 +444,9 @@ class CSRSerial(Component):
         self.irq_reg = csr.Element(8, "r", path=("irq",))
         self.mux.add(self.irq_reg, name="irq", addr=4)
 
-        super().__init__()
+        super().__init__(sig)
         self.serial = UART(divisor=12000000 // 9600)
+        self.bus.memory_map = self.mux.bus.memory_map
 
     def elaborate(self, plat):
         m = Module()

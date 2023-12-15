@@ -36,9 +36,10 @@ class DecodeException(Struct):
 
 
 class Decode(Component):
-    @property
-    def signature(self):
-        base = {
+    def __init__(self, *, formal=False):
+        self.formal = formal
+
+        sig = {
             "do_decode": Out(1),
             "insn": Out(32),
             "src_a_unreg": In(5),
@@ -68,21 +69,9 @@ class Decode(Component):
                 "insn": Out(32),
             })
 
-            # Base part of signature is from peripheral/responder POV
-            sig = Signature(base).flip()
-            # But RVFI is from initiator POV, extending sig is easier to read
-            # than doing In(Out(rvfi)) to cancel out flip.
-            sig.members += {
-                "rvfi": Out(rvfi)
-            }
+            sig["rvfi"] = In(rvfi)
 
-            return sig
-        else:
-            return Signature(base).flip()
-
-    def __init__(self, *, formal=False):
-        self.formal = formal
-        super().__init__()
+        super().__init__(Signature(sig).flip())
 
     def elaborate(self, platform):
         m = Module()

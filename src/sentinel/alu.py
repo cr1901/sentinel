@@ -66,19 +66,15 @@ AluCtrlSignature = Signature({
 
 
 class ALU(Component):
-    @property
-    def signature(self):
-        return Signature({
+    # Assumes: op is held steady for duration of op.
+    def __init__(self, width: int):
+        self.width = width
+        super().__init__(Signature({
             "a": Out(self.width),
             "b": Out(self.width),
             "o": In(self.width),
             "ctrl": Out(AluCtrlSignature),
-        }).flip()
-
-    # Assumes: op is held steady for duration of op.
-    def __init__(self, width: int):
-        self.width = width
-        super().__init__()
+        }).flip())
 
         ###
 

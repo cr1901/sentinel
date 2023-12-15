@@ -6,28 +6,30 @@ from .decode import DecodeException
 from .ucodefields import MemSel, ExceptCtl
 
 
+SrcSignature = Signature({
+    "alu_lo": Out(2),
+    "csr": Out(Signature({
+        "mstatus": Out(MStatus),
+        "mip": Out(MIP),
+        "mie": Out(MIE)
+    })),
+    "ctrl": Out(Signature({
+        "mem_sel": Out(MemSel),
+        "except_ctl": Out(ExceptCtl)
+    })),
+    "decode": Out(DecodeException)
+})
+
+
+OutSignature = Signature({
+    "exception": Out(1),
+    "mcause": Out(MCause)
+})
+
+
 class ExceptionRouter(Component):
-    @property
-    def signature(self):
-        return Signature({
-            "src": In(Signature({
-                "alu_lo": Out(2),
-                "csr": Out(Signature({
-                    "mstatus": Out(MStatus),
-                    "mip": Out(MIP),
-                    "mie": Out(MIE)
-                })),
-                "ctrl": Out(Signature({
-                    "mem_sel": Out(MemSel),
-                    "except_ctl": Out(ExceptCtl)
-                })),
-                "decode": Out(DecodeException),
-            })),
-            "out": Out(Signature({
-                "exception": Out(1),
-                "mcause": Out(MCause)
-            }))
-        })
+    src: In(SrcSignature)
+    out: Out(OutSignature)
 
     def elaborate(self, platform):
         m = Module()

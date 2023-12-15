@@ -66,15 +66,9 @@ PcSignature = Signature({
 })
 
 
-DataPathSignature = Signature({
-    "gp": Out(GPSignature),
-    "csr": Out(CSRSignature),
-    "pc": Out(PcSignature),
-})
-
-
 class ProgramCounter(Component):
-    signature = PcSignature.flip()
+    def __init__(self):
+        super().__init__(PcSignature.flip())
 
     def elaborate(self, platform):
         m = Module()
@@ -89,10 +83,8 @@ class ProgramCounter(Component):
 
 
 class RegFile(Component):
-    signature = Signature({
-        "pub": In(GPSignature),
-        "priv": In(PrivateCSRGPSignature)
-    })
+    pub: In(GPSignature)
+    priv: In(PrivateCSRGPSignature)
 
     def __init__(self, *, formal):
         self.formal = formal
@@ -152,6 +144,9 @@ class RegFile(Component):
 
 
 class CSRFile(Component):
+    pub: In(CSRSignature)
+    priv: Out(PrivateCSRGPSignature)
+
     MSTATUS = 0
     MIE = 0x4
     MTVEC = 0x5
@@ -159,11 +154,6 @@ class CSRFile(Component):
     MEPC = 0x9
     MCAUSE = 0xA
     MIP = 0xC
-
-    signature = Signature({
-        "pub": In(CSRSignature),
-        "priv": Out(PrivateCSRGPSignature)
-    })
 
     def elaborate(self, platform):
         m = Module()

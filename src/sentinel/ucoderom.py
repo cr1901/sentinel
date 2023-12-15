@@ -40,10 +40,6 @@ class UCodeROM(Component):
         "except_ctl": ExceptCtl
     }
 
-    @property
-    def signature(self):
-        return ucoderom_signature(self).flip()
-
     @staticmethod
     def main_microcode_file():
         return (Path(__file__).parent / "microcode.asm").resolve()
@@ -61,7 +57,10 @@ class UCodeROM(Component):
             self.enum_map = enum_map
 
         self.assemble()
-        super().__init__()
+        super().__init__({
+            "addr": Out(log2_int(self.depth)),
+            "fields": In(self.field_layout)
+        })
 
     def elaborate(self, platform):
         m = Module()
