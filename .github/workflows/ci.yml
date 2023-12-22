@@ -16,8 +16,8 @@ jobs:
         runs-on: ${{ matrix.os }}
 
         steps:
-            - uses: actions/checkout@v3
-            - uses: actions/setup-python@v4
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
               with:
                 python-version: "3.11"
             - uses: pdm-project/setup-pdm@v3
@@ -83,8 +83,8 @@ jobs:
         name: RISCOF Check
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v3
-            - uses: actions/setup-python@v4
+            - uses: actions/checkout@v4
+            - uses: actions/setup-python@v5
               with:
                 python-version: "3.11"
             - uses: pdm-project/setup-pdm@v3
@@ -121,8 +121,8 @@ jobs:
       runs-on: ubuntu-latest
 
       steps:
-          - uses: actions/checkout@v3
-          - uses: actions/setup-python@v4
+          - uses: actions/checkout@v4
+          - uses: actions/setup-python@v5
             with:
               python-version: "3.11"
           - uses: pdm-project/setup-pdm@v3
