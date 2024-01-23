@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <strong>Logo by <a href="https://keidavt.carrd.co/">keidaVT</a></strong>.
+  <strong>Logo by <a href="https://tokinokei.carrd.co/>Tokino Kei</a></strong>.
 </p>
 
 [![CI](https://github.com/cr1901/sentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cr1901/sentinel/actions/workflows/ci.yml)
@@ -88,10 +88,41 @@ just fine :'D!).
 pdm install -G dev -G examples
 ```
 
-### Generate A Core
+### Use In Amaranth Code
+
+I expect most users to only need to `import` from `sentinel.top`. The top-level
+module of the Sentinel CPU is appropriately named `Top`:
+
+```python
+from sentinel.top import Top
+
+class MySoC(Elaboratable):
+    def __init__(self):
+        self.cpu = Top()
+        ...
+
+    def elaborate(self, plat):
+        m = Module()
+        m.submodules.cpu = self.cpu
+        ...
+```
+
+`Top` exposes a Wishbone Classic bus, and an `irq` input pin as the [interface](https://amaranth-lang.org/rfcs/0002-interfaces.html#interface-definition-library-rfc)
+to all other modules in an FPGA design. Of course, `Top`'s also has `clk` and
+`rst` lines, which belong to the `sync` [clock domain](https://amaranth-lang.org/docs/amaranth/latest/lang.html#control-domains)
+rather than being directly exposed in `Top`'s `Signature`. `sync` is the only
+clock domain that Sentinel uses.
+
+See the `AttoSoC` `class` in [examples/attosoc.py](examples/attosoc.py) for a
+full working example. A working demo can be generated from this example, as
+explained [below](#generate-a-demo-bitstream-for-lattice-icestick).
+
+### Generate A Verilog Core
+#### Using `pdm`/`pyproject.toml` From This Package
 
 This command will generate a core with a Wishbone Classic bus, and `clk`,
-`rst`, and `irq` input pins (Sentinel uses a single clock domain):
+`rst`, and `irq` input pins (as mentioned above, Sentinel uses a single clock
+domain):
 
 ```
 pdm gen > sentinel.v
@@ -110,6 +141,25 @@ For help, run:
 
 ```
 pdm gen -h
+```
+
+#### From An Installed Package/As A Dependency
+If using Sentinel as an installed package, the previous section still applies,
+except the command is now:
+
+```
+[pdm run] python -m sentinel.gen
+```
+
+If you're using `pdm` to handle Python dependencies in e.g. a mixed Python/Verilog
+project, and Sentinel is a one of those Python dependencies, you may wish
+to use [scripts](https://pdm-project.org/latest/usage/scripts/#pdm-scripts) to
+provide a shortcut for Verilog generation in your `pyproject.toml`
+(_`call = "python -m sentinel.gen"` does not work!_):
+
+```toml
+[tool.pdm.scripts]
+gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
 ```
 
 ### Generate A Demo Bitstream For [Lattice iCEstick](https://www.latticesemi.com/icestick)

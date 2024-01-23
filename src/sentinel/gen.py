@@ -41,7 +41,11 @@ def generate(args=None):
             fp.write(v)
 
     if isinstance(args, argparse.Namespace):
-        do_gen(args)
+        if len(sys.argv) < 2:
+            m = Top()
+            print(verilog.convert(m))
+        else:
+            do_gen(**vars(args))
     else:
         if len(sys.argv) < 2:
             m = Top()
