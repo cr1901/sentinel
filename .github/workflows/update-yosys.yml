@@ -1,7 +1,7 @@
 on:
     workflow_dispatch:
     schedule:
-        - cron: '0 0 1 * *'
+        - cron: '0 5 1 * *'
 
 name: Update Yosys (and OSS Cad Suite)
 
