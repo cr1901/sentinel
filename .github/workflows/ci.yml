@@ -1,5 +1,7 @@
 on:
     push:
+      branches-ignore:
+        - update-yosys-*
     pull_request:
 
 name: CI
@@ -20,7 +22,7 @@ jobs:
             - uses: actions/setup-python@v5
               with:
                 python-version: "3.11"
-            - uses: pdm-project/setup-pdm@v3
+            - uses: pdm-project/setup-pdm@v4
               with:
                 python-version: 3.11
                 cache: true
@@ -37,7 +39,7 @@ jobs:
                 echo >> $GITHUB_ENV OSS_CAD_SUITE_DATE=$(cat ci/oss-cad-suite-version)
             - name: Cache OSS CAD Suite
               id: cache-oss-cad-suite
-              uses: actions/cache@v3
+              uses: actions/cache@v4
               with:
                 path: ~/cache/
                 key: ${{ runner.os }}-${{ env.OSS_CAD_SUITE_DATE }}
@@ -87,7 +89,7 @@ jobs:
             - uses: actions/setup-python@v5
               with:
                 python-version: "3.11"
-            - uses: pdm-project/setup-pdm@v3
+            - uses: pdm-project/setup-pdm@v4
               with:
                 python-version: 3.11
                 cache: true
@@ -98,7 +100,7 @@ jobs:
                 echo >> $GITHUB_ENV OSS_CAD_SUITE_DATE=$(cat ci/oss-cad-suite-version)
             - name: Cache OSS CAD Suite
               id: cache-oss-cad-suite
-              uses: actions/cache@v3
+              uses: actions/cache@v4
               with:
                 path: ~/cache/
                 key: ${{ runner.os }}-${{ env.OSS_CAD_SUITE_DATE }}
@@ -125,7 +127,7 @@ jobs:
           - uses: actions/setup-python@v5
             with:
               python-version: "3.11"
-          - uses: pdm-project/setup-pdm@v3
+          - uses: pdm-project/setup-pdm@v4
             with:
               python-version: 3.11
               cache: true
@@ -136,7 +138,7 @@ jobs:
               echo >> $GITHUB_ENV OSS_CAD_SUITE_DATE=$(cat ci/oss-cad-suite-version)
           - name: Cache OSS CAD Suite
             id: cache-oss-cad-suite
-            uses: actions/cache@v3
+            uses: actions/cache@v4
             with:
               path: ~/cache/
               key: ${{ runner.os }}-${{ env.OSS_CAD_SUITE_DATE }}
