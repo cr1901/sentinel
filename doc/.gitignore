@@ -1,2 +1,6 @@
 # LibreOffice lockfiles
 .~lock.*
+
+# Sphinx
+_build/
+_linkcheck/

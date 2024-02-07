@@ -132,8 +132,15 @@ remote = [
 lint = [
     "ruff>=0.6.7",
 ]
+doc = [
+    "sphinx>=7.2.6",
+    "sphinx-rtd-theme>=2.0.0",
+    "myst-parser>=2.0.0",
+    "sphinx-autobuild>=2024.2.4",
+]
 
 [tool.pdm.scripts]
+# Lint
 lint = { composite = [
     # Python
     "ruff check",
@@ -141,10 +148,13 @@ lint = { composite = [
     "cargo clippy --release --examples",
     "cargo doc --release --examples"
 ], help = "lint Python and Rust sources" }
+
 # Most Tests
 test = { cmd = "pytest", help="run all pytest tests" }
+
 # Generate
 gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
+
 # Demo
 # PDM "does the right thing" here; specifying "python " interpreter not required:
 # https://github.com/pdm-project/pdm/blob/73651b7a948679d31f4d00e8b14c8a51009126e8/src/pdm/cli/commands/run.py#L179
@@ -153,14 +163,23 @@ demo-rust = { composite = [
     "cargo build --release --example=attosoc",
     "demo -g target/riscv32i-unknown-none-elf/release/examples/attosoc -b build-rust {args}"
 ], help = "create AttoSoC Sentinel demo bitstream (Rust version)"}
+
+# Docs
+doc = { cmd = "sphinx-build doc/ doc/_build/" }
+doc-linkck = "sphinx-build doc/ doc/_linkcheck/ -b linkcheck"
+doc-auto = "sphinx-autobuild doc/ doc/_build/ --watch src/sentinel"
+
 # DoIt wrappers. Prefer using these over running DoIt directly.
 doit = { cmd = "doit", help="escape hatch to call doit directly" }
 ucode = { cmd = "doit ucode", help="generate supplementary microcode files" }
+
 # LUTs
 bench-luts = { cmd = "doit bench_luts", help="add stats to LUTs.csv" }
 plot-luts = { cmd = "doit plot_luts", help="plot LUTs.csv" }
+
 # Upstream
 compile-upstream = { cmd = "doit compile_upstream", help="regnerate riscv-test binaries" }
+
 # RISC-V Formal
 rvformal = { cmd = "doit run_sby:{args}", help="run a single RISC-V Formal test" }
 # Not clear to me that this is still required after refactors.
@@ -172,6 +191,7 @@ rvformal-all = { composite = [
     "doit run_sby:setup",  # serially generate RISC-V Formal files to avoid race condition
     "doit {args:-n 2} run_sby"
 ], help="run all RISC-V Formal tests" }
+
 # RISCOF
 riscof-all = { cmd = "doit run_riscof", help="run all RISCOF tests"}
 
