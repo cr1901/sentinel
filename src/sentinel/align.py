@@ -1,3 +1,5 @@
+"""Components to align external data going in/out of the Sentinel Core."""
+
 from amaranth import Elaboratable, Signal, Module, C, Cat
 from amaranth.lib.wiring import Component, Signature, In, Out
 

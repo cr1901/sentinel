@@ -7,10 +7,15 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import sys
+import os
+
 project = 'sentinel'
 copyright = '2024, William D. Jones'
 author = 'William D. Jones'
 release = '0.1.0'
+
+sys.path.append(os.path.abspath("../src"))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
