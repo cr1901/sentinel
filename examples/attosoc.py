@@ -759,7 +759,12 @@ def demo(args):
     else:
         if not args.b:
             args.b = "build"
-        plan.execute_local(Path(args.b), run_script=not args.n)
+
+        if not args.n:
+            plan.execute_local(Path(args.b))
+        else:
+            plan.extract(Path(args.b))
+
         local_path = Path(args.b)
 
     if args.x:
