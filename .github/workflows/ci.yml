@@ -2,6 +2,7 @@ on:
     push:
       branches-ignore:
         - update-yosys-*
+        - renovate/*
     pull_request:
 
 name: CI
