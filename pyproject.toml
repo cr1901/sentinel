@@ -1,6 +1,5 @@
 [project]
 name = "sentinel"
-version = "0.1.0"
 description = "Embedded RISC-V implementation written in Amaranth"
 authors = [
     {name = "William D. Jones", email = "thor0505@comcast.net"},
@@ -13,6 +12,7 @@ dependencies = [
 requires-python = ">=3.11"
 readme = "README.md"
 license = {text = "MIT"}
+dynamic = ["version"]
 
 [build-system]
 requires = ["pdm-backend"]
@@ -27,6 +27,10 @@ markers = [
   "module: top-level module to simulate."
 ]
 addopts="--ignore=tests/upstream/binaries"
+
+[tool.pdm.version]
+source = "scm"
+write_to = "sentinel/version.txt"
 
 [tool.pdm.dev-dependencies]
 dev = [
