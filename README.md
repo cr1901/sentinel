@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <strong>Logo by <a href="https://keidavt.carrd.co/">keidaVT</a></strong>.
+  <strong>Logo by <a href="https://tokinokei.carrd.co/">Tokino Kei</a>.</strong>
 </p>
 
 [![CI](https://github.com/cr1901/sentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cr1901/sentinel/actions/workflows/ci.yml)
