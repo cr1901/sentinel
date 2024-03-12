@@ -82,8 +82,9 @@ class FormalTop(Component):
         m.d.comb += self.cpu.irq.eq(self.irq)
 
         # rs1/rs2_data helpers.
-        m.submodules.rvfi_rs1 = rs1_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
-        m.submodules.rvfi_rs2 = rs2_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
+        w_port = self.cpu.datapath.regfile.w_port
+        rs1_port = self.cpu.datapath.regfile.mem.read_port(transparent_for=(w_port,))  # noqa: E501
+        rs2_port = self.cpu.datapath.regfile.mem.read_port(transparent_for=(w_port,))  # noqa: E501
 
         # By default, don't output new data on the ports.
         m.d.comb += [
@@ -234,10 +235,10 @@ class FormalTop(Component):
         m.d.comb += self.rvfi.ixl.eq(1)
 
         # CSRS
-        m.submodules.mscratch = mscratch_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
-        m.submodules.mcause = mcause_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
-        m.submodules.mtvec = mtvec_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
-        m.submodules.mepc = mepc_port = self.cpu.datapath.regfile.mem.read_port()  # noqa: E501
+        mscratch_port = self.cpu.datapath.regfile.mem.read_port(transparent_for=(w_port,))  # noqa: E501
+        mcause_port = self.cpu.datapath.regfile.mem.read_port(transparent_for=(w_port,))  # noqa: E501
+        mtvec_port = self.cpu.datapath.regfile.mem.read_port(transparent_for=(w_port,))  # noqa: E501
+        mepc_port = self.cpu.datapath.regfile.mem.read_port(transparent_for=(w_port,))  # noqa: E501
         m.d.comb += [
             mscratch_port.addr.eq(CSRFile.MSCRATCH + 32),
             mcause_port.addr.eq(CSRFile.MCAUSE + 32),

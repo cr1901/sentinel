@@ -10,7 +10,8 @@
   <strong>Logo by <a href="https://tokinokei.carrd.co/">Tokino Kei</a>.</strong>
 </p>
 
-[![CI](https://github.com/cr1901/sentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cr1901/sentinel/actions/workflows/ci.yml)
+[![main](https://github.com/cr1901/sentinel/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/cr1901/sentinel/actions/workflows/ci.yml)
+[![next](https://github.com/cr1901/sentinel/actions/workflows/ci.yml/badge.svg?branch=next)](https://github.com/cr1901/sentinel/actions/workflows/ci.yml)
 
 # `sentinel`
 

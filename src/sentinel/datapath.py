@@ -96,13 +96,18 @@ class RegFile(Component):
         # this will be removed.
         self.mem = Memory(shape=32, depth=32*2, init=[0xdeadbeef])
 
+        # Formal needs to create several more read ports transparent
+        # to a single write port. However, FormalTop elaborates before
+        # Regfile, so squirrel away a reference.
+        self.w_port = self.mem.write_port()
+
         super().__init__()
 
     def elaborate(self, platform):
         m = Module()
         m.submodules.mem = self.mem
 
-        w_port = self.mem.write_port()
+        w_port = self.w_port
         r_port = self.mem.read_port(transparent_for=(w_port,))
 
         m.d.comb += [
