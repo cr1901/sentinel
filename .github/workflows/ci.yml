@@ -69,6 +69,14 @@ jobs:
             - name: Create Rust Firmware
               run: |
                 LD_PRELOAD="" pdm _rust-firmware
+              # Test that the following generates correctly:
+              # 1. IceStick, Wishbone Periphs, Default demo. This is also
+              #    benchmarked in the next step separately.
+              # 2. HX8K Eval, CSR Periphs, Rust demo
+            - name: Check Gateware Generation
+              run: |
+                LD_PRELOAD="" pdm demo -n
+                LD_PRELOAD="" pdm demo-rust -n -p ice40_hx8k_b_evn -i csr
               # Get an idea of whether the full default prime-counting firmware
               # demo fits into 1280 LUTs or exceeds it a bit. This also
               # checks whether a demo bitstream build was successful.
