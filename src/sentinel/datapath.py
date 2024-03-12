@@ -1,5 +1,6 @@
-from amaranth import Cat, Module, Signal, Memory
+from amaranth import Cat, Module, Signal
 from amaranth.lib.data import View
+from amaranth.lib.memory import Memory
 from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 
 from .ucodefields import PcAction, CSROp, ExceptCtl
@@ -93,51 +94,43 @@ class RegFile(Component):
         # 0xdeadbeef is a fake init value to ensure that microcode reset
         # properly initializes r0. If somehow we ever get to ASIC stage,
         # this will be removed.
-        if self.formal:
-            self.mem = Memory(width=32, depth=32*2, init=[0xdeadbeef])
+        self.mem = Memory(shape=32, depth=32*2, init=[0xdeadbeef])
 
         super().__init__()
 
     def elaborate(self, platform):
         m = Module()
+        m.submodules.mem = self.mem
 
-        # 32 GP regs, 32 scratch regs
-        # Avoid accidentally instantiating rd ports during pytest simulation
-        # with no way to access the underlying memory, unless we're doing
-        # formal (in which we have no choice).
-        # See: https://github.com/amaranth-lang/amaranth/blob/392ead8d00c9a130b656b3af45c21fa410268301/amaranth/hdl/mem.py#L264-L268)  # noqa: E501
-        if not self.formal:
-            self.mem = Memory(width=32, depth=32*2, init=[0xdeadbeef])
-
-        m.submodules.rdport = rdport = self.mem.read_port()
-        m.submodules.wrport = wrport = self.mem.write_port()
+        w_port = self.mem.write_port()
+        r_port = self.mem.read_port(transparent_for=(w_port,))
 
         m.d.comb += [
-            self.priv.dat_r.eq(rdport.data),
-            self.pub.dat_r.eq(rdport.data),
-            rdport.addr.eq(self.pub.adr_r),
-            wrport.addr.eq(self.pub.adr_w),
-            wrport.data.eq(self.pub.dat_w),
+            self.priv.dat_r.eq(r_port.data),
+            self.pub.dat_r.eq(r_port.data),
+            r_port.addr.eq(self.pub.adr_r),
+            w_port.addr.eq(self.pub.adr_w),
+            w_port.data.eq(self.pub.dat_w),
         ]
 
         with m.Switch(self.priv.op):
             with m.Case(CSROp.NONE):
                 m.d.comb += [
-                    rdport.en.eq(self.pub.ctrl.reg_read),
-                    wrport.en.eq(self.pub.ctrl.reg_write &
+                    r_port.en.eq(self.pub.ctrl.reg_read),
+                    w_port.en.eq(self.pub.ctrl.reg_write &
                                  (self.pub.adr_w != 0 |
                                   self.pub.ctrl.allow_zero_wr))
                 ]
             with m.Case(CSROp.READ_CSR):
                 m.d.comb += [
-                    rdport.en.eq(1),
-                    rdport.addr.eq(Cat(self.priv.adr, 1)),
+                    r_port.en.eq(1),
+                    r_port.addr.eq(Cat(self.priv.adr, 1)),
                 ]
             with m.Case(CSROp.WRITE_CSR):
                 m.d.comb += [
-                    wrport.addr.eq(Cat(self.priv.adr, 1)),
-                    wrport.data.eq(self.priv.dat_w),
-                    wrport.en.eq(1)
+                    w_port.addr.eq(Cat(self.priv.adr, 1)),
+                    w_port.data.eq(self.priv.dat_w),
+                    w_port.en.eq(1)
                 ]
 
         return m
@@ -158,7 +151,7 @@ class CSRFile(Component):
     def elaborate(self, platform):
         m = Module()
 
-        mstatus = Signal(MStatus, reset={"mpp": 0b11})
+        mstatus = Signal(MStatus, init={"mpp": 0b11})
         mip = Signal(MIP)
         mie = Signal(MIE)
 

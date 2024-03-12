@@ -2,10 +2,11 @@ from io import IOBase
 from pathlib import Path
 from itertools import tee, zip_longest
 
-from amaranth import unsigned, Memory, Module
+from amaranth import unsigned, Module
 from amaranth.lib.data import StructLayout
+from amaranth.lib.memory import Memory
 from amaranth.lib.wiring import Signature, In, Out, Component
-from amaranth.utils import log2_int
+from amaranth.utils import ceil_log2
 from m5pre import M5Pre
 from m5meta import M5Meta
 
@@ -16,7 +17,7 @@ from .ucodefields import OpType, CondTest, JmpType, PcAction, ASrc, BSrc, \
 
 def ucoderom_signature(ucoderom):
     return Signature({
-        "addr": Out(log2_int(ucoderom.depth)),
+        "addr": Out(ceil_log2(ucoderom.depth)),
         "fields": In(ucoderom.field_layout)
     })
 
@@ -57,22 +58,22 @@ class UCodeROM(Component):
             self.enum_map = enum_map
 
         self.assemble()
+        self.ucode_mem = Memory(shape=self.width, depth=self.depth,
+                                init=self.ucode_contents)
         super().__init__({
-            "addr": Out(log2_int(self.depth)),
+            "addr": Out(ceil_log2(self.depth)),
             "fields": In(self.field_layout)
         })
 
     def elaborate(self, platform):
         m = Module()
+        m.submodules.ucode_mem = self.ucode_mem
 
-        self.ucode_mem = Memory(width=self.width, depth=self.depth,
-                                init=self.ucode_contents)
-        m.submodules.rdport = rdport = \
-            self.ucode_mem.read_port(transparent=False)
+        r_port = self.ucode_mem.read_port()
 
         m.d.comb += [
-            rdport.addr.eq(self.addr),
-            self.fields.as_value().eq(rdport.data)
+            r_port.addr.eq(self.addr),
+            self.fields.as_value().eq(r_port.data)
         ]
 
         return m

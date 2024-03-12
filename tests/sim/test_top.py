@@ -3,7 +3,7 @@ import pytest
 
 from itertools import repeat, chain, islice
 from functools import reduce
-from amaranth.sim import Passive
+from amaranth.sim import Passive, Tick
 from elftools.elf.elffile import ELFFile
 
 
@@ -38,17 +38,17 @@ def cpu_proc_aux(sim_mod):
             # Wait for insn.
             while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
                        (yield m.cpu.control.insn_fetch)):
-                yield
+                yield Tick()
 
             # Wait for memory to respond.
             while not (yield m.cpu.bus.ack):
-                yield
+                yield Tick()
 
             # When ACK is asserted, we should always be going to uinsn
             # "check_int".
             assert (yield m.cpu.control.sequencer.adr) == 2 or \
                 (yield m.cpu.control.sequencer.adr) == 1
-            yield
+            yield Tick()
 
             # Check results as new insn begins (i.e. prev results).
             yield from check_regs(curr_r)
@@ -87,16 +87,16 @@ def test_seq(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
             # Wait for memory
             while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
                        (yield m.cpu.control.insn_fetch)):
-                yield
+                yield Tick()
 
             # Wait state
             # FIXME: Need add_comb_process to force wait_state to start at
             # right time. Wait states probably work fine
             # anyway.
             for _ in range(ws):
-                yield
+                yield Tick()
 
-            yield
+            yield Tick()
 
     m.rom = """
         addi x0, x0, 0  # 0
@@ -300,7 +300,7 @@ bgeu_dst2:
         yield from cpu_proc_aux(regs, ram, csrs)
 
     sim.ports = basic_ports
-    sim.run(sync_processes=[cpu_proc, ucode_panic])
+    sim.run(testbenches=[cpu_proc], sync_processes=[ucode_panic])
 
 
 @pytest.mark.module(AttoSoC(sim=True))
@@ -367,13 +367,13 @@ countdown:
                     assert (yield m.cpu.bus.dat_w) == p
                     break
                 else:
-                    yield
+                    yield Tick()
             else:
                 raise AssertionError("CPU (but not microcode) probably stuck "
                                      "in infinite loop")
-            yield
+            yield Tick()
 
-    sim.run(sync_processes=[io_proc, ucode_panic])
+    sim.run(testbenches=[io_proc], sync_processes=[ucode_panic])
 
 
 @pytest.mark.module(AttoSoC(sim=True))
@@ -388,16 +388,16 @@ def test_csr_ro0(sim_mod, ucode_panic, cpu_proc_aux):
             # Wait for memory
             while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
                        (yield m.cpu.control.insn_fetch)):
-                yield
+                yield Tick()
 
             # Wait state
             # FIXME: Need add_comb_process to force wait_state to start at
             # right time. Wait states probably work fine
             # anyway.
             for _ in range(ws):
-                yield
+                yield Tick()
 
-            yield
+            yield Tick()
 
     m.rom = """
         addi x1, x0, 1  # 0
@@ -421,7 +421,7 @@ def test_csr_ro0(sim_mod, ucode_panic, cpu_proc_aux):
     def cpu_proc():
         yield from cpu_proc_aux(regs, ram, csrs)
 
-    sim.run(sync_processes=[cpu_proc, ucode_panic])
+    sim.run(testbenches=[cpu_proc], sync_processes=[ucode_panic])
 
 
 @pytest.mark.module(AttoSoC(sim=True))
@@ -436,16 +436,16 @@ def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
             # Wait for memory
             while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
                        (yield m.cpu.control.insn_fetch)):
-                yield
+                yield Tick()
 
             # Wait state
             # FIXME: Need add_comb_process to force wait_state to start at
             # right time. Wait states probably work fine
             # anyway.
             for _ in range(ws):
-                yield
+                yield Tick()
 
-            yield
+            yield Tick()
 
     m.rom = """
         csrrwi x0, 31, 0x340   # mscratch  # 0x00
@@ -569,16 +569,16 @@ def test_exception(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
             # Wait for memory
             while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
                        (yield m.cpu.control.insn_fetch)):
-                yield
+                yield Tick()
 
             # Wait state
             # FIXME: Need add_comb_process to force wait_state to start at
             # right time. Wait states probably work fine
             # anyway.
             for _ in range(ws):
-                yield
+                yield Tick()
 
-            yield
+            yield Tick()
 
     # ECALL sets xEPC to the ECALL insn, not the following one!
     m.rom = """
@@ -615,7 +615,7 @@ handler:
         yield from cpu_proc_aux(regs, ram, csrs)
 
     sim.ports = basic_ports
-    sim.run(sync_processes=[cpu_proc, ucode_panic])
+    sim.run(testbenches=[cpu_proc], sync_processes=[ucode_panic])
 
 
 # Infrequently-used test mostly for testing address decoding. Should not cause
@@ -648,8 +648,8 @@ def test_rust(sim_mod, ucode_panic, request):
 
     def io_proc():
         for _ in range(2000):
-            yield
+            yield Tick()
 
         assert (yield m.serial.tx) == 0
 
-    sim.run(sync_processes=[io_proc, ucode_panic])
+    sim.run(testbenches=[io_proc], sync_processes=[ucode_panic])

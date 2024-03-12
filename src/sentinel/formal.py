@@ -92,7 +92,7 @@ class FormalTop(Component):
         ]
 
         # Insn retirement helpers.
-        in_init = Signal(1, reset=1)
+        in_init = Signal(1, init=1)
         committed_to_insn = Signal()
         just_committed_to_insn = Signal()
         # If we fetched an insn and the bus just ACK'ed, the next cycle the

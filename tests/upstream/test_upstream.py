@@ -1,6 +1,7 @@
 import functools
 import pytest
 
+from amaranth.sim import Tick
 from enum import Enum, auto
 
 # FIXME: Eventually go to RISCOF approach? Less invasive than test_top, and
@@ -68,7 +69,7 @@ def wait_for_host_write(sim_mod, request):
                     raise AssertionError("CPU (but not microcode) probably "
                                          "stuck in infinite loop")
 
-            yield
+            yield Tick()
             i += 1
             if i > 65535:
                 state = HOST_STATE.TIMEOUT
@@ -94,7 +95,7 @@ RV32UI_TESTS = [
 @pytest.mark.parametrize("test_bin", RV32UI_TESTS, indirect=True)
 def test_rv32ui(sim_mod, ucode_panic, test_bin, wait_for_host_write):
     sim, m = sim_mod
-    sim.run(sync_processes=[wait_for_host_write, ucode_panic])
+    sim.run(testbenches=[wait_for_host_write], sync_processes=[ucode_panic])
 
 
 RV32MI_TESTS = [
@@ -111,4 +112,4 @@ RV32MI_TESTS = [
 @pytest.mark.parametrize("test_bin", RV32MI_TESTS, indirect=True)
 def test_rv32mi(sim_mod, ucode_panic, test_bin, wait_for_host_write):
     sim, m = sim_mod
-    sim.run(sync_processes=[wait_for_host_write, ucode_panic])
+    sim.run(testbenches=[wait_for_host_write], sync_processes=[ucode_panic])

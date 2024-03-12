@@ -2,8 +2,8 @@ import functools
 import pytest
 
 from amaranth import Value
-from amaranth.hdl.ast import ValueCastable
-from amaranth.sim import Simulator, Passive
+from amaranth.hdl import ValueCastable
+from amaranth.sim import Simulator, Passive, Tick
 from amaranth.lib.wiring import Signature
 
 
@@ -84,7 +84,7 @@ class SimulatorFixture:
     def ports(self, ports):
         self._ports = ports
 
-    def run(self, sync_processes, processes=[]):
+    def run(self, testbenches=[], sync_processes=[], comb_processes=[]):
         # Don't elaborate until we're ready to sim. This causes weird
         # behaviors if you modify the object after elaboration. For instance,
         # changing a Memory's init file after elaboration causes memory
@@ -94,10 +94,13 @@ class SimulatorFixture:
         for c in self.clks:
             sim.add_clock(c)
 
-        for s in sync_processes:
-            sim.add_sync_process(s)
+        for t in testbenches:
+            sim.add_testbench(t)
 
-        for p in processes:
+        for s in sync_processes:
+            sim.add_process(s)
+
+        for p in comb_processes:
             sim.add_process(p)
 
         if self.vcds:
@@ -125,7 +128,7 @@ def ucode_panic(sim_mod):
         prev_addr = 0
         count = 0
         while True:
-            yield
+            yield Tick()
 
             if (yield m.cpu.control.ucoderom.addr == 255):
                 raise AssertionError("microcode panic (not implemented)")

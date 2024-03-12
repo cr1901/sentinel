@@ -1,5 +1,6 @@
 import pytest
 from amaranth import Elaboratable, Module, Signal
+from amaranth.sim import Tick
 from sentinel.top import Top
 
 from conftest import RV32Regs, CSRRegs
@@ -29,85 +30,85 @@ def csrrc_bad_rd_process(sim_mod):
     def proc():
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b0)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b110000000011111111111111111111)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b110000000011111111111111111111)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b110000000111111111111111111111)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b110000000111111111111111111111)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b11110100010000100111111111111111)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b1)
         yield m.cpu.bus.dat_r.eq(0b110000000000100011010001110011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b10000001110011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b1)
         yield m.cpu.bus.dat_r.eq(0b110010000100010010001001110011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b110000100000010100000000010011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b100100011011010100110011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b110100001011000000000110100011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b110100000010011010000101110011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b10010000000011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b110000001000000000000001101111)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b100001110000111110011)
-        yield
+        yield Tick()
 
         assert (yield m.cpu.datapath.csr.adr) == 0b0000
 
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b1000100001000000101001101100011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b1)
         yield m.cpu.bus.dat_r.eq(0b10100001000111000010010011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b10110000001000001001011111101111)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b1)
         yield m.cpu.bus.dat_r.eq(0b100001001101000010010100)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b110000010000001000000100001111)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b11001000001000010110111)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b11111110110110000011000010011100)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b11011101010100101000111110010011)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b0)
         yield m.cpu.bus.dat_r.eq(0b10000010100111000000001101101)
-        yield
+        yield Tick()
         yield m.cpu.bus.ack.eq(0b1)
         yield m.cpu.bus.dat_r.eq(0b0)
-        yield
+        yield Tick()
 
         expected_regs = RV32Regs(R8=0x00001800, PC=8 >> 2)
         actual_regs = yield from RV32Regs.from_top_module(m)
@@ -138,4 +139,5 @@ class WitnessTop(Elaboratable):
 @pytest.mark.clks((1.0 / 12e6,))
 def test_csrrc_bad_rd(sim_mod, csrrc_bad_rd_process, ucode_panic):
     sim, m = sim_mod
-    sim.run(sync_processes=[csrrc_bad_rd_process, ucode_panic])
+    sim.run(testbenches=[csrrc_bad_rd_process],
+            sync_processes=[ucode_panic])

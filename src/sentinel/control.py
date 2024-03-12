@@ -157,11 +157,11 @@ class Sequencer(Elaboratable):
 
         # upc == 2 is reset; 0 is "do insn fetch". 0 is so important, that
         # it's an implied target in DIRECT_ZERO.
-        self.adr = Signal.like(ucoderom.fields.target, reset=2)
+        self.adr = Signal.like(ucoderom.fields.target, init=2)
         self.opcode_adr = Signal.like(self.adr)
         self.vec_adr = Signal.like(self.adr)
         self.next_adr = Signal.like(self.adr)
-        self.ice40_rst_guard = Signal(reset=1)
+        self.ice40_rst_guard = Signal(init=1)
 
         # If test succeeds, branch in target/vec_adr is taken, otherwise
         # next_adr.

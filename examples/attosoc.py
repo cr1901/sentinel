@@ -12,13 +12,14 @@ from enum import auto
 
 from bronzebeard.asm import assemble
 from elftools.elf.elffile import ELFFile
-from amaranth import Module, Memory, Signal, Cat, C
+from amaranth import Module, Signal, Cat, C
 from amaranth_soc import wishbone
 from amaranth_soc import csr
 from amaranth_soc.csr.wishbone import WishboneCSRBridge
 from amaranth_soc.memory import MemoryMap
 from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
     Signature, flipped
+from amaranth.lib.memory import Memory
 from amaranth.build import ResourceError, Resource, Pins
 from amaranth_boards import icestick, ice40_hx8k_b_evn
 from tabulate import tabulate
@@ -41,6 +42,7 @@ class WBMemory(Component):
 
         self.sim = sim
         self.num_bytes = num_bytes
+        self._mem_set = False
 
         super().__init__(sig)
 
@@ -48,32 +50,33 @@ class WBMemory(Component):
         self.bus.memory_map = MemoryMap(addr_width=25, data_width=8)
         # But only actually _use_ a small chunk of it.
         self.bus.memory_map.add_resource(self, name=("ram",), size=num_bytes)
+        self.mem = Memory(shape=32, depth=self.num_bytes//4, init=[])
 
     @property
-    def init_mem(self):
-        return self.mem_contents
+    def init(self):
+        return self.mem.init
 
-    @init_mem.setter
-    def init_mem(self, mem):
-        self.mem_contents = mem
+    @init.setter
+    def init(self, mem):
+        self.mem.init[:len(mem)] = mem
 
     def elaborate(self, plat):
         m = Module()
-        self.mem = Memory(width=32, depth=self.num_bytes//4,
-                          init=self.mem_contents)
-        m.submodules.rdport = rdport = self.mem.read_port(transparent=True)
-        m.submodules.wrport = wrport = self.mem.write_port(granularity=8)
+
+        m.submodules.mem = self.mem
+        w_port = self.mem.write_port(granularity=8)
+        r_port = self.mem.read_port(transparent_for=(w_port,))
 
         m.d.comb += [
-            rdport.addr.eq(self.bus.adr),
-            wrport.addr.eq(self.bus.adr),
-            self.bus.dat_r.eq(rdport.data),
-            wrport.data.eq(self.bus.dat_w),
-            rdport.en.eq(self.bus.stb & self.bus.cyc & ~self.bus.we),
+            r_port.addr.eq(self.bus.adr),
+            w_port.addr.eq(self.bus.adr),
+            self.bus.dat_r.eq(r_port.data),
+            w_port.data.eq(self.bus.dat_w),
+            r_port.en.eq(self.bus.stb & self.bus.cyc & ~self.bus.we),
         ]
 
         with m.If(self.bus.stb & self.bus.cyc & self.bus.we):
-            m.d.comb += wrport.en.eq(self.bus.sel)
+            m.d.comb += w_port.en.eq(self.bus.sel)
 
         if self.sim:
             ack_cond = self.bus.stb & self.bus.cyc & ~self.bus.ack & \
@@ -108,8 +111,8 @@ class WBLeds(Component):
                                         name="leds")
         # FIXME: We need something better here than fake empty components
         # representing "I'm attaching registers directly to the peripheral's
-        # WB bus, and there's no Component representing the register that
-        # we can use. "
+        # WB bus without any submodules, and there's no Component representing
+        # the register that we can use."
         self.bus.memory_map.add_resource(Component({}), name=("leds",), size=1)
         self.bus.memory_map.add_resource(Component({}), name=("inout",),
                                          size=1)
@@ -600,21 +603,21 @@ class AttoSoC(Elaboratable):
 
     @property
     def rom(self):
-        return self.mem.init_mem
+        return self.mem.init
 
     @rom.setter
     def rom(self, source_or_list):
         if isinstance(source_or_list, str):
             insns = assemble(source_or_list)
-            self.mem.init_mem = [int.from_bytes(insns[adr:adr+4],
-                                                byteorder="little")
-                                 for adr in range(0, len(insns), 4)]
+            self.mem.init = [int.from_bytes(insns[adr:adr+4],
+                                            byteorder="little")
+                             for adr in range(0, len(insns), 4)]
         elif isinstance(source_or_list, (bytes, bytearray)):
-            self.mem.init_mem = [int.from_bytes(source_or_list[adr:adr+4],
-                                                byteorder="little")
-                                 for adr in range(0, len(source_or_list), 4)]
+            self.mem.init = [int.from_bytes(source_or_list[adr:adr+4],
+                                            byteorder="little")
+                             for adr in range(0, len(source_or_list), 4)]
         else:
-            self.mem.init_mem = source_or_list
+            self.mem.init = source_or_list
 
     def elaborate(self, plat):
         m = Module()
@@ -711,9 +714,9 @@ class AttoSoC(Elaboratable):
 def demo(args):
     match args.i:
         case "wishbone":
-            asoc = AttoSoC(num_bytes=0x1000, bus_type=BusType.WB)
+            bus_type = BusType.WB
         case "csr":
-            asoc = AttoSoC(num_bytes=0x1000, bus_type=BusType.CSR)
+            bus_type = BusType.CSR
 
     if args.g:
         # In-line objcopy -O binary implementation. Probably does not handle
@@ -727,14 +730,14 @@ def demo(args):
 
             segs = ELFFile(fp).iter_segments()
             text_ro_and_data_segs = itertools.islice(segs, 2)
-            asoc.rom = reduce(append_bytes,
-                              map(seg_data, text_ro_and_data_segs),
-                              b"")
+            rom = reduce(append_bytes,
+                         map(seg_data, text_ro_and_data_segs),
+                         b"")
     elif args.r:
-        asoc.rom = [randint(0, 0xffffffff) for _ in range(0x400)]
+        rom = [randint(0, 0xffffffff) for _ in range(0x400)]
     else:
         # Primes test firmware from tests and nextpnr AttoSoC.
-        asoc.rom = """
+        rom = """
             li      s0,2
             lui     s1,0x2000  # IO port at 0x2000000
             li      s3,256
@@ -770,6 +773,9 @@ def demo(args):
             bnez    t0,countdown
             ret
     """
+
+    asoc = AttoSoC(num_bytes=0x1000, bus_type=bus_type)
+    asoc.rom = rom
 
     match args.p:
         case "ice40_hx8k_b_evn":
