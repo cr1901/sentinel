@@ -85,9 +85,9 @@ commit_parsers = [
     { message = "^Merge", skip = true },
     { message = "^Revert", group = "Removed" },
     { message = "^.*([Aa]dd|[Ii]mplement)", group = "Added" },
+    { message = "^.*([Ff]ix)", group = "Fixed" },
     { message = "^.*([Rr]emove|[Rr]evert|[Dd]elete)", group = "Removed" },
     { message = "^.*([Dd]eprecate)", group = "Deprecate" },
-    { message = "^.*([Ff]ix)", group = "Fixed" },
     { message = "^.*", group = "Changed" },
 ]
 # protect breaking changes from being skipped due to matching a skipping commit_parser
