@@ -47,8 +47,7 @@ class WBMemory(Component):
         # Allocate a bunch of address space for RAM
         self.bus.memory_map = MemoryMap(addr_width=25, data_width=8)
         # But only actually _use_ a small chunk of it.
-        self.bus.memory_map.add_resource(self.bus, name="ram",
-                                         size=num_bytes)
+        self.bus.memory_map.add_resource(self, name=("ram",), size=num_bytes)
 
     @property
     def init_mem(self):
@@ -107,12 +106,14 @@ class WBLeds(Component):
 
         self.bus.memory_map = MemoryMap(addr_width=25, data_width=8,
                                         name="leds")
-        self.bus.memory_map.add_resource(self.leds, name="leds", size=1)
-        self.bus.memory_map.add_resource(((g.o for g in self.gpio),
-                                         (g.i for g in self.gpio)),
-                                         name="inout", size=1)
-        self.bus.memory_map.add_resource((g.oe for g in self.gpio),
-                                         name="oe", size=1)
+        # FIXME: We need something better here than fake empty components
+        # representing "I'm attaching registers directly to the peripheral's
+        # WB bus, and there's no Component representing the register that
+        # we can use. "
+        self.bus.memory_map.add_resource(Component({}), name=("leds",), size=1)
+        self.bus.memory_map.add_resource(Component({}), name=("inout",),
+                                         size=1)
+        self.bus.memory_map.add_resource(Component({}), name=("oe",), size=1)
 
     def elaborate(self, plat):
         m = Module()
@@ -143,11 +144,71 @@ class WBLeds(Component):
         return m
 
 
+class RWStrobe(csr.FieldAction):
+    """A read/write field action, **without** built-in storage.
+
+    Parameters
+    ----------
+    shape : :ref:`shape-castable <lang-shapecasting>`
+        Shape of the field.
+
+    Interface attributes
+    --------------------
+    port : :class:`FieldPort`
+        Field port.
+    r_data : Signal(shape)
+        Read data. Drives ``port.r_data``. See :class:`FieldPort`.
+    r_stb : Signal()
+        Read strobe. Driven by ``port.r_stb``. See :class:`FieldPort`.
+    w_data : Signal(shape)
+        Write data. Driven by ``port.w_data``. See :class:`FieldPort`.
+    w_stb : Signal()
+        Write strobe. Driven by ``port.w_stb``. See :class:`FieldPort`.
+    """
+    def __init__(self, shape):
+        super().__init__(shape, access=csr.FieldPort.Access.RW, members={
+            "r_data": In(shape),
+            "r_stb":  Out(1),
+            "w_data": Out(shape),
+            "w_stb":  Out(1),
+        })
+
+    def elaborate(self, platform):
+        m = Module()
+        m.d.comb += [
+            self.port.r_data.eq(self.r_data),
+            self.r_stb.eq(self.port.r_stb),
+            self.w_data.eq(self.port.w_data),
+            self.w_stb.eq(self.port.w_stb),
+        ]
+        return m
+
+
 class CSRLeds(Component):
+    class Leds(csr.Register, access=csr.Element.Access.W):
+        leds: csr.Field(csr.action.W, 8)
+
+    class InOut(csr.Register, access=csr.Element.Access.RW):
+        inout: csr.Field(RWStrobe, 8)
+
+    class OE(csr.Register, access=csr.Element.Access.W):
+        oe: csr.Field(csr.action.W, 8)
+
     def __init__(self):
-        self.mux = csr.bus.Multiplexer(addr_width=4, data_width=8, name="gpio")
+        self.leds_reg = self.Leds()
+        self.inout_reg = self.InOut()
+        self.oe_reg = self.OE()
+
+        builder = csr.Builder(addr_width=4, data_width=8, name="gpio")
+        builder.add("leds", self.leds_reg)
+        builder.add("inout", self.inout_reg, offset=4)
+        builder.add("oe", self.oe_reg, offset=8)
+
+        mem_map = builder.as_memory_map()
+        self.bridge = csr.Bridge(mem_map)
+
         sig = {
-            "bus": Out(self.mux.signature.members["bus"].signature),
+            "bus": Out(self.bridge.bus.signature),
             "leds": Out(8),
             "gpio": In(Signature({
                  "i": In(1),
@@ -156,35 +217,30 @@ class CSRLeds(Component):
             })).array(8)
         }
 
-        self.leds_reg = csr.Element(8, "w", path=("leds",))
-        self.inout_reg = csr.Element(8, "rw", path=("inout",))
-        self.oe_reg = csr.Element(8, "rw", path=("oe",))
-        self.mux.add(self.leds_reg, name="leds")
-        self.mux.add(self.inout_reg, name="inout", addr=4)
-        self.mux.add(self.oe_reg, name="oe", addr=8)
-
         super().__init__(sig)
-        self.bus.memory_map = self.mux.bus.memory_map
+        self.bus.memory_map = self.bridge.bus.memory_map
 
     def elaborate(self, plat):
         m = Module()
-        m.submodules.mux = self.mux
+        m.submodules.bridge = self.bridge
 
-        connect(m, flipped(self.bus), self.mux.bus)
+        connect(m, flipped(self.bus), self.bridge.bus)
 
-        with m.If(self.leds_reg.w_stb):
-            m.d.sync += self.leds.eq(self.leds_reg.w_data)
+        with m.If(self.leds_reg.f.leds.w_stb):
+            m.d.sync += self.leds.eq(self.leds_reg.f.leds.w_data)
 
-        with m.If(self.inout_reg.w_stb):
+        with m.If(self.inout_reg.f.inout.w_stb):
             for i in range(8):
-                m.d.sync += self.gpio[i].o.eq(self.leds_reg.w_data[i])
+                m.d.sync += self.gpio[i].o.eq(
+                    self.inout_reg.f.inout.w_data[i])
 
         for i in range(8):
-            m.d.comb += self.inout_reg.r_data[i].eq(self.gpio[i].i)
+            m.d.comb += self.inout_reg.f.inout.r_data[i].eq(self.gpio[i].i)  # noqa: E501
 
-        with m.If(self.oe_reg.w_stb):
+        with m.If(self.oe_reg.f.oe.w_stb):
             for i in range(8):
-                m.d.sync += self.gpio[i].oe.eq(self.oe_reg.w_data[i])
+                m.d.sync += self.gpio[i].oe.eq(
+                    self.oe_reg.f.oe.w_data[i])
 
         return m
 
@@ -201,7 +257,7 @@ class WBTimer(Component):
 
         self.bus.memory_map = MemoryMap(addr_width=30, data_width=8,
                                         name="timer")
-        self.bus.memory_map.add_resource(self.irq, name="irq", size=1)
+        self.bus.memory_map.add_resource(Component({}), name=("irq",), size=1)
 
     def elaborate(self, plat):
         m = Module()
@@ -227,39 +283,41 @@ class WBTimer(Component):
 
 
 class CSRTimer(Component):
-    @property
-    def signature(self):
-        return self._signature
+    class IRQ(csr.Register, access=csr.Element.Access.R):
+        irq: csr.Field(csr.action.R, 1)
 
     def __init__(self):
-        self.mux = csr.bus.Multiplexer(addr_width=3, data_width=8,
-                                       name="timer")
+        self.irq_reg = self.IRQ()
+
+        builder = csr.Builder(addr_width=3, data_width=8, name="timer")
+        builder.add("irq", self.irq_reg)
+
+        mem_map = builder.as_memory_map()
+        self.bridge = csr.Bridge(mem_map)
+
         sig = {
-            "bus": Out(self.mux.signature.members["bus"].signature),
+            "bus": Out(self.bridge.bus.signature),
             "irq": Out(1)
         }
 
-        self.irq_reg = csr.Element(8, "r", path=("irq",))
-        self.mux.add(self.irq_reg, name="irq")
-
         super().__init__(sig)
-        self.bus.memory_map = self.mux.bus.memory_map
+        self.bus.memory_map = self.bridge.bus.memory_map
 
     def elaborate(self, plat):
         m = Module()
-        m.submodules.mux = self.mux
+        m.submodules.bridge = self.bridge
 
-        connect(m, flipped(self.bus), self.mux.bus)
+        connect(m, flipped(self.bus), self.bridge.bus)
 
         prescaler = Signal(15)
 
         m.d.sync += prescaler.eq(prescaler + 1)
         m.d.comb += [
             self.irq.eq(prescaler[14]),
-            self.irq_reg.r_data.eq(prescaler[14])
+            self.irq_reg.f.irq.r_data.eq(prescaler[14])
         ]
 
-        with m.If(self.irq_reg.r_stb):
+        with m.If(self.irq_reg.f.irq.r_stb):
             with m.If(self.irq):
                 m.d.sync += prescaler[14].eq(0)
 
@@ -367,9 +425,9 @@ class WBSerial(Component):
         })
         self.bus.memory_map = MemoryMap(addr_width=30, data_width=8,
                                         name="serial")
-        self.bus.memory_map.add_resource((self.tx, self.rx), name="rxtx",
+        self.bus.memory_map.add_resource(Component({}), name=("rxtx",),
                                          size=1)
-        self.bus.memory_map.add_resource(self.irq, name="irq", size=1)
+        self.bus.memory_map.add_resource(Component({}), name=("irq",), size=1)
         self.serial = UART(divisor=12000000 // 9600)
 
     def elaborate(self, plat):
@@ -429,31 +487,40 @@ class WBSerial(Component):
 
 
 class CSRSerial(Component):
+    class TXRX(csr.Register, access=csr.Element.Access.RW):
+        txrx: csr.Field(RWStrobe, 8)
+
+    class IRQ(csr.Register, access=csr.Element.Access.R):
+        irq: csr.Field(csr.action.R, 2)
+
     def __init__(self):
-        self.mux = csr.bus.Multiplexer(addr_width=3, data_width=8, alignment=0,
-                                       name="serial")
+        self.txrx_reg = self.TXRX()
+        self.irq_reg = self.IRQ()
+
+        builder = csr.Builder(addr_width=3, data_width=8, name="serial")
+        builder.add("txrx", self.txrx_reg)
+        builder.add("irq", self.irq_reg, offset=4)
+
+        mem_map = builder.as_memory_map()
+        self.bridge = csr.Bridge(mem_map)
+
         sig = {
-            "bus": Out(self.mux.signature.members["bus"].signature),
+            "bus": Out(self.bridge.bus.signature),
             "rx": In(1),
             "tx": Out(1),
             "irq": Out(1)
         }
 
-        self.txrx_reg = csr.Element(8, "rw", path=("txrx",))
-        self.mux.add(self.txrx_reg, name="txrx")
-        self.irq_reg = csr.Element(8, "r", path=("irq",))
-        self.mux.add(self.irq_reg, name="irq", addr=4)
-
         super().__init__(sig)
         self.serial = UART(divisor=12000000 // 9600)
-        self.bus.memory_map = self.mux.bus.memory_map
+        self.bus.memory_map = self.bridge.bus.memory_map
 
     def elaborate(self, plat):
         m = Module()
         m.submodules.ser_internal = self.serial
-        m.submodules.mux = self.mux
+        m.submodules.bridge = self.bridge
 
-        connect(m, flipped(self.bus), self.mux.bus)
+        connect(m, flipped(self.bus), self.bridge.bus)
 
         # rx_rdy_prev having reset of 1 will suppress IRQ at reset. We use this
         # to detect WB vs CSR bus.
@@ -474,17 +541,17 @@ class CSRSerial(Component):
         ]
 
         m.d.comb += [
-            self.serial.tx_data.eq(self.txrx_reg.w_data),
-            self.txrx_reg.r_data.eq(self.serial.rx_data),
-            self.irq_reg.r_data.eq(Cat(rx_rdy_irq, tx_ack_irq))
+            self.serial.tx_data.eq(self.txrx_reg.f.txrx.w_data),
+            self.txrx_reg.f.txrx.r_data.eq(self.serial.rx_data),
+            self.irq_reg.f.irq.r_data.eq(Cat(rx_rdy_irq, tx_ack_irq))
         ]
 
-        with m.If(self.txrx_reg.w_stb):
+        with m.If(self.txrx_reg.f.txrx.w_stb):
             m.d.comb += self.serial.tx_rdy.eq(1)
-        with m.If(self.txrx_reg.r_stb):
+        with m.If(self.txrx_reg.f.txrx.r_stb):
             m.d.comb += self.serial.rx_ack.eq(1)
 
-        with m.If(self.irq_reg.r_stb):
+        with m.If(self.irq_reg.f.irq.r_stb):
             m.d.sync += [
                 rx_rdy_irq.eq(0),
                 tx_ack_irq.eq(0)
@@ -620,7 +687,17 @@ class AttoSoC(Elaboratable):
             m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
 
         def destruct_res(res):
-            return ("/".join(res.path), res.start, res.end, res.width)
+            ls = []
+            for c in res.path:
+                if isinstance(c, str):
+                    ls.append(c)
+                elif isinstance(c, (tuple, list)):
+                    ls.extend(c)
+                else:
+                    raise ValueError("can only create a name for a str, "
+                                     f"tuple, or list, not {type(c)}")
+
+            return ("/".join(ls), res.start, res.end, res.width)
 
         print(tabulate(map(destruct_res,
                            self.decoder.bus.memory_map.all_resources()),

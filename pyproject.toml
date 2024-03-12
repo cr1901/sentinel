@@ -29,6 +29,9 @@ markers = [
 ]
 addopts="--ignore=tests/upstream/binaries"
 
+[tool.pyright]
+reportInvalidTypeForm = false
+
 [tool.pdm.version]
 source = "scm"
 write_to = "sentinel/version.txt"
