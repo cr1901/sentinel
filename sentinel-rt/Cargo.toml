@@ -15,3 +15,6 @@ heapless = { version = "0.8.0", default-features = false, features = ["portable-
 once_cell = { version = "1.19.0", default-features = false }
 panic-halt = "0.2.0"
 portable-atomic = { version = "1.6.0", features = ["unsafe-assume-single-core"] }
+
+[lints]
+workspace = true

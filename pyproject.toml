@@ -87,7 +87,10 @@ lint = [
 ]
 
 [tool.pdm.scripts]
-lint = { composite = ["ruff check", "flake8", "doc-test"], help="lint python sources" }
+lint = { composite = [
+    "ruff check", "flake8",  # Python- flake8 include pydoclint
+    "_clippy", "_rustdoc"  # Rust- _clippy includes "cargo check": https://stackoverflow.com/a/57477060
+], help = "lint Python and Rust sources" }
 # Most Tests
 test = { cmd = "pytest", help="run all pytest tests" }
 # Generate
@@ -141,6 +144,14 @@ cmd = "cargo build -p sentinel-rt --release --target=riscv32i-unknown-none-elf -
 # --threads=1 fixes Windows issue: https://github.com/rust-lang/rust/issues/115985
 env = { RUSTFLAGS="-C link-arg=--threads=1 -C link-arg=-Tsentinel-rt/examples/device.x" }
 help = "compile sentinel-rt demo firmware for AttoSoC"
+
+[tool.pdm.scripts._clippy]
+cmd = "cargo clippy --release --target=riscv32i-unknown-none-elf --examples"
+help = "run clippy against rust sources"
+
+[tool.pdm.scripts._rustdoc]
+cmd = "cargo doc --release --target=riscv32i-unknown-none-elf --examples"
+help = "run rustdoc against rust sources"
 
 [tool.pdm.scripts.rvformal-status]
 cmd = "doit list_sby_status:{args}"
