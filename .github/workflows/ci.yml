@@ -63,12 +63,6 @@ jobs:
               # for any commands requiring yosys/nextpnr.
               run: |
                 LD_PRELOAD="" pdm gen -o sentinel.v
-              # We only build the Rust firmware here and not build the
-              # bitstream; building the bitstream will be identical to the next
-              # Benchmark step, aside from block RAM contents- redundant.
-            - name: Create Rust Firmware
-              run: |
-                LD_PRELOAD="" pdm _rust-firmware
               # Test that the following generates correctly:
               # 1. IceStick, Wishbone Periphs, Default demo. This is also
               #    benchmarked in the next step separately.

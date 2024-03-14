@@ -1,0 +1,8 @@
+[build]
+target="riscv32i-unknown-none-elf"
+
+[target.riscv32i-unknown-none-elf]
+rustflags = [
+    "-C", "link-arg=--threads=1",  # --threads=1 fixes Windows issue: https://github.com/rust-lang/rust/issues/115985 
+    "-C", "link-arg=-Tsentinel-rt/examples/device.x"
+]

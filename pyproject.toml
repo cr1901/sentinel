@@ -88,8 +88,12 @@ lint = [
 
 [tool.pdm.scripts]
 lint = { composite = [
-    "ruff check", "flake8",  # Python- flake8 include pydoclint
-    "_clippy", "_rustdoc"  # Rust- _clippy includes "cargo check": https://stackoverflow.com/a/57477060
+    # Python- flake8 include pydoclint
+    "ruff check",
+    "flake8",
+    # Rust- _clippy includes "cargo check": https://stackoverflow.com/a/57477060
+    "cargo clippy --release --examples",
+    "cargo doc --release --examples"
 ], help = "lint Python and Rust sources" }
 # Most Tests
 test = { cmd = "pytest", help="run all pytest tests" }
@@ -100,7 +104,7 @@ gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
 # https://github.com/pdm-project/pdm/blob/73651b7a948679d31f4d00e8b14c8a51009126e8/src/pdm/cli/commands/run.py#L179
 demo = { cmd = "examples/attosoc.py", help="create AttoSoC Sentinel demo bitstream" }
 demo-rust = { composite = [
-    "_rust-firmware",
+    "cargo build --release --example=attosoc",
     "demo -g target/riscv32i-unknown-none-elf/release/examples/attosoc -b build-rust {args}"
 ], help = "create AttoSoC Sentinel demo bitstream (Rust version)"}
 # DoIt wrappers. Prefer using these over running DoIt directly.
@@ -138,20 +142,6 @@ help = "update Ruff linter on MSYS2- work around Rust issue #109797"
 [tool.pdm.scripts.test-quick]
 cmd = "pytest -k \"test_top or test_upstream or test_witness\""
 help = "run quick subset of pytest tests"
-
-[tool.pdm.scripts._rust-firmware]
-cmd = "cargo build -p sentinel-rt --release --target=riscv32i-unknown-none-elf --example=attosoc"
-# --threads=1 fixes Windows issue: https://github.com/rust-lang/rust/issues/115985
-env = { RUSTFLAGS="-C link-arg=--threads=1 -C link-arg=-Tsentinel-rt/examples/device.x" }
-help = "compile sentinel-rt demo firmware for AttoSoC"
-
-[tool.pdm.scripts._clippy]
-cmd = "cargo clippy --release --target=riscv32i-unknown-none-elf --examples"
-help = "run clippy against rust sources"
-
-[tool.pdm.scripts._rustdoc]
-cmd = "cargo doc --release --target=riscv32i-unknown-none-elf --examples"
-help = "run rustdoc against rust sources"
 
 [tool.pdm.scripts.rvformal-status]
 cmd = "doit list_sby_status:{args}"
