@@ -5,7 +5,7 @@
 groups = ["default", "examples", "riscof", "dev", "remote", "lint"]
 strategy = ["cross_platform"]
 lock_version = "4.4"
-content_hash = "sha256:da1b26a0aac9084491cc78b98cbdca4277172b781c5dd7cca6c223912dfed226"
+content_hash = "sha256:66348a3928dd236fe5cbae432e89874c7b65dc7cbc5772a2ee26225fe2798346"
 
 [[package]]
 name = "amaranth"

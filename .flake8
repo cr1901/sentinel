@@ -1,7 +1,22 @@
 [flake8]
-exclude = .git/,
-          __pycache__/,
-          .venv/,
+extend-exclude = .venv/,
+          # .pdm-plugins, specifically
+          .pdm-*/,
+          # External code
           tests/upstream/riscv-tests/,
           tests/formal/riscv-formal/,
-          tests/riscof/sail_cSim/
+          tests/riscof/sail_cSim/,
+          # Private testing directories on local machine
+          MCVE,
+          plugins
+# F is supported well in Ruff. E and W? Not so much. See:
+# https://docs.astral.sh/ruff/rules/#pyflakes-f
+# https://docs.astral.sh/ruff/rules/#error-e
+# https://docs.astral.sh/ruff/rules/#warning-w
+# Also see the following issues:
+# https://github.com/astral-sh/ruff/issues/2402
+# https://github.com/astral-sh/ruff/issues/458
+select=E1,E2,E3,W,DOC
+style=numpy
+skip_checking_short_docstrings=False
+arg_type_hints_in_signature=False

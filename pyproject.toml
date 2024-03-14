@@ -29,6 +29,24 @@ markers = [
 ]
 addopts="--ignore=tests/upstream/binaries"
 
+[tool.ruff]
+src = [ "src", "tests" ]  # https://docs.astral.sh/ruff/faq/#how-does-ruff-determine-which-of-my-imports-are-first-party-third-party-etc
+external = [ "DOC" ]  # pydoclint
+line-length = 79  # flake8 compat
+# These will catch missing docstrings and other nits, which pydoclint doesn't.
+# Also, add stable-but-disabled E checks
+lint.extend-select = ["E4", "E5", "E7", "E9", "D"]
+lint.pydocstyle.convention = "numpy"
+lint.pycodestyle.max-line-length = 79  # flake8 compat
+
+[tool.ruff.lint.per-file-ignores]
+# Tolerate missing strings for tests- they are not a public API.
+"tests/**/*.py" = ["D10"]
+# External code
+"tests/formal/riscv-formal/**" = ["F", "E", "W", "D"]
+"tests/riscof/sail_cSim/**" = ["F", "E", "W", "D"]
+"tests/upstream/riscv-tests/**" = ["F", "E", "W", "D"]
+
 [tool.pyright]
 reportInvalidTypeForm = false
 
