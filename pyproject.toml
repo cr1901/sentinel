@@ -40,7 +40,6 @@ write_to = "sentinel/version.txt"
 dev = [
     "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
     "bronzebeard>=0.2.1",
-    "flake8>=6.1.0",
     "pytest>=7.4.2",
     "doit>=0.36.0",
     "Verilog-VCD>=1.11",
@@ -63,9 +62,14 @@ remote = [
     "amaranth[remote-build] @ git+https://github.com/amaranth-lang/amaranth",
     "paramiko~=2.7"
 ]
+lint = [
+    "ruff>=0.3.2",
+    "flake8>=7.0.0",
+    "pydoclint[flake8]>=0.4.1",
+]
 
 [tool.pdm.scripts]
-lint = { cmd = "flake8", help="lint python sources" }
+lint = { composite = ["ruff check", "flake8", "doc-test"], help="lint python sources" }
 # Most Tests
 test = { cmd = "pytest", help="run all pytest tests" }
 # Generate
@@ -99,6 +103,16 @@ rvformal-all = { composite = [
 ], help="run all RISC-V Formal tests" }
 # RISCOF
 riscof-all = { cmd = "doit run_riscof", help="run all RISCOF tests"}
+
+[tool.pdm.scripts._add-ruff]
+cmd = "pdm add --dev -G lint ruff"
+env = { CARGO_PROFILE_RELEASE_LTO="false" }
+help = "add Ruff linter on MSYS2- work around Rust issue #109797"
+
+[tool.pdm.scripts._update-ruff]
+cmd = "pdm update --dev -G lint ruff"
+env = { CARGO_PROFILE_RELEASE_LTO="false" }
+help = "update Ruff linter on MSYS2- work around Rust issue #109797"
 
 [tool.pdm.scripts.test-quick]
 cmd = "pytest -k \"test_top or test_upstream or test_witness\""
