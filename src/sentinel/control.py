@@ -1,7 +1,7 @@
 from amaranth import Signal, Elaboratable, Module
 from amaranth.lib.wiring import Component, Signature, In, Out
 
-from .decode import OpcodeType
+from .decode import Insn
 from .alu import AluCtrlSignature
 from .ucoderom import UCodeROM
 from .datapath import GPControlSignature, PCControlSignature, \
@@ -30,7 +30,7 @@ class Control(Component):
         # Control inputs
         self.vec_adr = Signal.like(self.ucoderom.fields.target)
         # Direct 5 high bits of opcode.
-        self.opcode = Signal(OpcodeType)
+        self.opcode = Signal(Insn.OpcodeType)
         # RISCV major/minor opcodes compressed into 8 bits to index into
         # ucode ROM. Chosen through trial and error.
         self.requested_op = Signal(8)
