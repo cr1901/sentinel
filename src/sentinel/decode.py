@@ -1,6 +1,6 @@
 from amaranth import Signal, Module, Cat, Value, C, unsigned
 from amaranth.lib import enum
-from amaranth.lib.data import Struct
+from amaranth.lib.data import Struct, StructLayout
 from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .csr import MCause, Quadrant, AccessMode
@@ -110,6 +110,90 @@ class Insn:
         return self.raw[-1]
 
 
+class CSRAccessControl(Component):
+    def __init__(self):
+        # illegal: bit 0 set
+        # zero: bit 1 set
+        # mstatus, mie, mtvec, mscratch, mepc, mcause, mip: both bits clear
+        # ^These registers are actually implemented.
+        self.init = [1] * 1024  # By default, access is illegal.
+
+        sig = {
+            "addr": Out(12),
+            "data": In(StructLayout({
+                "ill": unsigned(1),
+                "ro": unsigned(1)
+            })),
+        }
+
+        self._rom_init()
+        super().__init__(Signature(sig).flip())
+
+    def elaborate(self, platform):
+        m = Module()
+
+        # FIXME: Use _CSR somehow to make self.addr slicing nicer?
+        with m.Switch(Cat(self.addr[0:8], self.addr[10:])):
+            for i, v in enumerate(self.init):
+                with m.Case(i):
+                    m.d.sync += self.data.eq(v)
+
+        return m
+
+    def _idx(self, csr_addr):
+        return (csr_addr & 0xff) + ((csr_addr & 0xc00) >> 2)
+
+    def _rom_init(self):
+        self.init[self._idx(0xF11)] = 2  # mvendorid
+        self.init[self._idx(0xF12)] = 2  # marchid
+        self.init[self._idx(0xF13)] = 2  # mimpid
+        self.init[self._idx(0xF14)] = 2  # mhartid
+        self.init[self._idx(0xF15)] = 2  # mconfigptr
+        self.init[self._idx(0x300)] = 0  # mstatus
+        self.init[self._idx(0x301)] = 2  # misa
+        self.init[self._idx(0x302)] = 1  # medeleg
+        self.init[self._idx(0x303)] = 1  # mideleg
+        self.init[self._idx(0x304)] = 0  # mie
+        self.init[self._idx(0x305)] = 0  # mtvec
+        self.init[self._idx(0x306)] = 1  # mcounteren
+        self.init[self._idx(0x310)] = 2  # mstatush
+        self.init[self._idx(0x340)] = 0  # mscratch
+        self.init[self._idx(0x341)] = 0  # mepc
+        self.init[self._idx(0x342)] = 0  # mcause
+        self.init[self._idx(0x343)] = 2  # mtval
+        self.init[self._idx(0x344)] = 0  # mip
+        self.init[self._idx(0x34A)] = 1  # mtinst
+        self.init[self._idx(0x34B)] = 1  # mtval2
+        self.init[self._idx(0x30A)] = 1  # menvcfg
+        self.init[self._idx(0x31A)] = 1  # menvcfgh
+        self.init[self._idx(0x747)] = 1  # mseccfg
+        self.init[self._idx(0x757)] = 1  # mseccfgh
+        for i in range(0x3A0, 0x3B0):
+            self.init[self._idx(i)] = 1  # pmpcfg0-15 illegal
+        for i in range(0x3B0, 0x3F0):
+            self.init[self._idx(i)] = 1  # pmpaddr0-63 illegal
+        self.init[self._idx(0xB00)] = 2  # mcycle
+        self.init[self._idx(0xB02)] = 2  # minstret
+        for i in range(0xB03, 0xB1F):
+            self.init[self._idx(i)] = 2  # mhpmcounter3-31
+        self.init[self._idx(0xB80)] = 2  # mcycleh
+        self.init[self._idx(0xB82)] = 2  # minstreth
+        for i in range(0xB83, 0xB8F):
+            self.init[self._idx(i)] = 2  # mhpmcounter3h-31
+        self.init[self._idx(0x320)] = 2  # mcountinhibit
+        for i in range(0x323, 0x340):
+            self.init[self._idx(i)] = 2  # mhpmevent3-31
+        self.init[self._idx(0x7A0)] = 1  # tselect
+        self.init[self._idx(0x7A1)] = 1
+        self.init[self._idx(0x7A2)] = 1
+        self.init[self._idx(0x7A3)] = 1  # tdata1-3
+        self.init[self._idx(0x7A8)] = 1  # mcontext
+        self.init[self._idx(0x7B0)] = 1  # dcsr
+        self.init[self._idx(0x7B1)] = 1  # dpc
+        self.init[self._idx(0x7B2)] = 1  # dscratch0
+        self.init[self._idx(0x7B3)] = 1  # dscratch1
+
+
 class DecodeException(Struct):
     valid: unsigned(1)
     e_type: MCause.Cause
@@ -118,6 +202,7 @@ class DecodeException(Struct):
 class Decode(Component):
     def __init__(self, *, formal=False):
         self.formal = formal
+        self.csr_ctrl = CSRAccessControl()
 
         sig = {
             "do_decode": Out(1),
@@ -156,18 +241,15 @@ class Decode(Component):
     def elaborate(self, platform):
         m = Module()
 
+        m.submodules.csr_ctrl = self.csr_ctrl
+
         insn = Insn(self.insn)
 
         m.d.comb += [
             self.opcode.eq(insn.opcode),
-            self.src_a_unreg.eq(insn.rs1)
+            self.src_a_unreg.eq(insn.rs1),
+            self.csr_ctrl.addr.eq(insn.csr.addr)
         ]
-
-        csr_map = Signal(2)
-        with m.Switch(Cat(insn.csr.addr[0:8], insn.csr.access)):
-            for i, v in enumerate(self.mmode_csr_quadrant_init()):
-                with m.Case(i):
-                    m.d.sync += csr_map.eq(v)
 
         forward_csr = Signal()
         csr_quadrant = Signal(Quadrant)
@@ -313,25 +395,20 @@ class Decode(Component):
 
         # Second decode cycle if this is a CSR access.
         with m.If(forward_csr):
-            ro0 = Signal()
-            illegal = Signal()
-
-            m.d.comb += illegal.eq(csr_map[0])
-            m.d.comb += ro0.eq(csr_map[1])
             m.d.sync += self.exception.e_type.eq(MCause.Cause.ILLEGAL_INSN)
             m.d.sync += self.exception.valid.eq(0)
 
             with m.Switch(csr_quadrant):
                 # Machine Mode CSRs.
-                with m.Case(0b11):
+                with m.Case(Quadrant.MACHINE):
                     # Most CSR accesses.
-                    with m.If(illegal):
+                    with m.If(self.csr_ctrl.data.ill):
                         m.d.sync += self.exception.valid.eq(1)
 
                     # Read-only Zero CSRs. Includes CSRs that are in actually
                     # read-only space (top 2 bits set), all of which are 0
                     # for this core.
-                    with m.Elif(ro0):
+                    with m.Elif(self.csr_ctrl.data.ro):
                         # AFAICT, writing to ro0 registers outside of the
                         # read-only space should succeed (but the write is
                         # ignored).
@@ -413,64 +490,3 @@ class Decode(Component):
                   (self.opcode == Insn.OpcodeType.STORE)))
 
         return m
-
-    def mmode_csr_quadrant_init(self):
-        def idx(csr_addr):
-            return (csr_addr & 0xff) + ((csr_addr & 0xc00) >> 2)
-
-        # illegal: bit 0 set
-        # zero: bit 1 set
-        # mstatus, mie, mtvec, mscratch, mepc, mcause, mip: both bits clear
-        # ^These registers are actually implemented.
-        init = [1]*1024  # By default, access is illegal.
-
-        init[idx(0xF11)] = 2  # mvendorid
-        init[idx(0xF12)] = 2  # marchid
-        init[idx(0xF13)] = 2  # mimpid
-        init[idx(0xF14)] = 2  # mhartid
-        init[idx(0xF15)] = 2  # mconfigptr
-        init[idx(0x300)] = 0  # mstatus
-        init[idx(0x301)] = 2  # misa
-        init[idx(0x302)] = 1  # medeleg
-        init[idx(0x303)] = 1  # mideleg
-        init[idx(0x304)] = 0  # mie
-        init[idx(0x305)] = 0  # mtvec
-        init[idx(0x306)] = 1  # mcounteren
-        init[idx(0x310)] = 2  # mstatush
-        init[idx(0x340)] = 0  # mscratch
-        init[idx(0x341)] = 0  # mepc
-        init[idx(0x342)] = 0  # mcause
-        init[idx(0x343)] = 2  # mtval
-        init[idx(0x344)] = 0  # mip
-        init[idx(0x34A)] = 1  # mtinst
-        init[idx(0x34B)] = 1  # mtval2
-        init[idx(0x30A)] = 1  # menvcfg
-        init[idx(0x31A)] = 1  # menvcfgh
-        init[idx(0x747)] = 1  # mseccfg
-        init[idx(0x757)] = 1  # mseccfgh
-        for i in range(0x3A0, 0x3B0):
-            init[idx(i)] = 1  # pmpcfg0-15 illegal
-        for i in range(0x3B0, 0x3F0):
-            init[idx(i)] = 1  # pmpaddr0-63 illegal
-        init[idx(0xB00)] = 2  # mcycle
-        init[idx(0xB02)] = 2  # minstret
-        for i in range(0xB03, 0xB1F):
-            init[idx(i)] = 2  # mhpmcounter3-31
-        init[idx(0xB80)] = 2  # mcycleh
-        init[idx(0xB82)] = 2  # minstreth
-        for i in range(0xB83, 0xB8F):
-            init[idx(i)] = 2  # mhpmcounter3h-31
-        init[idx(0x320)] = 2  # mcountinhibit
-        for i in range(0x323, 0x340):
-            init[idx(i)] = 2  # mhpmevent3-31
-        init[idx(0x7A0)] = 1  # tselect
-        init[idx(0x7A1)] = 1
-        init[idx(0x7A2)] = 1
-        init[idx(0x7A3)] = 1  # tdata1-3
-        init[idx(0x7A8)] = 1  # mcontext
-        init[idx(0x7B0)] = 1  # dcsr
-        init[idx(0x7B1)] = 1  # dpc
-        init[idx(0x7B2)] = 1  # dscratch0
-        init[idx(0x7B3)] = 1  # dscratch1
-
-        return init
