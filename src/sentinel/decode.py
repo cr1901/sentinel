@@ -1,13 +1,12 @@
-from amaranth import Signal, Module, Cat, Value, C, unsigned, ValueCastable, \
-    ShapeCastable
+from amaranth import Signal, Module, Cat, Value, C, unsigned
 from amaranth.lib import enum
-from amaranth.lib.data import Struct, FlexibleLayout, View, Field, Layout
+from amaranth.lib.data import Struct
 from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .csr import MCause, Quadrant, AccessMode
 
 
-class Insn(View):
+class Insn:
     """View of all immediately-apparent information in a RISC-V instruction."""
 
     # "Immediately-apparent" means "I can get this info with Cats, Slices,
@@ -15,16 +14,10 @@ class Insn(View):
 
     # Does not inherit from View because Layouts are not designed to retrieve
     # non-contiguous bits.
-    class _Imm(ValueCastable):
-        def __init__(self, insn):
-            self.sign = insn[-1]
-            self.raw = insn
-
-        def as_value(self):
-            return self.raw
-
-        def shape(self):
-            return Insn._ImmShape()
+    class _Imm:
+        def __init__(self, value):
+            self.raw = value
+            self.sign = self.raw[-1]
 
         @property
         def I(self):  # noqa: E743
@@ -49,17 +42,23 @@ class Insn(View):
             return Cat(C(0), self.raw[21:25], self.raw[25:31], self.raw[20],
                        self.raw[12:20], Value.replicate(self.sign, 12))
 
-    class _ImmShape(ShapeCastable):
-        def as_shape(self):
-            return unsigned(32)
+    class _CSR:
+        def __init__(self, value):
+            self.raw = value[20:]
 
-        def __call__(self, target):
-            return Insn._Imm(target)
+        @property
+        def addr(self):
+            return self.raw
 
-        # There is no reason to initialize to this layout.
-        const = None
+        @property
+        def quadrant(self):
+            return enum.EnumView(Quadrant, self.raw[8:10])
 
-    class OpcodeType(enum.Enum):
+        @property
+        def access(self):
+            return enum.EnumView(AccessMode, self.raw[10:])
+
+    class OpcodeType(enum.Enum, shape=unsigned(5)):
         OP_IMM = 0b00100
         LUI = 0b01101
         AUIPC = 0b00101
@@ -74,22 +73,41 @@ class Insn(View):
         SYSTEM = 0b11100
 
     def __init__(self, value):
-        super().__init__(FlexibleLayout(32, {
-            "opcode": Field(Insn.OpcodeType, 2),
-            "rd": Field(unsigned(5), 7),
-            "funct3": Field(unsigned(3), 12),
-            "rs1": Field(unsigned(5), 15),
-            "rs2": Field(unsigned(5), 20),
-            "funct7": Field(unsigned(7), 25),
-            "funct12": Field(unsigned(12), 20),
-            "sign": Field(unsigned(1), 31),
-            "csr": Field(FlexibleLayout(12, {
-                "addr": Field(unsigned(12), 0),
-                "quadrant": Field(Quadrant, 8),
-                "access": Field(AccessMode, 10)
-            }), 20),
-            "imm": Field(Insn._ImmShape(), 0)
-        }), value)
+        self.raw = value
+        self.imm = Insn._Imm(self.raw)
+        self.csr = Insn._CSR(self.raw)
+
+    @property
+    def opcode(self):
+        return Insn.OpcodeType(self.raw[2:7])
+
+    @property
+    def rd(self):
+        return self.raw[7:12]
+
+    @property
+    def funct3(self):
+        return self.raw[12:15]
+
+    @property
+    def rs1(self):
+        return self.raw[15:20]
+
+    @property
+    def rs2(self):
+        return self.raw[20:25]
+
+    @property
+    def funct7(self):
+        return self.raw[25:]
+
+    @property
+    def funct12(self):
+        return self.raw[20:]
+
+    @property
+    def sign(self):
+        return self.raw[-1]
 
 
 class DecodeException(Struct):

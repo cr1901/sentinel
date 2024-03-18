@@ -6,14 +6,14 @@ from amaranth.lib.data import Struct
 # for Sentinel. And even then, only the used fields are explicitly laid out.
 
 
-class AccessMode(Enum):
+class AccessMode(Enum, shape=unsigned(2)):
     _READ_WRITE_00 = 0b00
     _READ_WRITE_01 = 0b01
     _READ_WRITE_02 = 0b10
     READ_ONLY = 0b11
 
 
-class Quadrant(Enum):
+class Quadrant(Enum, shape=unsigned(2)):
     UNPRIVILEGED = 0b00
     SUPERVISOR = 0b01
     HYPERVISOR = 0b10
