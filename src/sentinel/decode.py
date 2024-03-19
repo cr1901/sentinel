@@ -42,6 +42,27 @@ class Insn:
             return Cat(C(0), self.raw[21:25], self.raw[25:31], self.raw[20],
                        self.raw[12:20], Value.replicate(self.sign, 12))
 
+        def from_opcode_type(self, opcode):
+            match opcode:
+                case Insn.OpcodeType.OP_IMM | Insn.OpcodeType.JALR | \
+                        Insn.OpcodeType.LOAD:
+                    return self.I
+                case Insn.OpcodeType.LUI | Insn.OpcodeType.AUIPC:
+                    return self.U
+                case Insn.OpcodeType.OP | Insn.OpcodeType.CUSTOM_0 | \
+                        Insn.OpcodeType.MISC_MEM | Insn.OpcodeType.SYSTEM:
+                    return None
+                case Insn.OpcodeType.JAL:
+                    return self.J
+                case Insn.OpcodeType.BRANCH:
+                    return self.B
+                case Insn.OpcodeType.STORE:
+                    return self.S
+                case _:
+                    raise NotImplementedError(
+                        f"cannot determine immediate type for an opcode of "
+                        f"type {opcode}")
+
     class _CSR:
         def __init__(self, value):
             self.raw = value[20:]
@@ -277,11 +298,16 @@ class Decode(Component):
                 self.dst.eq(insn.rd),
             ]
 
+            with m.Switch(self.opcode):
+                for op in Insn.OpcodeType:
+                    imm_from_insn = insn.imm.from_opcode_type(op)
+                    if imm_from_insn is not None:
+                        with m.Case(op):
+                            m.d.sync += self.imm.eq(imm_from_insn)
+
             # TODO: Might be worth hoisting comb statements out of m.If?
             with m.Switch(self.opcode):
                 with m.Case(Insn.OpcodeType.OP_IMM):
-                    m.d.sync += self.imm.eq(insn.imm.I)
-
                     with m.If((insn.funct3 == 1) | (insn.funct3 == 5)):
                         op_map = Cat(insn.funct3, insn.funct7[-2], C(4))
                         with m.If(insn.funct3 == 1):
@@ -295,10 +321,8 @@ class Decode(Component):
                         op_map = Cat(insn.funct3, 0, C(4))
                         m.d.sync += self.requested_op.eq(op_map)
                 with m.Case(Insn.OpcodeType.LUI):
-                    m.d.sync += self.imm.eq(insn.imm.U)
                     m.d.sync += self.requested_op.eq(0xD0)
                 with m.Case(Insn.OpcodeType.AUIPC):
-                    m.d.sync += self.imm.eq(insn.imm.U)
                     m.d.sync += self.requested_op.eq(0x50)
                 with m.Case(Insn.OpcodeType.OP):
                     op_map = Cat(insn.funct3, insn.funct7[-2], C(0xC))
@@ -311,30 +335,25 @@ class Decode(Component):
                             m.d.sync += self.exception.valid.eq(1)
                         m.d.sync += self.requested_op.eq(op_map)
                 with m.Case(Insn.OpcodeType.JAL):
-                    m.d.sync += self.imm.eq(insn.imm.J)
                     m.d.sync += self.requested_op.eq(0xB0)
                 with m.Case(Insn.OpcodeType.JALR):
-                    m.d.sync += self.imm.eq(insn.imm.I)
                     m.d.sync += self.requested_op.eq(0x98)
 
                     with m.If(insn.funct3 != 0):
                         m.d.sync += self.exception.valid.eq(1)
                 with m.Case(Insn.OpcodeType.BRANCH):
-                    m.d.sync += self.imm.eq(insn.imm.B)
                     m.d.sync += self.requested_op.eq(Cat(insn.funct3, C(0x11)))
 
                     with m.If((insn.funct3 == 2) | (insn.funct3 == 3)):
                         m.d.sync += self.exception.valid.eq(1)
                 with m.Case(Insn.OpcodeType.LOAD):
                     op_map = Cat(insn.funct3, C(1))
-                    m.d.sync += self.imm.eq(insn.imm.I)
                     m.d.sync += self.requested_op.eq(op_map)
 
                     with m.If((insn.funct3 == 3) | (insn.funct3 == 6) | (insn.funct3 == 7)):
                         m.d.sync += self.exception.valid.eq(1)
                 with m.Case(Insn.OpcodeType.STORE):
                     op_map = Cat(insn.funct3, C(0x10))
-                    m.d.sync += self.imm.eq(insn.imm.S)
                     m.d.sync += self.requested_op.eq(op_map)
 
                     with m.If(insn.funct3 >= 3):
