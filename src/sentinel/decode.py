@@ -3,7 +3,7 @@ from amaranth.lib import enum
 from amaranth.lib.data import Struct, StructLayout
 from amaranth.lib.wiring import Component, Signature, In, Out
 
-from .csr import MCause, Quadrant, AccessMode
+from .csr import MCause, Quadrant, AccessMode, MachineAddr as CSRM
 
 
 class Insn:
@@ -111,12 +111,39 @@ class Insn:
 
 
 class CSRAccessControl(Component):
+    _DataLayout = StructLayout({
+        "ill": unsigned(1),
+        "ro": unsigned(1)
+    })
+    _Implemented = C({}, _DataLayout)
+    _Illegal = C({"ill": 1}, _DataLayout)
+    _Ro0 = C({"ro": 1}, _DataLayout)
+
+    # No plans to support Supervisor Mode, but User Mode might be worthwhile.
+    class _MachineROM:
+        def __init__(self, init):
+            self.rom = init
+
+        def idx(self, csr_addr):
+            return (csr_addr & 0xff) + ((csr_addr & 0xc00) >> 2)
+
+        def __getitem__(self, k):
+            self.rom[self.idx(k)]
+
+        def __setitem__(self, k, v):
+            self.rom[self.idx(k)] = v
+
+        def __iter__(self):
+            return iter(self.rom)
+
     def __init__(self):
         # illegal: bit 0 set
         # zero: bit 1 set
         # mstatus, mie, mtvec, mscratch, mepc, mcause, mip: both bits clear
         # ^These registers are actually implemented.
-        self.init = [1] * 1024  # By default, access is illegal.
+        # By default, access is illegal.
+        self._machine = CSRAccessControl._MachineROM(
+            [CSRAccessControl._Illegal] * 1024)
 
         sig = {
             "addr": Out(12),
@@ -126,72 +153,48 @@ class CSRAccessControl(Component):
             })),
         }
 
-        self._rom_init()
+        self._machine_rom_init()
         super().__init__(Signature(sig).flip())
 
     def elaborate(self, platform):
         m = Module()
 
         # FIXME: Use _CSR somehow to make self.addr slicing nicer?
+        # Use cases to let the optimizer decide whether to use a BRAM or not.
         with m.Switch(Cat(self.addr[0:8], self.addr[10:])):
-            for i, v in enumerate(self.init):
+            for i, v in enumerate(self._machine):
                 with m.Case(i):
                     m.d.sync += self.data.eq(v)
 
         return m
 
-    def _idx(self, csr_addr):
-        return (csr_addr & 0xff) + ((csr_addr & 0xc00) >> 2)
-
-    def _rom_init(self):
-        self.init[self._idx(0xF11)] = 2  # mvendorid
-        self.init[self._idx(0xF12)] = 2  # marchid
-        self.init[self._idx(0xF13)] = 2  # mimpid
-        self.init[self._idx(0xF14)] = 2  # mhartid
-        self.init[self._idx(0xF15)] = 2  # mconfigptr
-        self.init[self._idx(0x300)] = 0  # mstatus
-        self.init[self._idx(0x301)] = 2  # misa
-        self.init[self._idx(0x302)] = 1  # medeleg
-        self.init[self._idx(0x303)] = 1  # mideleg
-        self.init[self._idx(0x304)] = 0  # mie
-        self.init[self._idx(0x305)] = 0  # mtvec
-        self.init[self._idx(0x306)] = 1  # mcounteren
-        self.init[self._idx(0x310)] = 2  # mstatush
-        self.init[self._idx(0x340)] = 0  # mscratch
-        self.init[self._idx(0x341)] = 0  # mepc
-        self.init[self._idx(0x342)] = 0  # mcause
-        self.init[self._idx(0x343)] = 2  # mtval
-        self.init[self._idx(0x344)] = 0  # mip
-        self.init[self._idx(0x34A)] = 1  # mtinst
-        self.init[self._idx(0x34B)] = 1  # mtval2
-        self.init[self._idx(0x30A)] = 1  # menvcfg
-        self.init[self._idx(0x31A)] = 1  # menvcfgh
-        self.init[self._idx(0x747)] = 1  # mseccfg
-        self.init[self._idx(0x757)] = 1  # mseccfgh
-        for i in range(0x3A0, 0x3B0):
-            self.init[self._idx(i)] = 1  # pmpcfg0-15 illegal
-        for i in range(0x3B0, 0x3F0):
-            self.init[self._idx(i)] = 1  # pmpaddr0-63 illegal
-        self.init[self._idx(0xB00)] = 2  # mcycle
-        self.init[self._idx(0xB02)] = 2  # minstret
-        for i in range(0xB03, 0xB1F):
-            self.init[self._idx(i)] = 2  # mhpmcounter3-31
-        self.init[self._idx(0xB80)] = 2  # mcycleh
-        self.init[self._idx(0xB82)] = 2  # minstreth
-        for i in range(0xB83, 0xB8F):
-            self.init[self._idx(i)] = 2  # mhpmcounter3h-31
-        self.init[self._idx(0x320)] = 2  # mcountinhibit
-        for i in range(0x323, 0x340):
-            self.init[self._idx(i)] = 2  # mhpmevent3-31
-        self.init[self._idx(0x7A0)] = 1  # tselect
-        self.init[self._idx(0x7A1)] = 1
-        self.init[self._idx(0x7A2)] = 1
-        self.init[self._idx(0x7A3)] = 1  # tdata1-3
-        self.init[self._idx(0x7A8)] = 1  # mcontext
-        self.init[self._idx(0x7B0)] = 1  # dcsr
-        self.init[self._idx(0x7B1)] = 1  # dpc
-        self.init[self._idx(0x7B2)] = 1  # dscratch0
-        self.init[self._idx(0x7B3)] = 1  # dscratch1
+    def _machine_rom_init(self):
+        self._machine[CSRM.MVENDORID] = CSRAccessControl._Ro0
+        self._machine[CSRM.MARCHID] = CSRAccessControl._Ro0
+        self._machine[CSRM.MIMPID] = CSRAccessControl._Ro0
+        self._machine[CSRM.MHARTID] = CSRAccessControl._Ro0
+        self._machine[CSRM.MCONFIGPTR] = CSRAccessControl._Ro0
+        self._machine[CSRM.MSTATUS] = CSRAccessControl._Implemented
+        self._machine[CSRM.MISA] = CSRAccessControl._Ro0
+        self._machine[CSRM.MIE] = CSRAccessControl._Implemented
+        self._machine[CSRM.MTVEC] = CSRAccessControl._Implemented
+        self._machine[CSRM.MSTATUSH] = CSRAccessControl._Ro0
+        self._machine[CSRM.MSCRATCH] = CSRAccessControl._Implemented
+        self._machine[CSRM.MEPC] = CSRAccessControl._Implemented
+        self._machine[CSRM.MCAUSE] = CSRAccessControl._Implemented
+        self._machine[CSRM.MTVAL] = CSRAccessControl._Ro0
+        self._machine[CSRM.MIP] = CSRAccessControl._Implemented
+        self._machine[CSRM.MCYCLE] = CSRAccessControl._Ro0
+        self._machine[CSRM.MINSTRET] = CSRAccessControl._Ro0
+        for i in range(CSRM.MHPMCOUNTER3, CSRM.MHPMCOUNTER31 + 1):
+            self._machine[i] = CSRAccessControl._Ro0
+        self._machine[CSRM.MCYCLEH] = CSRAccessControl._Ro0
+        self._machine[CSRM.MINSTRETH] = CSRAccessControl._Ro0
+        for i in range(CSRM.MHPMCOUNTER3H, CSRM.MHPMCOUNTER31H + 1):
+            self._machine[i] = CSRAccessControl._Ro0
+        self._machine[CSRM.MCOUNTINHIBIT] = CSRAccessControl._Ro0
+        for i in range(CSRM.MHPMEVENT3, CSRM.MHPMEVENT31 + 1):
+            self._machine[i] = CSRAccessControl._Ro0  # mhpmevent3-31
 
 
 class DecodeException(Struct):
