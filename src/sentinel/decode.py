@@ -42,27 +42,6 @@ class Insn:
             return Cat(C(0), self.raw[21:25], self.raw[25:31], self.raw[20],
                        self.raw[12:20], Value.replicate(self.sign, 12))
 
-        def from_opcode_type(self, opcode):
-            match opcode:
-                case Insn.OpcodeType.OP_IMM | Insn.OpcodeType.JALR | \
-                        Insn.OpcodeType.LOAD:
-                    return self.I
-                case Insn.OpcodeType.LUI | Insn.OpcodeType.AUIPC:
-                    return self.U
-                case Insn.OpcodeType.OP | Insn.OpcodeType.CUSTOM_0 | \
-                        Insn.OpcodeType.MISC_MEM | Insn.OpcodeType.SYSTEM:
-                    return None
-                case Insn.OpcodeType.JAL:
-                    return self.J
-                case Insn.OpcodeType.BRANCH:
-                    return self.B
-                case Insn.OpcodeType.STORE:
-                    return self.S
-                case _:
-                    raise NotImplementedError(
-                        f"cannot determine immediate type for an opcode of "
-                        f"type {opcode}")
-
     class _CSR:
         def __init__(self, value):
             self.raw = value[20:]
@@ -218,6 +197,43 @@ class CSRAccessControl(Component):
             self._machine[i] = CSRAccessControl._Ro0  # mhpmevent3-31
 
 
+class ImmediateGenerator(Component):
+    def __init__(self):
+        sig = {
+            "enable": Out(1),
+            "insn": Out(32),
+            "imm": In(32)
+        }
+
+        super().__init__(Signature(sig).flip())
+
+    def elaborate(self, platform):
+        m = Module()
+
+        insn = Insn(self.insn)
+
+        with m.If(self.enable):
+            with m.Switch(insn.opcode):
+                with m.Case(Insn.OpcodeType.OP_IMM):
+                    m.d.sync += self.imm.eq(insn.imm.I)
+                with m.Case(Insn.OpcodeType.JALR):
+                    m.d.sync += self.imm.eq(insn.imm.I)
+                with m.Case(Insn.OpcodeType.LOAD):
+                    m.d.sync += self.imm.eq(insn.imm.I)
+                with m.Case(Insn.OpcodeType.LUI):
+                    m.d.sync += self.imm.eq(insn.imm.U)
+                with m.Case(Insn.OpcodeType.AUIPC):
+                    m.d.sync += self.imm.eq(insn.imm.U)
+                with m.Case(Insn.OpcodeType.JAL):
+                    m.d.sync += self.imm.eq(insn.imm.J)
+                with m.Case(Insn.OpcodeType.BRANCH):
+                    m.d.sync += self.imm.eq(insn.imm.B)
+                with m.Case(Insn.OpcodeType.STORE):
+                    m.d.sync += self.imm.eq(insn.imm.S)
+
+        return m
+
+
 class DecodeException(Struct):
     valid: unsigned(1)
     e_type: MCause.Cause
@@ -227,6 +243,7 @@ class Decode(Component):
     def __init__(self, *, formal=False):
         self.formal = formal
         self.csr_ctrl = CSRAccessControl()
+        self.imm_gen = ImmediateGenerator()
 
         sig = {
             "do_decode": Out(1),
@@ -266,13 +283,19 @@ class Decode(Component):
         m = Module()
 
         m.submodules.csr_ctrl = self.csr_ctrl
+        m.submodules.imm_gen = self.imm_gen
 
         insn = Insn(self.insn)
 
         m.d.comb += [
             self.opcode.eq(insn.opcode),
             self.src_a_unreg.eq(insn.rs1),
-            self.csr_ctrl.addr.eq(insn.csr.addr)
+            self.imm.eq(self.imm_gen.imm),
+
+            self.csr_ctrl.addr.eq(insn.csr.addr),
+
+            self.imm_gen.enable.eq(self.do_decode),
+            self.imm_gen.insn.eq(self.insn),
         ]
 
         forward_csr = Signal()
@@ -297,13 +320,6 @@ class Decode(Component):
                 self.src_b.eq(insn.rs2),
                 self.dst.eq(insn.rd),
             ]
-
-            with m.Switch(self.opcode):
-                for op in Insn.OpcodeType:
-                    imm_from_insn = insn.imm.from_opcode_type(op)
-                    if imm_from_insn is not None:
-                        with m.Case(op):
-                            m.d.sync += self.imm.eq(imm_from_insn)
 
             # TODO: Might be worth hoisting comb statements out of m.If?
             with m.Switch(self.opcode):
