@@ -321,17 +321,13 @@ class Decode(Component):
                 self.dst.eq(insn.rd),
             ]
 
+        # Mapping ROM
+        with m.If(self.do_decode):
             # TODO: Might be worth hoisting comb statements out of m.If?
             with m.Switch(self.opcode):
                 with m.Case(Insn.OpcodeType.OP_IMM):
                     with m.If((insn.funct3 == 1) | (insn.funct3 == 5)):
                         op_map = Cat(insn.funct3, insn.funct7[-2], C(4))
-                        with m.If(insn.funct3 == 1):
-                            with m.If(insn.funct7 != 0):
-                                m.d.sync += self.exception.valid.eq(1)
-                        with m.Else():
-                            with m.If((insn.funct7 != 0) & (insn.funct7 != 0b0100000)):  # noqa: E501
-                                m.d.sync += self.exception.valid.eq(1)
                         m.d.sync += self.requested_op.eq(op_map)
                     with m.Else():
                         op_map = Cat(insn.funct3, 0, C(4))
@@ -342,71 +338,32 @@ class Decode(Component):
                     m.d.sync += self.requested_op.eq(0x50)
                 with m.Case(Insn.OpcodeType.OP):
                     op_map = Cat(insn.funct3, insn.funct7[-2], C(0xC))
-                    with m.If((insn.funct3 == 0) | (insn.funct3 == 5)):
-                        with m.If((insn.funct7 != 0) & (insn.funct7 != 0b0100000)):  # noqa: E501
-                            m.d.sync += self.exception.valid.eq(1)
-                        m.d.sync += self.requested_op.eq(op_map)
-                    with m.Else():
-                        with m.If(insn.funct7 != 0):
-                            m.d.sync += self.exception.valid.eq(1)
-                        m.d.sync += self.requested_op.eq(op_map)
+                    m.d.sync += self.requested_op.eq(op_map)
                 with m.Case(Insn.OpcodeType.JAL):
                     m.d.sync += self.requested_op.eq(0xB0)
                 with m.Case(Insn.OpcodeType.JALR):
                     m.d.sync += self.requested_op.eq(0x98)
-
-                    with m.If(insn.funct3 != 0):
-                        m.d.sync += self.exception.valid.eq(1)
                 with m.Case(Insn.OpcodeType.BRANCH):
                     m.d.sync += self.requested_op.eq(Cat(insn.funct3, C(0x11)))
-
-                    with m.If((insn.funct3 == 2) | (insn.funct3 == 3)):
-                        m.d.sync += self.exception.valid.eq(1)
                 with m.Case(Insn.OpcodeType.LOAD):
                     op_map = Cat(insn.funct3, C(1))
                     m.d.sync += self.requested_op.eq(op_map)
-
-                    with m.If((insn.funct3 == 3) | (insn.funct3 == 6) | (insn.funct3 == 7)):
-                        m.d.sync += self.exception.valid.eq(1)
                 with m.Case(Insn.OpcodeType.STORE):
                     op_map = Cat(insn.funct3, C(0x10))
                     m.d.sync += self.requested_op.eq(op_map)
-
-                    with m.If(insn.funct3 >= 3):
-                        m.d.sync += self.exception.valid.eq(1)
-                with m.Case(Insn.OpcodeType.CUSTOM_0):
-                    m.d.sync += self.exception.valid.eq(1)
                 with m.Case(Insn.OpcodeType.MISC_MEM):
-                    # RS1 and RD should be ignored for FENCE insn in a base
-                    # impl.
                     m.d.sync += self.requested_op.eq(0x30)
-
-                    with m.If(insn.funct3 != 0):
-                        m.d.sync += self.exception.valid.eq(1)
                 with m.Case(Insn.OpcodeType.SYSTEM):
                     m.d.sync += self.exception.valid.eq(1)
                     with m.Switch(insn.funct3):
                         zeroes = (insn.rs1 == 0) & (insn.rd == 0)
                         with m.Case(0):
-                            with m.If((insn.funct12 == 0) & zeroes):
-                                # ecall
-                                m.d.sync += self.exception.e_type.eq(MCause.Cause.ECALL_MMODE)  # noqa: E501
-                            with m.Elif((insn.funct12 == 1) & zeroes):
-                                # ebreak
-                                m.d.sync += self.exception.e_type.eq(MCause.Cause.BREAKPOINT)  # noqa: E501
-                            with m.Elif((insn.funct12 == 0b001100000010) & zeroes):
+                            with m.If((insn.funct12 == 0b001100000010) & zeroes):
                                 # mret
-                                m.d.sync += [
-                                    self.requested_op.eq(248),
-                                    self.exception.valid.eq(0)
-                                ]
+                                m.d.sync += self.requested_op.eq(248)
                             with m.Elif((insn.funct12 == 0b000100000101) & zeroes):
                                 # wfi
-                                m.d.sync += [
-                                    self.requested_op.eq(0x30),
-                                    self.exception.valid.eq(0)
-                                ]
-
+                                m.d.sync += self.requested_op.eq(0x30)
                         with m.Case(4):
                             pass
                         with m.Default():
@@ -415,52 +372,21 @@ class Decode(Component):
                             # jump to a temporary location. The next cycle
                             # will have the microcode jump to the _real_ CSR
                             # routine.
-                            csr_encode = Cat(insn.funct12[0:3], insn.funct12[6])
-                            m.d.sync += [
-                                self.requested_op.eq(0x24),
-                                forward_csr.eq(1),
-                                self.exception.valid.eq(0),
-                                self.csr_encoding.eq(csr_encode)
-                            ]
-
-                with m.Default():
-                    # Catch-all for all ones.
-                    m.d.sync += self.exception.valid.eq(1)
-
-            # Catch-all for compressed insns, zero insn.
-            with m.If(self.insn[0:2] != 0b11):
-                m.d.sync += self.exception.valid.eq(1)
+                            m.d.sync += self.requested_op.eq(0x24)
 
         # Second decode cycle if this is a CSR access.
         with m.If(forward_csr):
-            m.d.sync += self.exception.e_type.eq(MCause.Cause.ILLEGAL_INSN)
-            m.d.sync += self.exception.valid.eq(0)
-
             with m.Switch(csr_quadrant):
                 # Machine Mode CSRs.
                 with m.Case(Quadrant.MACHINE):
-                    # Most CSR accesses.
                     with m.If(self.csr_ctrl.data.ill):
-                        m.d.sync += self.exception.valid.eq(1)
-
+                        pass
                     # Read-only Zero CSRs. Includes CSRs that are in actually
                     # read-only space (top 2 bits set), all of which are 0
                     # for this core.
                     with m.Elif(self.csr_ctrl.data.ro):
-                        # AFAICT, writing to ro0 registers outside of the
-                        # read-only space should succeed (but the write is
-                        # ignored).
-                        # None of the ro0 registers have side effects either?
                         # csrro0
                         m.d.sync += self.requested_op.eq(0x25)
-                        with m.If(csr_ro_space):
-                            # CSRRW and CSRRWI don't have a mechanism to only
-                            # read a register.
-                            with m.If((csr_op == 1) |
-                                      (csr_op == 5) |
-                                      (self.src_a != 0)):
-                                m.d.sync += self.exception.valid.eq(1)
-
                     with m.Else():
                         # Jump to microcode routines for actual, implemented
                         # CSR registers.
@@ -506,6 +432,120 @@ class Decode(Component):
                             # requested_op has a meaningful value in it.
                             # Make sure this is actually the case.
                             pass
+
+        # Exception Control
+        with m.If(self.do_decode):
+            # TODO: Might be worth hoisting comb statements out of m.If?
+            with m.Switch(self.opcode):
+                with m.Case(Insn.OpcodeType.OP_IMM):
+                    with m.If((insn.funct3 == 1) | (insn.funct3 == 5)):
+                        with m.If(insn.funct3 == 1):
+                            with m.If(insn.funct7 != 0):
+                                m.d.sync += self.exception.valid.eq(1)
+                        with m.Else():
+                            with m.If((insn.funct7 != 0) & (insn.funct7 != 0b0100000)):
+                                m.d.sync += self.exception.valid.eq(1)
+                with m.Case(Insn.OpcodeType.LUI):
+                    pass
+                with m.Case(Insn.OpcodeType.AUIPC):
+                    pass
+                with m.Case(Insn.OpcodeType.OP):
+                    with m.If((insn.funct3 == 0) | (insn.funct3 == 5)):
+                        with m.If((insn.funct7 != 0) & (insn.funct7 != 0b0100000)):  # noqa: E501
+                            m.d.sync += self.exception.valid.eq(1)
+                    with m.Else():
+                        with m.If(insn.funct7 != 0):
+                            m.d.sync += self.exception.valid.eq(1)
+                with m.Case(Insn.OpcodeType.JAL):
+                    pass
+                with m.Case(Insn.OpcodeType.JALR):
+                    with m.If(insn.funct3 != 0):
+                        m.d.sync += self.exception.valid.eq(1)
+                with m.Case(Insn.OpcodeType.BRANCH):
+                    with m.If((insn.funct3 == 2) | (insn.funct3 == 3)):
+                        m.d.sync += self.exception.valid.eq(1)
+                with m.Case(Insn.OpcodeType.LOAD):
+                    with m.If((insn.funct3 == 3) | (insn.funct3 == 6) | (insn.funct3 == 7)):
+                        m.d.sync += self.exception.valid.eq(1)
+                with m.Case(Insn.OpcodeType.STORE):
+                    with m.If(insn.funct3 >= 3):
+                        m.d.sync += self.exception.valid.eq(1)
+                with m.Case(Insn.OpcodeType.CUSTOM_0):
+                    m.d.sync += self.exception.valid.eq(1)
+                with m.Case(Insn.OpcodeType.MISC_MEM):
+                    # RS1 and RD should be ignored for FENCE insn in a base
+                    # impl.
+                    with m.If(insn.funct3 != 0):
+                        m.d.sync += self.exception.valid.eq(1)
+                with m.Case(Insn.OpcodeType.SYSTEM):
+                    m.d.sync += self.exception.valid.eq(1)
+                    with m.Switch(insn.funct3):
+                        zeroes = (insn.rs1 == 0) & (insn.rd == 0)
+                        with m.Case(0):
+                            with m.If((insn.funct12 == 0) & zeroes):
+                                # ecall
+                                m.d.sync += self.exception.e_type.eq(MCause.Cause.ECALL_MMODE)  # noqa: E501
+                            with m.Elif((insn.funct12 == 1) & zeroes):
+                                # ebreak
+                                m.d.sync += self.exception.e_type.eq(MCause.Cause.BREAKPOINT)  # noqa: E501
+                            with m.Elif((insn.funct12 == 0b001100000010) & zeroes):
+                                # mret
+                                m.d.sync +=  self.exception.valid.eq(0)
+                            with m.Elif((insn.funct12 == 0b000100000101) & zeroes):
+                                # wfi
+                                m.d.sync += self.exception.valid.eq(0)
+
+                        with m.Case(4):
+                            pass
+                        with m.Default():
+                            # CSR ops take two cycles to decode. Rather than
+                            # penalize the rest of the core, have the microcode
+                            # jump to a temporary location. The next cycle
+                            # will have the microcode jump to the _real_ CSR
+                            # routine.
+                            csr_encode = Cat(insn.funct12[0:3], insn.funct12[6])
+                            m.d.sync += [
+                                forward_csr.eq(1),
+                                self.exception.valid.eq(0),
+                                self.csr_encoding.eq(csr_encode)
+                            ]
+
+                with m.Default():
+                    # Catch-all for all ones.
+                    m.d.sync += self.exception.valid.eq(1)
+
+            # Catch-all for compressed insns, zero insn.
+            with m.If(self.insn[0:2] != 0b11):
+                m.d.sync += self.exception.valid.eq(1)
+
+        # Second decode cycle if this is a CSR access.
+        with m.If(forward_csr):
+            m.d.sync += self.exception.e_type.eq(MCause.Cause.ILLEGAL_INSN)
+            m.d.sync += self.exception.valid.eq(0)
+
+            with m.Switch(csr_quadrant):
+                # Machine Mode CSRs.
+                with m.Case(Quadrant.MACHINE):
+                    # Most CSR accesses.
+                    with m.If(self.csr_ctrl.data.ill):
+                        m.d.sync += self.exception.valid.eq(1)
+
+                    # Read-only Zero CSRs. Includes CSRs that are in actually
+                    # read-only space (top 2 bits set), all of which are 0
+                    # for this core.
+                    with m.Elif(self.csr_ctrl.data.ro):
+                        # AFAICT, writing to ro0 registers outside of the
+                        # read-only space should succeed (but the write is
+                        # ignored).
+                        # None of the ro0 registers have side effects either?
+                        # csrro0
+                        with m.If(csr_ro_space):
+                            # CSRRW and CSRRWI don't have a mechanism to only
+                            # read a register.
+                            with m.If((csr_op == 1) |
+                                      (csr_op == 5) |
+                                      (self.src_a != 0)):
+                                m.d.sync += self.exception.valid.eq(1)
 
                 # Other Modes (User, Supervisor).
                 with m.Default():
