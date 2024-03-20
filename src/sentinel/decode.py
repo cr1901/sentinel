@@ -1,4 +1,4 @@
-from amaranth import Signal, Module, Cat, Value, C, unsigned
+from amaranth import Signal, Module, Cat, Value, C, unsigned, ValueCastable
 from amaranth.lib import enum
 from amaranth.lib.data import Struct, StructLayout
 from amaranth.lib.wiring import Component, Signature, In, Out
@@ -14,6 +14,12 @@ class Insn:
 
     # Does not inherit from View because Layouts are not designed to retrieve
     # non-contiguous bits.
+
+    ECALL = 0b00000000000000000000000001110011
+    EBREAK = 0b00000000000100000000000001110011
+    MRET = 0b00110000001000000000000001110011
+    WFI = 0b00010000010100000000000001110011
+
     class _Imm:
         def __init__(self, value):
             self.raw = value
@@ -354,25 +360,13 @@ class Decode(Component):
                 with m.Case(Insn.OpcodeType.MISC_MEM):
                     m.d.sync += self.requested_op.eq(0x30)
                 with m.Case(Insn.OpcodeType.SYSTEM):
-                    m.d.sync += self.exception.valid.eq(1)
-                    with m.Switch(insn.funct3):
-                        zeroes = (insn.rs1 == 0) & (insn.rd == 0)
-                        with m.Case(0):
-                            with m.If((insn.funct12 == 0b001100000010) & zeroes):
-                                # mret
-                                m.d.sync += self.requested_op.eq(248)
-                            with m.Elif((insn.funct12 == 0b000100000101) & zeroes):
-                                # wfi
-                                m.d.sync += self.requested_op.eq(0x30)
-                        with m.Case(4):
-                            pass
-                        with m.Default():
-                            # CSR ops take two cycles to decode. Rather than
-                            # penalize the rest of the core, have the microcode
-                            # jump to a temporary location. The next cycle
-                            # will have the microcode jump to the _real_ CSR
-                            # routine.
-                            m.d.sync += self.requested_op.eq(0x24)
+                    with m.If(insn.raw == Insn.MRET):
+                        m.d.sync += self.requested_op.eq(248)
+                    with m.Elif(insn.raw == Insn.WFI):
+                        m.d.sync += self.requested_op.eq(0x30)
+                    with m.Elif((insn.funct3 != 0) & (insn.funct3 != 4)):
+                        # csr
+                        m.d.sync += self.requested_op.eq(0x24)
 
         # Second decode cycle if this is a CSR access.
         with m.If(forward_csr):
@@ -436,7 +430,7 @@ class Decode(Component):
         # Exception Control
         with m.If(self.do_decode):
             # TODO: Might be worth hoisting comb statements out of m.If?
-            with m.Switch(self.opcode):
+            with m.Switch(insn.opcode):
                 with m.Case(Insn.OpcodeType.OP_IMM):
                     with m.If((insn.funct3 == 1) | (insn.funct3 == 5)):
                         with m.If(insn.funct3 == 1):
@@ -479,36 +473,28 @@ class Decode(Component):
                         m.d.sync += self.exception.valid.eq(1)
                 with m.Case(Insn.OpcodeType.SYSTEM):
                     m.d.sync += self.exception.valid.eq(1)
-                    with m.Switch(insn.funct3):
-                        zeroes = (insn.rs1 == 0) & (insn.rd == 0)
-                        with m.Case(0):
-                            with m.If((insn.funct12 == 0) & zeroes):
-                                # ecall
-                                m.d.sync += self.exception.e_type.eq(MCause.Cause.ECALL_MMODE)  # noqa: E501
-                            with m.Elif((insn.funct12 == 1) & zeroes):
-                                # ebreak
-                                m.d.sync += self.exception.e_type.eq(MCause.Cause.BREAKPOINT)  # noqa: E501
-                            with m.Elif((insn.funct12 == 0b001100000010) & zeroes):
-                                # mret
-                                m.d.sync +=  self.exception.valid.eq(0)
-                            with m.Elif((insn.funct12 == 0b000100000101) & zeroes):
-                                # wfi
-                                m.d.sync += self.exception.valid.eq(0)
-
-                        with m.Case(4):
-                            pass
-                        with m.Default():
-                            # CSR ops take two cycles to decode. Rather than
-                            # penalize the rest of the core, have the microcode
-                            # jump to a temporary location. The next cycle
-                            # will have the microcode jump to the _real_ CSR
-                            # routine.
-                            csr_encode = Cat(insn.funct12[0:3], insn.funct12[6])
-                            m.d.sync += [
-                                forward_csr.eq(1),
-                                self.exception.valid.eq(0),
-                                self.csr_encoding.eq(csr_encode)
-                            ]
+                    # Yes, stripping the lower bits inexplicably makes a
+                    # difference in resource usage...
+                    with m.If(insn.raw[7:] == (Insn.ECALL >> 7)):
+                        m.d.sync += self.exception.e_type.eq(MCause.Cause.ECALL_MMODE)  # noqa: E501
+                    with m.Elif(insn.raw == Insn.EBREAK):
+                        m.d.sync += self.exception.e_type.eq(MCause.Cause.BREAKPOINT)  # noqa: E501
+                    with m.Elif(insn.raw == Insn.MRET):
+                        m.d.sync += self.exception.valid.eq(0)
+                    with m.Elif(insn.raw == Insn.WFI):
+                        m.d.sync += self.exception.valid.eq(0)
+                    with m.Elif((insn.funct3 != 0) & (insn.funct3 != 4)):
+                        # CSR ops take two cycles to decode. Rather than
+                        # penalize the rest of the core, have the microcode
+                        # jump to a temporary location. The next cycle
+                        # will have the microcode jump to the _real_ CSR
+                        # routine.
+                        csr_encode = Cat(insn.funct12[0:3], insn.funct12[6])
+                        m.d.sync += [
+                            forward_csr.eq(1),
+                            self.exception.valid.eq(0),
+                            self.csr_encoding.eq(csr_encode)
+                        ]
 
                 with m.Default():
                     # Catch-all for all ones.
