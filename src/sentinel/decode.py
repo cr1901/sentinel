@@ -49,6 +49,13 @@ class Insn:
                        self.raw[12:20], Value.replicate(self.sign, 12))
 
     class _CSR:
+        RW = 0b001
+        RS = 0b010
+        RC = 0b011
+        RWI = 0b101
+        RSI = 0b110
+        RCI = 0b111
+
         def __init__(self, value):
             self.raw = value[20:]
 
@@ -333,26 +340,27 @@ class Decode(Component):
             with m.Switch(self.opcode):
                 with m.Case(Insn.OpcodeType.OP_IMM):
                     with m.If((insn.funct3 == 1) | (insn.funct3 == 5)):
-                        op_map = Cat(insn.funct3, insn.funct7[-2], C(4))
+                        op_map = Cat(insn.funct3, insn.funct7[-2],
+                                     C(0x40 >> 4))
                         m.d.sync += self.requested_op.eq(op_map)
                     with m.Else():
-                        op_map = Cat(insn.funct3, 0, C(4))
+                        op_map = Cat(insn.funct3, 0, C(0x40 >> 4))
                         m.d.sync += self.requested_op.eq(op_map)
                 with m.Case(Insn.OpcodeType.LUI):
                     m.d.sync += self.requested_op.eq(0xD0)
                 with m.Case(Insn.OpcodeType.AUIPC):
                     m.d.sync += self.requested_op.eq(0x50)
                 with m.Case(Insn.OpcodeType.OP):
-                    op_map = Cat(insn.funct3, insn.funct7[-2], C(0xC))
+                    op_map = Cat(insn.funct3, insn.funct7[-2], C(0xC0 >> 4))
                     m.d.sync += self.requested_op.eq(op_map)
                 with m.Case(Insn.OpcodeType.JAL):
                     m.d.sync += self.requested_op.eq(0xB0)
                 with m.Case(Insn.OpcodeType.JALR):
                     m.d.sync += self.requested_op.eq(0x98)
                 with m.Case(Insn.OpcodeType.BRANCH):
-                    m.d.sync += self.requested_op.eq(Cat(insn.funct3, C(0x11)))
+                    m.d.sync += self.requested_op.eq(Cat(insn.funct3, C(0x88 >> 3)))
                 with m.Case(Insn.OpcodeType.LOAD):
-                    op_map = Cat(insn.funct3, C(1))
+                    op_map = Cat(insn.funct3, C(0x08 >> 3))
                     m.d.sync += self.requested_op.eq(op_map)
                 with m.Case(Insn.OpcodeType.STORE):
                     op_map = Cat(insn.funct3, C(0x10))
@@ -370,62 +378,49 @@ class Decode(Component):
 
         # Second decode cycle if this is a CSR access.
         with m.If(forward_csr):
-            with m.Switch(csr_quadrant):
-                # Machine Mode CSRs.
-                with m.Case(Quadrant.MACHINE):
-                    with m.If(self.csr_ctrl.data.ill):
-                        pass
-                    # Read-only Zero CSRs. Includes CSRs that are in actually
-                    # read-only space (top 2 bits set), all of which are 0
-                    # for this core.
-                    with m.Elif(self.csr_ctrl.data.ro):
-                        # csrro0
-                        m.d.sync += self.requested_op.eq(0x25)
-                    with m.Else():
-                        # Jump to microcode routines for actual, implemented
-                        # CSR registers.
-                        with m.If((csr_op == 1) & (self.dst == 0)):
-                            # csrw
-                            m.d.sync += self.requested_op.eq(0x26)
-                        with m.Elif((csr_op == 1) & (self.dst != 0)):
-                            # csrrw
-                            m.d.sync += self.requested_op.eq(0x27)
-                        with m.Elif((csr_op == 2) & (self.src_a == 0)):
-                            # csrr
-                            m.d.sync += self.requested_op.eq(0x28)
-                        with m.Elif((csr_op == 2) & (self.src_a != 0)):
-                            # csrrs
-                            m.d.sync += self.requested_op.eq(0x29)
-                        with m.Elif((csr_op == 3) & (self.src_a == 0)):
-                            # csrrc, no write
-                            m.d.sync += self.requested_op.eq(0x28)
-                        with m.Elif((csr_op == 3) & (self.src_a != 0)):
-                            # csrrc
-                            m.d.sync += self.requested_op.eq(0x2a)
-                        with m.Elif((csr_op == 5) & (self.dst == 0)):
-                            # csrwi
-                            m.d.sync += self.requested_op.eq(0x2b)
-                        with m.Elif((csr_op == 5) & (self.dst != 0)):
-                            # csrrwi
-                            m.d.sync += self.requested_op.eq(0x2c)
-                        with m.Elif((csr_op == 6) & (self.src_a == 0)):
-                            # csrrsi, no write
-                            m.d.sync += self.requested_op.eq(0x28)
-                        with m.Elif((csr_op == 6) & (self.src_a != 0)):
-                            # csrrsi
-                            m.d.sync += self.requested_op.eq(0x2d)
-                        with m.Elif((csr_op == 7) & (self.src_a == 0)):
-                            # csrrci, no write
-                            m.d.sync += self.requested_op.eq(0x28)
-                        with m.Elif((csr_op == 7) & (self.src_a != 0)):
-                            # csrrci
-                            m.d.sync += self.requested_op.eq(0x2e)
-                        with m.Else():
-                            # TODO: cover via rvformal.
-                            # This might be reachable, but not while
-                            # requested_op has a meaningful value in it.
-                            # Make sure this is actually the case.
-                            pass
+            # It's illegal, sequencer will never send requested_op to ucode
+            # ROM. So we can do nothing here...
+            with m.If(self.csr_ctrl.data.ill):
+                pass
+            # Read-only Zero CSRs. Includes CSRs that are in actually
+            # read-only space (top 2 bits set), all of which are 0
+            # for this core.
+            with m.Elif(self.csr_ctrl.data.ro):
+                # csrro0
+                m.d.sync += self.requested_op.eq(0x25)
+            with m.Else():
+                # Jump to microcode routines for actual, implemented
+                # CSR registers.
+                with m.If((csr_op == Insn._CSR.RW) & (self.dst == 0)):
+                    m.d.sync += self.requested_op.eq(0x26)  # csrw
+                with m.Elif((csr_op == Insn._CSR.RW) & (self.dst != 0)):
+                    m.d.sync += self.requested_op.eq(0x27)  # csrrw
+                with m.Elif((csr_op == Insn._CSR.RS) & (self.src_a == 0)):
+                    m.d.sync += self.requested_op.eq(0x28)  # csrr
+                with m.Elif((csr_op == Insn._CSR.RS) & (self.src_a != 0)):
+                    m.d.sync += self.requested_op.eq(0x29)  # csrrs
+                with m.Elif((csr_op == Insn._CSR.RC) & (self.src_a == 0)):
+                    m.d.sync += self.requested_op.eq(0x28)  # csrrc, no write
+                with m.Elif((csr_op == Insn._CSR.RC) & (self.src_a != 0)):
+                    m.d.sync += self.requested_op.eq(0x2a)  # csrrc
+                with m.Elif((csr_op == Insn._CSR.RWI) & (self.dst == 0)):
+                    m.d.sync += self.requested_op.eq(0x2b)  # csrwi
+                with m.Elif((csr_op == Insn._CSR.RWI) & (self.dst != 0)):
+                    m.d.sync += self.requested_op.eq(0x2c)  # csrrwi
+                with m.Elif((csr_op == Insn._CSR.RSI) & (self.src_a == 0)):
+                    m.d.sync += self.requested_op.eq(0x28)  # csrrsi, no write
+                with m.Elif((csr_op == Insn._CSR.RSI) & (self.src_a != 0)):
+                    m.d.sync += self.requested_op.eq(0x2d)  # csrrsi
+                with m.Elif((csr_op == Insn._CSR.RCI) & (self.src_a == 0)):
+                    m.d.sync += self.requested_op.eq(0x28)  # csrrci, no write
+                with m.Elif((csr_op == Insn._CSR.RCI) & (self.src_a != 0)):
+                    m.d.sync += self.requested_op.eq(0x2e)  # csrrci
+                with m.Else():
+                    # TODO: cover via rvformal.
+                    # This might be reachable, but not while
+                    # requested_op has a meaningful value in it.
+                    # Make sure this is actually the case.
+                    pass
 
         # Exception Control
         with m.If(self.do_decode):
@@ -528,8 +523,8 @@ class Decode(Component):
                         with m.If(csr_ro_space):
                             # CSRRW and CSRRWI don't have a mechanism to only
                             # read a register.
-                            with m.If((csr_op == 1) |
-                                      (csr_op == 5) |
+                            with m.If((csr_op == Insn._CSR.RW) |
+                                      (csr_op == Insn._CSR.RWI) |
                                       (self.src_a != 0)):
                                 m.d.sync += self.exception.valid.eq(1)
 
