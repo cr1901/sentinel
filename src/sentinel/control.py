@@ -45,6 +45,7 @@ class MappingROM(Component):
         m = Module()
 
         insn = Insn(self.insn)
+
         src_a = Signal.like(insn.rs1)
         dst = Signal.like(insn.rd)
         forward_csr = Signal()
@@ -56,7 +57,6 @@ class MappingROM(Component):
             csr_op.eq(insn.funct3),
         ]
 
-        # Mapping ROM
         with m.If(self.start):
             m.d.sync += [
                 # For now, unconditionally propogate these and rely on

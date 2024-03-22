@@ -8,6 +8,11 @@ from .csr import MCause, Quadrant, AccessMode, MachineAddr as CSRM
 from .insn import Insn, OpcodeType
 
 
+class DecodeException(Struct):
+    valid: unsigned(1)
+    e_type: MCause.Cause
+
+
 # Only valid for Machine Mode CSRs at present (bits 8 and 9 stripped). No plans
 # to support Supervisor Mode, but User Mode might be worthwhile.
 # Read-only mode can be easily calculated from bits 10 and 11, so not handled
@@ -134,78 +139,23 @@ class ImmediateGenerator(Component):
         return m
 
 
-class DecodeException(Struct):
-    valid: unsigned(1)
-    e_type: MCause.Cause
-
-
-class Decode(Component):
-    def __init__(self, *, formal=False):
-        self.formal = formal
-        self.csr_attr = CSRAttributes()
-        self.imm_gen = ImmediateGenerator()
-        self.mapping = MappingROM()
-
+class ExceptionControl(Component):
+    def __init__(self):
         sig = {
-            "do_decode": Out(1),
+            "start": Out(1),
             "insn": Out(32),
-            "src_a_unreg": In(5),
-            "src_a": In(5),
-            "src_b": In(5),
-            "imm": In(32),
-            "dst": In(5),
-            "opcode": In(OpcodeType),
+            "csr_attr": Out(CSRAttributes._DataLayout),
             "exception": In(DecodeException),
-            # Map from opcode, funct3, and funct7, and funct12 bits to a 8-bit
-            # ID to index into ucode ROM. Chosen through trial and error.
-            "requested_op": In(8),
-            # Squash CSR encoding down to only bits that vary between
-            # the 7 implemented CSRs.
-            "csr_encoding": In(4)
         }
-
-        if self.formal:
-            rvfi = Signature({
-                "rs1": Out(5),
-                "rs2": Out(5),
-                "rd": Out(5),
-                "rd_valid": Out(1),
-                "do_decode": Out(1),
-                "funct12": Out(12),
-                "funct3": Out(3),
-                "insn": Out(32),
-            })
-
-            sig["rvfi"] = In(rvfi)
 
         super().__init__(Signature(sig).flip())
 
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.csr_attr = self.csr_attr
-        m.submodules.imm_gen = self.imm_gen
-        m.submodules.mapping = self.mapping
-
         insn = Insn(self.insn)
 
-        m.d.comb += [
-            self.opcode.eq(insn.opcode),
-            self.src_a_unreg.eq(insn.rs1),
-            self.imm.eq(self.imm_gen.imm),
-
-            self.csr_attr.addr.eq(insn.csr.addr),
-
-            self.imm_gen.enable.eq(self.do_decode),
-            self.imm_gen.insn.eq(self.insn),
-
-            self.mapping.start.eq(self.do_decode),
-            self.mapping.insn.eq(self.insn),
-            self.mapping.csr_attr.eq(self.csr_attr.data),
-            self.requested_op.eq(self.mapping.requested_op),
-            self.csr_encoding.eq(self.mapping.csr_encoding)
-        ]
-
+        src_a = Signal.like(insn.rs1)
         forward_csr = Signal()
         csr_quadrant = Signal(Quadrant)
         csr_op = Signal.like(insn.funct3)
@@ -220,17 +170,9 @@ class Decode(Component):
             csr_ro_space.eq(insn.csr.access == AccessMode.READ_ONLY)
         ]
 
-        with m.If(self.do_decode):
-            m.d.sync += [
-                # For now, unconditionally propogate these and rely on
-                # microcode program to ignore when necessary.
-                self.src_a.eq(insn.rs1),
-                self.src_b.eq(insn.rs2),
-                self.dst.eq(insn.rd),
-            ]
+        with m.If(self.start):
+            m.d.sync += src_a.eq(insn.rs1)
 
-        # Exception Control
-        with m.If(self.do_decode):
             # TODO: Might be worth hoisting comb statements out of m.If?
             with m.Switch(insn.opcode):
                 with m.Case(OpcodeType.OP_IMM):
@@ -309,7 +251,7 @@ class Decode(Component):
             m.d.sync += self.exception.e_type.eq(MCause.Cause.ILLEGAL_INSN)
             m.d.sync += self.exception.valid.eq(0)
 
-            with m.If(self.csr_attr.data.ill):
+            with m.If(self.csr_attr.ill):
                 m.d.sync += self.exception.valid.eq(1)
 
             # Read-only CSRs. AFAICT, writing to ro0 registers outside
@@ -318,7 +260,7 @@ class Decode(Component):
             # read a register.
             with m.Elif(csr_ro_space & ((csr_op == Insn._CSR.RW) |
                                         (csr_op == Insn._CSR.RWI) |
-                                        (self.src_a != 0))):
+                                        (src_a != 0))):
                 m.d.sync += self.exception.valid.eq(1)
 
             # Machine Mode CSRs- CSRAttributes only valid for Machine Mode
@@ -326,6 +268,92 @@ class Decode(Component):
             # not).
             with m.Elif(csr_quadrant != Quadrant.MACHINE):
                 m.d.sync += self.exception.valid.eq(1)
+
+        return m
+
+
+class Decode(Component):
+    def __init__(self, *, formal=False):
+        self.formal = formal
+        self.csr_attr = CSRAttributes()
+        self.imm_gen = ImmediateGenerator()
+        self.mapping = MappingROM()
+        self.except_ctrl = ExceptionControl()
+
+        sig = {
+            "do_decode": Out(1),
+            "insn": Out(32),
+            "src_a_unreg": In(5),
+            "src_a": In(5),
+            "src_b": In(5),
+            "imm": In(32),
+            "dst": In(5),
+            "opcode": In(OpcodeType),
+            "exception": In(DecodeException),
+            # Map from opcode, funct3, and funct7, and funct12 bits to a 8-bit
+            # ID to index into ucode ROM. Chosen through trial and error.
+            "requested_op": In(8),
+            # Squash CSR encoding down to only bits that vary between
+            # the 7 implemented CSRs.
+            "csr_encoding": In(4)
+        }
+
+        if self.formal:
+            rvfi = Signature({
+                "rs1": Out(5),
+                "rs2": Out(5),
+                "rd": Out(5),
+                "rd_valid": Out(1),
+                "do_decode": Out(1),
+                "funct12": Out(12),
+                "funct3": Out(3),
+                "insn": Out(32),
+            })
+
+            sig["rvfi"] = In(rvfi)
+
+        super().__init__(Signature(sig).flip())
+
+    def elaborate(self, platform):
+        m = Module()
+
+        m.submodules.csr_attr = self.csr_attr
+        m.submodules.imm_gen = self.imm_gen
+        m.submodules.mapping = self.mapping
+        m.submodules.except_ctrl = self.except_ctrl
+
+        insn = Insn(self.insn)
+
+        m.d.comb += [
+            self.opcode.eq(insn.opcode),
+            self.src_a_unreg.eq(insn.rs1),
+            self.imm.eq(self.imm_gen.imm),
+
+            self.csr_attr.addr.eq(insn.csr.addr),
+
+            self.imm_gen.enable.eq(self.do_decode),
+            self.imm_gen.insn.eq(self.insn),
+
+            self.mapping.start.eq(self.do_decode),
+            self.mapping.insn.eq(self.insn),
+            self.mapping.csr_attr.eq(self.csr_attr.data),
+            self.requested_op.eq(self.mapping.requested_op),
+            self.csr_encoding.eq(self.mapping.csr_encoding),
+
+            self.except_ctrl.start.eq(self.do_decode),
+            self.except_ctrl.insn.eq(self.insn),
+            self.except_ctrl.csr_attr.eq(self.csr_attr.data),
+            self.exception.eq(self.except_ctrl.exception)
+        ]
+
+        with m.If(self.do_decode):
+            m.d.sync += [
+                # For now, unconditionally propogate these and rely on
+                # microcode program to ignore when necessary.
+                self.src_a.eq(insn.rs1),
+                self.src_b.eq(insn.rs2),
+                self.dst.eq(insn.rd),
+            ]
 
         if self.formal:
             m.d.comb += [
