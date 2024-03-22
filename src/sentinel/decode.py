@@ -123,21 +123,25 @@ class Insn:
         return self.raw[-1]
 
 
-class CSRAccessControl(Component):
+# Only valid for Machine Mode CSRs at present (bits 8 and 9 stripped). No plans
+# to support Supervisor Mode, but User Mode might be worthwhile.
+# Read-only mode can be easily calculated from bits 10 and 11, so not handled
+# here.
+class CSRAttributes(Component):
     _DataLayout = StructLayout({
         "ill": unsigned(1),
-        "ro": unsigned(1)
+        "ro0": unsigned(1)
     })
     _Implemented = C({}, _DataLayout)
     _Illegal = C({"ill": 1}, _DataLayout)
-    _Ro0 = C({"ro": 1}, _DataLayout)
+    _Ro0 = C({"ro0": 1}, _DataLayout)
 
-    # No plans to support Supervisor Mode, but User Mode might be worthwhile.
-    class _MachineROM:
+    class _ROM:
         def __init__(self, init):
             self.rom = init
 
         def idx(self, csr_addr):
+            # Strip bits 8 and 9 and concatenate to index into ROM.
             return (csr_addr & 0xff) + ((csr_addr & 0xc00) >> 2)
 
         def __getitem__(self, k):
@@ -154,60 +158,58 @@ class CSRAccessControl(Component):
         # zero: bit 1 set
         # mstatus, mie, mtvec, mscratch, mepc, mcause, mip: both bits clear
         # ^These registers are actually implemented.
-        # By default, access is illegal.
-        self._machine = CSRAccessControl._MachineROM(
-            [CSRAccessControl._Illegal] * 1024)
+        # By default, access is illegal. Any fields added should nominally
+        # be one-hot (zero allowed).
+        self._rom = CSRAttributes._ROM(
+            [CSRAttributes._Illegal] * 1024)
 
         sig = {
             "addr": Out(12),
-            "data": In(StructLayout({
-                "ill": unsigned(1),
-                "ro": unsigned(1)
-            })),
+            "data": In(CSRAttributes._DataLayout),
         }
 
-        self._machine_rom_init()
+        self._rom_init()
         super().__init__(Signature(sig).flip())
 
     def elaborate(self, platform):
         m = Module()
 
         # FIXME: Use _CSR somehow to make self.addr slicing nicer?
-        # Use cases to let the optimizer decide whether to use a BRAM or not.
+        # Use Cases to let the optimizer decide whether to use a BRAM or not.
         with m.Switch(Cat(self.addr[0:8], self.addr[10:])):
-            for i, v in enumerate(self._machine):
+            for i, v in enumerate(self._rom):
                 with m.Case(i):
                     m.d.sync += self.data.eq(v)
 
         return m
 
-    def _machine_rom_init(self):
-        self._machine[CSRM.MVENDORID] = CSRAccessControl._Ro0
-        self._machine[CSRM.MARCHID] = CSRAccessControl._Ro0
-        self._machine[CSRM.MIMPID] = CSRAccessControl._Ro0
-        self._machine[CSRM.MHARTID] = CSRAccessControl._Ro0
-        self._machine[CSRM.MCONFIGPTR] = CSRAccessControl._Ro0
-        self._machine[CSRM.MSTATUS] = CSRAccessControl._Implemented
-        self._machine[CSRM.MISA] = CSRAccessControl._Ro0
-        self._machine[CSRM.MIE] = CSRAccessControl._Implemented
-        self._machine[CSRM.MTVEC] = CSRAccessControl._Implemented
-        self._machine[CSRM.MSTATUSH] = CSRAccessControl._Ro0
-        self._machine[CSRM.MSCRATCH] = CSRAccessControl._Implemented
-        self._machine[CSRM.MEPC] = CSRAccessControl._Implemented
-        self._machine[CSRM.MCAUSE] = CSRAccessControl._Implemented
-        self._machine[CSRM.MTVAL] = CSRAccessControl._Ro0
-        self._machine[CSRM.MIP] = CSRAccessControl._Implemented
-        self._machine[CSRM.MCYCLE] = CSRAccessControl._Ro0
-        self._machine[CSRM.MINSTRET] = CSRAccessControl._Ro0
+    def _rom_init(self):
+        self._rom[CSRM.MVENDORID] = CSRAttributes._Ro0
+        self._rom[CSRM.MARCHID] = CSRAttributes._Ro0
+        self._rom[CSRM.MIMPID] = CSRAttributes._Ro0
+        self._rom[CSRM.MHARTID] = CSRAttributes._Ro0
+        self._rom[CSRM.MCONFIGPTR] = CSRAttributes._Ro0
+        self._rom[CSRM.MSTATUS] = CSRAttributes._Implemented
+        self._rom[CSRM.MISA] = CSRAttributes._Ro0
+        self._rom[CSRM.MIE] = CSRAttributes._Implemented
+        self._rom[CSRM.MTVEC] = CSRAttributes._Implemented
+        self._rom[CSRM.MSTATUSH] = CSRAttributes._Ro0
+        self._rom[CSRM.MSCRATCH] = CSRAttributes._Implemented
+        self._rom[CSRM.MEPC] = CSRAttributes._Implemented
+        self._rom[CSRM.MCAUSE] = CSRAttributes._Implemented
+        self._rom[CSRM.MTVAL] = CSRAttributes._Ro0
+        self._rom[CSRM.MIP] = CSRAttributes._Implemented
+        self._rom[CSRM.MCYCLE] = CSRAttributes._Ro0
+        self._rom[CSRM.MINSTRET] = CSRAttributes._Ro0
         for i in range(CSRM.MHPMCOUNTER3, CSRM.MHPMCOUNTER31 + 1):
-            self._machine[i] = CSRAccessControl._Ro0
-        self._machine[CSRM.MCYCLEH] = CSRAccessControl._Ro0
-        self._machine[CSRM.MINSTRETH] = CSRAccessControl._Ro0
+            self._rom[i] = CSRAttributes._Ro0
+        self._rom[CSRM.MCYCLEH] = CSRAttributes._Ro0
+        self._rom[CSRM.MINSTRETH] = CSRAttributes._Ro0
         for i in range(CSRM.MHPMCOUNTER3H, CSRM.MHPMCOUNTER31H + 1):
-            self._machine[i] = CSRAccessControl._Ro0
-        self._machine[CSRM.MCOUNTINHIBIT] = CSRAccessControl._Ro0
+            self._rom[i] = CSRAttributes._Ro0
+        self._rom[CSRM.MCOUNTINHIBIT] = CSRAttributes._Ro0
         for i in range(CSRM.MHPMEVENT3, CSRM.MHPMEVENT31 + 1):
-            self._machine[i] = CSRAccessControl._Ro0  # mhpmevent3-31
+            self._rom[i] = CSRAttributes._Ro0
 
 
 class ImmediateGenerator(Component):
@@ -255,7 +257,7 @@ class DecodeException(Struct):
 class Decode(Component):
     def __init__(self, *, formal=False):
         self.formal = formal
-        self.csr_ctrl = CSRAccessControl()
+        self.csr_attr = CSRAttributes()
         self.imm_gen = ImmediateGenerator()
 
         sig = {
@@ -295,7 +297,7 @@ class Decode(Component):
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.csr_ctrl = self.csr_ctrl
+        m.submodules.csr_attr = self.csr_attr
         m.submodules.imm_gen = self.imm_gen
 
         insn = Insn(self.insn)
@@ -305,7 +307,7 @@ class Decode(Component):
             self.src_a_unreg.eq(insn.rs1),
             self.imm.eq(self.imm_gen.imm),
 
-            self.csr_ctrl.addr.eq(insn.csr.addr),
+            self.csr_attr.addr.eq(insn.csr.addr),
 
             self.imm_gen.enable.eq(self.do_decode),
             self.imm_gen.insn.eq(self.insn),
@@ -380,12 +382,12 @@ class Decode(Component):
         with m.If(forward_csr):
             # It's illegal, sequencer will never send requested_op to ucode
             # ROM. So we can do nothing here...
-            with m.If(self.csr_ctrl.data.ill):
+            with m.If(self.csr_attr.data.ill):
                 pass
             # Read-only Zero CSRs. Includes CSRs that are in actually
             # read-only space (top 2 bits set), all of which are 0
             # for this core.
-            with m.Elif(self.csr_ctrl.data.ro):
+            with m.Elif(self.csr_attr.data.ro0):
                 # csrro0
                 m.d.sync += self.requested_op.eq(0x25)
             with m.Else():
@@ -504,33 +506,23 @@ class Decode(Component):
             m.d.sync += self.exception.e_type.eq(MCause.Cause.ILLEGAL_INSN)
             m.d.sync += self.exception.valid.eq(0)
 
-            with m.Switch(csr_quadrant):
-                # Machine Mode CSRs.
-                with m.Case(Quadrant.MACHINE):
-                    # Most CSR accesses.
-                    with m.If(self.csr_ctrl.data.ill):
-                        m.d.sync += self.exception.valid.eq(1)
+            with m.If(self.csr_attr.data.ill):
+                m.d.sync += self.exception.valid.eq(1)
 
-                    # Read-only Zero CSRs. Includes CSRs that are in actually
-                    # read-only space (top 2 bits set), all of which are 0
-                    # for this core.
-                    with m.Elif(self.csr_ctrl.data.ro):
-                        # AFAICT, writing to ro0 registers outside of the
-                        # read-only space should succeed (but the write is
-                        # ignored).
-                        # None of the ro0 registers have side effects either?
-                        # csrro0
-                        with m.If(csr_ro_space):
-                            # CSRRW and CSRRWI don't have a mechanism to only
-                            # read a register.
-                            with m.If((csr_op == Insn._CSR.RW) |
-                                      (csr_op == Insn._CSR.RWI) |
-                                      (self.src_a != 0)):
-                                m.d.sync += self.exception.valid.eq(1)
+            # Read-only CSRs. AFAICT, writing to ro0 registers outside
+            # of the read-only space should succeed (but the write is
+            # ignored). CSRRW and CSRRWI don't have a mechanism to only
+            # read a register.
+            with m.Elif(csr_ro_space & ((csr_op == Insn._CSR.RW) |
+                                        (csr_op == Insn._CSR.RWI) |
+                                        (self.src_a != 0))):
+                m.d.sync += self.exception.valid.eq(1)
 
-                # Other Modes (User, Supervisor).
-                with m.Default():
-                    m.d.sync += self.exception.valid.eq(1)
+            # Machine Mode CSRs- CSRAttributes only valid for Machine Mode
+            # Quadrant for now (User mode may follow... Supervisor probably
+            # not).
+            with m.Elif(csr_quadrant != Quadrant.MACHINE):
+                m.d.sync += self.exception.valid.eq(1)
 
         if self.formal:
             m.d.comb += [
