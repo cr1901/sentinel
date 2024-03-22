@@ -1,12 +1,13 @@
-from amaranth import Signal, Elaboratable, Module
+from amaranth import Signal, Elaboratable, Module, Cat, C, unsigned
+from amaranth.lib.data import StructLayout
 from amaranth.lib.wiring import Component, Signature, In, Out
 
-from .decode import Insn
 from .alu import AluCtrlSignature
 from .ucoderom import UCodeROM
 from .datapath import GPControlSignature, PCControlSignature, \
     CSRControlSignature
 
+from .insn import Insn, OpcodeType
 from .ucodefields import JmpType, CondTest
 
 from typing import TextIO, Optional
@@ -21,6 +22,143 @@ ControlSignature = Signature({
 })
 
 
+# The MappingROM itself knows how to handle CSRs. Logically it's part of the
+# control unit. Physically, it's part of the instruction decoder for space
+# reasons.
+class MappingROM(Component):
+    def __init__(self):
+        sig = {
+            "start": Out(1),
+            "insn": Out(32),
+            # Cannot use _DataLayout due to circular imports.
+            "csr_attr": Out(StructLayout({
+                "ill": unsigned(1),
+                "ro0": unsigned(1)
+            })),
+            "requested_op": In(8),
+            "csr_encoding": In(4)
+        }
+
+        super().__init__(Signature(sig).flip())
+
+    def elaborate(self, platform):
+        m = Module()
+
+        insn = Insn(self.insn)
+        src_a = Signal.like(insn.rs1)
+        dst = Signal.like(insn.rd)
+        forward_csr = Signal()
+        csr_op = Signal.like(insn.funct3)
+        csr_encode = Signal(4)
+
+        m.d.sync += [
+            forward_csr.eq(0),
+            csr_op.eq(insn.funct3),
+        ]
+
+        # Mapping ROM
+        with m.If(self.start):
+            m.d.sync += [
+                # For now, unconditionally propogate these and rely on
+                # microcode program to ignore when necessary.
+                src_a.eq(insn.rs1),
+                dst.eq(insn.rd),
+            ]
+
+            # TODO: Might be worth hoisting comb statements out of m.If?
+            with m.Switch(insn.opcode):
+                with m.Case(OpcodeType.OP_IMM):
+                    with m.If((insn.funct3 == 1) | (insn.funct3 == 5)):
+                        op_map = Cat(insn.funct3, insn.funct7[-2],
+                                     C(0x40 >> 4))
+                        m.d.sync += self.requested_op.eq(op_map)
+                    with m.Else():
+                        op_map = Cat(insn.funct3, 0, C(0x40 >> 4))
+                        m.d.sync += self.requested_op.eq(op_map)
+                with m.Case(OpcodeType.LUI):
+                    m.d.sync += self.requested_op.eq(0xD0)
+                with m.Case(OpcodeType.AUIPC):
+                    m.d.sync += self.requested_op.eq(0x50)
+                with m.Case(OpcodeType.OP):
+                    op_map = Cat(insn.funct3, insn.funct7[-2], C(0xC0 >> 4))
+                    m.d.sync += self.requested_op.eq(op_map)
+                with m.Case(OpcodeType.JAL):
+                    m.d.sync += self.requested_op.eq(0xB0)
+                with m.Case(OpcodeType.JALR):
+                    m.d.sync += self.requested_op.eq(0x98)
+                with m.Case(OpcodeType.BRANCH):
+                    m.d.sync += self.requested_op.eq(Cat(insn.funct3, C(0x88 >> 3)))
+                with m.Case(OpcodeType.LOAD):
+                    op_map = Cat(insn.funct3, C(0x08 >> 3))
+                    m.d.sync += self.requested_op.eq(op_map)
+                with m.Case(OpcodeType.STORE):
+                    op_map = Cat(insn.funct3, C(0x10))
+                    m.d.sync += self.requested_op.eq(op_map)
+                with m.Case(OpcodeType.MISC_MEM):
+                    m.d.sync += self.requested_op.eq(0x30)
+                with m.Case(OpcodeType.SYSTEM):
+                    with m.If(insn.raw == Insn.MRET):
+                        m.d.sync += self.requested_op.eq(248)
+                    with m.Elif(insn.raw == Insn.WFI):
+                        m.d.sync += self.requested_op.eq(0x30)
+                    with m.Elif((insn.funct3 != 0) & (insn.funct3 != 4)):
+                        # csr
+                        csr_encode = Cat(insn.funct12[0:3], insn.funct12[6])
+                        m.d.sync += [
+                            forward_csr.eq(1),
+                            self.csr_encoding.eq(csr_encode),
+                            self.requested_op.eq(0x24)
+                        ]
+
+        # Second decode cycle if this is a CSR access.
+        with m.If(forward_csr):
+            # It's illegal, sequencer will never send requested_op to ucode
+            # ROM. So we can do nothing here...
+            with m.If(self.csr_attr.ill):
+                pass
+            # Read-only Zero CSRs. Includes CSRs that are in actually
+            # read-only space (top 2 bits set), all of which are 0
+            # for this core.
+            with m.Elif(self.csr_attr.ro0):
+                # csrro0
+                m.d.sync += self.requested_op.eq(0x25)
+            with m.Else():
+                # Jump to microcode routines for actual, implemented
+                # CSR registers.
+                with m.If((csr_op == Insn._CSR.RW) & (dst == 0)):
+                    m.d.sync += self.requested_op.eq(0x26)  # csrw
+                with m.Elif((csr_op == Insn._CSR.RW) & (dst != 0)):
+                    m.d.sync += self.requested_op.eq(0x27)  # csrrw
+                with m.Elif((csr_op == Insn._CSR.RS) & (src_a == 0)):
+                    m.d.sync += self.requested_op.eq(0x28)  # csrr
+                with m.Elif((csr_op == Insn._CSR.RS) & (src_a != 0)):
+                    m.d.sync += self.requested_op.eq(0x29)  # csrrs
+                with m.Elif((csr_op == Insn._CSR.RC) & (src_a == 0)):
+                    m.d.sync += self.requested_op.eq(0x28)  # csrrc, no write
+                with m.Elif((csr_op == Insn._CSR.RC) & (src_a != 0)):
+                    m.d.sync += self.requested_op.eq(0x2a)  # csrrc
+                with m.Elif((csr_op == Insn._CSR.RWI) & (dst == 0)):
+                    m.d.sync += self.requested_op.eq(0x2b)  # csrwi
+                with m.Elif((csr_op == Insn._CSR.RWI) & (dst != 0)):
+                    m.d.sync += self.requested_op.eq(0x2c)  # csrrwi
+                with m.Elif((csr_op == Insn._CSR.RSI) & (src_a == 0)):
+                    m.d.sync += self.requested_op.eq(0x28)  # csrrsi, no write
+                with m.Elif((csr_op == Insn._CSR.RSI) & (src_a != 0)):
+                    m.d.sync += self.requested_op.eq(0x2d)  # csrrsi
+                with m.Elif((csr_op == Insn._CSR.RCI) & (src_a == 0)):
+                    m.d.sync += self.requested_op.eq(0x28)  # csrrci, no write
+                with m.Elif((csr_op == Insn._CSR.RCI) & (src_a != 0)):
+                    m.d.sync += self.requested_op.eq(0x2e)  # csrrci
+                with m.Else():
+                    # TODO: cover via rvformal.
+                    # This might be reachable, but not while
+                    # requested_op has a meaningful value in it.
+                    # Make sure this is actually the case.
+                    pass
+
+        return m
+
+
 class Control(Component):
     def __init__(self, ucode: Optional[TextIO] = None):
         self.ucoderom = UCodeROM(main_file=ucode)
@@ -30,7 +168,7 @@ class Control(Component):
         # Control inputs
         self.vec_adr = Signal.like(self.ucoderom.fields.target)
         # Direct 5 high bits of opcode.
-        self.opcode = Signal(Insn.OpcodeType)
+        self.opcode = Signal(OpcodeType)
         # RISCV major/minor opcodes compressed into 8 bits to index into
         # ucode ROM. Chosen through trial and error.
         self.requested_op = Signal(8)

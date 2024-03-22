@@ -3,124 +3,9 @@ from amaranth.lib import enum
 from amaranth.lib.data import Struct, StructLayout
 from amaranth.lib.wiring import Component, Signature, In, Out
 
+from .control import MappingROM
 from .csr import MCause, Quadrant, AccessMode, MachineAddr as CSRM
-
-
-class Insn:
-    """View of all immediately-apparent information in a RISC-V instruction."""
-
-    # "Immediately-apparent" means "I can get this info with Cats, Slices,
-    # and Replicates".
-
-    # Does not inherit from View because Layouts are not designed to retrieve
-    # non-contiguous bits.
-
-    ECALL = 0b00000000000000000000000001110011
-    EBREAK = 0b00000000000100000000000001110011
-    MRET = 0b00110000001000000000000001110011
-    WFI = 0b00010000010100000000000001110011
-
-    class _Imm:
-        def __init__(self, value):
-            self.raw = value
-            self.sign = self.raw[-1]
-
-        @property
-        def I(self):  # noqa: E743
-            return Cat(self.raw[20:31], Value.replicate(self.sign, 21))
-
-        @property
-        def S(self):
-            return Cat(self.raw[7], self.raw[8:12], self.raw[25:31],
-                       Value.replicate(self.sign, 21))
-
-        @property
-        def B(self):
-            return Cat(C(0), self.raw[8:12], self.raw[25:31], self.raw[7],
-                       Value.replicate(self.sign, 20))
-
-        @property
-        def U(self):
-            return Cat(C(0, 12), self.raw[12:20], self.raw[20:31], self.sign)
-
-        @property
-        def J(self):
-            return Cat(C(0), self.raw[21:25], self.raw[25:31], self.raw[20],
-                       self.raw[12:20], Value.replicate(self.sign, 12))
-
-    class _CSR:
-        RW = 0b001
-        RS = 0b010
-        RC = 0b011
-        RWI = 0b101
-        RSI = 0b110
-        RCI = 0b111
-
-        def __init__(self, value):
-            self.raw = value[20:]
-
-        @property
-        def addr(self):
-            return self.raw
-
-        @property
-        def quadrant(self):
-            return enum.EnumView(Quadrant, self.raw[8:10])
-
-        @property
-        def access(self):
-            return enum.EnumView(AccessMode, self.raw[10:])
-
-    class OpcodeType(enum.Enum, shape=unsigned(5)):
-        OP_IMM = 0b00100
-        LUI = 0b01101
-        AUIPC = 0b00101
-        OP = 0b01100
-        JAL = 0b11011
-        JALR = 0b11001
-        BRANCH = 0b11000
-        LOAD = 0b00000
-        STORE = 0b01000
-        CUSTOM_0 = 0b00010
-        MISC_MEM = 0b00011
-        SYSTEM = 0b11100
-
-    def __init__(self, value):
-        self.raw = value
-        self.imm = Insn._Imm(self.raw)
-        self.csr = Insn._CSR(self.raw)
-
-    @property
-    def opcode(self):
-        return Insn.OpcodeType(self.raw[2:7])
-
-    @property
-    def rd(self):
-        return self.raw[7:12]
-
-    @property
-    def funct3(self):
-        return self.raw[12:15]
-
-    @property
-    def rs1(self):
-        return self.raw[15:20]
-
-    @property
-    def rs2(self):
-        return self.raw[20:25]
-
-    @property
-    def funct7(self):
-        return self.raw[25:]
-
-    @property
-    def funct12(self):
-        return self.raw[20:]
-
-    @property
-    def sign(self):
-        return self.raw[-1]
+from .insn import Insn, OpcodeType
 
 
 # Only valid for Machine Mode CSRs at present (bits 8 and 9 stripped). No plans
@@ -229,21 +114,21 @@ class ImmediateGenerator(Component):
 
         with m.If(self.enable):
             with m.Switch(insn.opcode):
-                with m.Case(Insn.OpcodeType.OP_IMM):
+                with m.Case(OpcodeType.OP_IMM):
                     m.d.sync += self.imm.eq(insn.imm.I)
-                with m.Case(Insn.OpcodeType.JALR):
+                with m.Case(OpcodeType.JALR):
                     m.d.sync += self.imm.eq(insn.imm.I)
-                with m.Case(Insn.OpcodeType.LOAD):
+                with m.Case(OpcodeType.LOAD):
                     m.d.sync += self.imm.eq(insn.imm.I)
-                with m.Case(Insn.OpcodeType.LUI):
+                with m.Case(OpcodeType.LUI):
                     m.d.sync += self.imm.eq(insn.imm.U)
-                with m.Case(Insn.OpcodeType.AUIPC):
+                with m.Case(OpcodeType.AUIPC):
                     m.d.sync += self.imm.eq(insn.imm.U)
-                with m.Case(Insn.OpcodeType.JAL):
+                with m.Case(OpcodeType.JAL):
                     m.d.sync += self.imm.eq(insn.imm.J)
-                with m.Case(Insn.OpcodeType.BRANCH):
+                with m.Case(OpcodeType.BRANCH):
                     m.d.sync += self.imm.eq(insn.imm.B)
-                with m.Case(Insn.OpcodeType.STORE):
+                with m.Case(OpcodeType.STORE):
                     m.d.sync += self.imm.eq(insn.imm.S)
 
         return m
@@ -259,6 +144,7 @@ class Decode(Component):
         self.formal = formal
         self.csr_attr = CSRAttributes()
         self.imm_gen = ImmediateGenerator()
+        self.mapping = MappingROM()
 
         sig = {
             "do_decode": Out(1),
@@ -268,7 +154,7 @@ class Decode(Component):
             "src_b": In(5),
             "imm": In(32),
             "dst": In(5),
-            "opcode": In(Insn.OpcodeType),
+            "opcode": In(OpcodeType),
             "exception": In(DecodeException),
             # Map from opcode, funct3, and funct7, and funct12 bits to a 8-bit
             # ID to index into ucode ROM. Chosen through trial and error.
@@ -299,6 +185,7 @@ class Decode(Component):
 
         m.submodules.csr_attr = self.csr_attr
         m.submodules.imm_gen = self.imm_gen
+        m.submodules.mapping = self.mapping
 
         insn = Insn(self.insn)
 
@@ -311,6 +198,12 @@ class Decode(Component):
 
             self.imm_gen.enable.eq(self.do_decode),
             self.imm_gen.insn.eq(self.insn),
+
+            self.mapping.start.eq(self.do_decode),
+            self.mapping.insn.eq(self.insn),
+            self.mapping.csr_attr.eq(self.csr_attr.data),
+            self.requested_op.eq(self.mapping.requested_op),
+            self.csr_encoding.eq(self.mapping.csr_encoding)
         ]
 
         forward_csr = Signal()
@@ -336,99 +229,11 @@ class Decode(Component):
                 self.dst.eq(insn.rd),
             ]
 
-        # Mapping ROM
-        with m.If(self.do_decode):
-            # TODO: Might be worth hoisting comb statements out of m.If?
-            with m.Switch(self.opcode):
-                with m.Case(Insn.OpcodeType.OP_IMM):
-                    with m.If((insn.funct3 == 1) | (insn.funct3 == 5)):
-                        op_map = Cat(insn.funct3, insn.funct7[-2],
-                                     C(0x40 >> 4))
-                        m.d.sync += self.requested_op.eq(op_map)
-                    with m.Else():
-                        op_map = Cat(insn.funct3, 0, C(0x40 >> 4))
-                        m.d.sync += self.requested_op.eq(op_map)
-                with m.Case(Insn.OpcodeType.LUI):
-                    m.d.sync += self.requested_op.eq(0xD0)
-                with m.Case(Insn.OpcodeType.AUIPC):
-                    m.d.sync += self.requested_op.eq(0x50)
-                with m.Case(Insn.OpcodeType.OP):
-                    op_map = Cat(insn.funct3, insn.funct7[-2], C(0xC0 >> 4))
-                    m.d.sync += self.requested_op.eq(op_map)
-                with m.Case(Insn.OpcodeType.JAL):
-                    m.d.sync += self.requested_op.eq(0xB0)
-                with m.Case(Insn.OpcodeType.JALR):
-                    m.d.sync += self.requested_op.eq(0x98)
-                with m.Case(Insn.OpcodeType.BRANCH):
-                    m.d.sync += self.requested_op.eq(Cat(insn.funct3, C(0x88 >> 3)))
-                with m.Case(Insn.OpcodeType.LOAD):
-                    op_map = Cat(insn.funct3, C(0x08 >> 3))
-                    m.d.sync += self.requested_op.eq(op_map)
-                with m.Case(Insn.OpcodeType.STORE):
-                    op_map = Cat(insn.funct3, C(0x10))
-                    m.d.sync += self.requested_op.eq(op_map)
-                with m.Case(Insn.OpcodeType.MISC_MEM):
-                    m.d.sync += self.requested_op.eq(0x30)
-                with m.Case(Insn.OpcodeType.SYSTEM):
-                    with m.If(insn.raw == Insn.MRET):
-                        m.d.sync += self.requested_op.eq(248)
-                    with m.Elif(insn.raw == Insn.WFI):
-                        m.d.sync += self.requested_op.eq(0x30)
-                    with m.Elif((insn.funct3 != 0) & (insn.funct3 != 4)):
-                        # csr
-                        m.d.sync += self.requested_op.eq(0x24)
-
-        # Second decode cycle if this is a CSR access.
-        with m.If(forward_csr):
-            # It's illegal, sequencer will never send requested_op to ucode
-            # ROM. So we can do nothing here...
-            with m.If(self.csr_attr.data.ill):
-                pass
-            # Read-only Zero CSRs. Includes CSRs that are in actually
-            # read-only space (top 2 bits set), all of which are 0
-            # for this core.
-            with m.Elif(self.csr_attr.data.ro0):
-                # csrro0
-                m.d.sync += self.requested_op.eq(0x25)
-            with m.Else():
-                # Jump to microcode routines for actual, implemented
-                # CSR registers.
-                with m.If((csr_op == Insn._CSR.RW) & (self.dst == 0)):
-                    m.d.sync += self.requested_op.eq(0x26)  # csrw
-                with m.Elif((csr_op == Insn._CSR.RW) & (self.dst != 0)):
-                    m.d.sync += self.requested_op.eq(0x27)  # csrrw
-                with m.Elif((csr_op == Insn._CSR.RS) & (self.src_a == 0)):
-                    m.d.sync += self.requested_op.eq(0x28)  # csrr
-                with m.Elif((csr_op == Insn._CSR.RS) & (self.src_a != 0)):
-                    m.d.sync += self.requested_op.eq(0x29)  # csrrs
-                with m.Elif((csr_op == Insn._CSR.RC) & (self.src_a == 0)):
-                    m.d.sync += self.requested_op.eq(0x28)  # csrrc, no write
-                with m.Elif((csr_op == Insn._CSR.RC) & (self.src_a != 0)):
-                    m.d.sync += self.requested_op.eq(0x2a)  # csrrc
-                with m.Elif((csr_op == Insn._CSR.RWI) & (self.dst == 0)):
-                    m.d.sync += self.requested_op.eq(0x2b)  # csrwi
-                with m.Elif((csr_op == Insn._CSR.RWI) & (self.dst != 0)):
-                    m.d.sync += self.requested_op.eq(0x2c)  # csrrwi
-                with m.Elif((csr_op == Insn._CSR.RSI) & (self.src_a == 0)):
-                    m.d.sync += self.requested_op.eq(0x28)  # csrrsi, no write
-                with m.Elif((csr_op == Insn._CSR.RSI) & (self.src_a != 0)):
-                    m.d.sync += self.requested_op.eq(0x2d)  # csrrsi
-                with m.Elif((csr_op == Insn._CSR.RCI) & (self.src_a == 0)):
-                    m.d.sync += self.requested_op.eq(0x28)  # csrrci, no write
-                with m.Elif((csr_op == Insn._CSR.RCI) & (self.src_a != 0)):
-                    m.d.sync += self.requested_op.eq(0x2e)  # csrrci
-                with m.Else():
-                    # TODO: cover via rvformal.
-                    # This might be reachable, but not while
-                    # requested_op has a meaningful value in it.
-                    # Make sure this is actually the case.
-                    pass
-
         # Exception Control
         with m.If(self.do_decode):
             # TODO: Might be worth hoisting comb statements out of m.If?
             with m.Switch(insn.opcode):
-                with m.Case(Insn.OpcodeType.OP_IMM):
+                with m.Case(OpcodeType.OP_IMM):
                     with m.If((insn.funct3 == 1) | (insn.funct3 == 5)):
                         with m.If(insn.funct3 == 1):
                             with m.If(insn.funct7 != 0):
@@ -436,39 +241,39 @@ class Decode(Component):
                         with m.Else():
                             with m.If((insn.funct7 != 0) & (insn.funct7 != 0b0100000)):
                                 m.d.sync += self.exception.valid.eq(1)
-                with m.Case(Insn.OpcodeType.LUI):
+                with m.Case(OpcodeType.LUI):
                     pass
-                with m.Case(Insn.OpcodeType.AUIPC):
+                with m.Case(OpcodeType.AUIPC):
                     pass
-                with m.Case(Insn.OpcodeType.OP):
+                with m.Case(OpcodeType.OP):
                     with m.If((insn.funct3 == 0) | (insn.funct3 == 5)):
                         with m.If((insn.funct7 != 0) & (insn.funct7 != 0b0100000)):  # noqa: E501
                             m.d.sync += self.exception.valid.eq(1)
                     with m.Else():
                         with m.If(insn.funct7 != 0):
                             m.d.sync += self.exception.valid.eq(1)
-                with m.Case(Insn.OpcodeType.JAL):
+                with m.Case(OpcodeType.JAL):
                     pass
-                with m.Case(Insn.OpcodeType.JALR):
+                with m.Case(OpcodeType.JALR):
                     with m.If(insn.funct3 != 0):
                         m.d.sync += self.exception.valid.eq(1)
-                with m.Case(Insn.OpcodeType.BRANCH):
+                with m.Case(OpcodeType.BRANCH):
                     with m.If((insn.funct3 == 2) | (insn.funct3 == 3)):
                         m.d.sync += self.exception.valid.eq(1)
-                with m.Case(Insn.OpcodeType.LOAD):
+                with m.Case(OpcodeType.LOAD):
                     with m.If((insn.funct3 == 3) | (insn.funct3 == 6) | (insn.funct3 == 7)):
                         m.d.sync += self.exception.valid.eq(1)
-                with m.Case(Insn.OpcodeType.STORE):
+                with m.Case(OpcodeType.STORE):
                     with m.If(insn.funct3 >= 3):
                         m.d.sync += self.exception.valid.eq(1)
-                with m.Case(Insn.OpcodeType.CUSTOM_0):
+                with m.Case(OpcodeType.CUSTOM_0):
                     m.d.sync += self.exception.valid.eq(1)
-                with m.Case(Insn.OpcodeType.MISC_MEM):
+                with m.Case(OpcodeType.MISC_MEM):
                     # RS1 and RD should be ignored for FENCE insn in a base
                     # impl.
                     with m.If(insn.funct3 != 0):
                         m.d.sync += self.exception.valid.eq(1)
-                with m.Case(Insn.OpcodeType.SYSTEM):
+                with m.Case(OpcodeType.SYSTEM):
                     m.d.sync += self.exception.valid.eq(1)
                     # Yes, stripping the lower bits inexplicably makes a
                     # difference in resource usage...
@@ -486,11 +291,9 @@ class Decode(Component):
                         # jump to a temporary location. The next cycle
                         # will have the microcode jump to the _real_ CSR
                         # routine.
-                        csr_encode = Cat(insn.funct12[0:3], insn.funct12[6])
                         m.d.sync += [
                             forward_csr.eq(1),
                             self.exception.valid.eq(0),
-                            self.csr_encoding.eq(csr_encode)
                         ]
 
                 with m.Default():
@@ -536,8 +339,8 @@ class Decode(Component):
             ]
 
             m.d.comb += self.rvfi.rd_valid.eq(
-                ~((self.opcode == Insn.OpcodeType.BRANCH) |
-                  (self.opcode == Insn.OpcodeType.MISC_MEM) |
-                  (self.opcode == Insn.OpcodeType.STORE)))
+                ~((self.opcode == OpcodeType.BRANCH) |
+                  (self.opcode == OpcodeType.MISC_MEM) |
+                  (self.opcode == OpcodeType.STORE)))
 
         return m
