@@ -2,7 +2,7 @@ from amaranth import Signal, Module, Cat, C
 from amaranth.lib.wiring import Component, Signature, Out, In, connect, flipped
 from amaranth_soc import wishbone
 
-from .alu import ALU
+from .alu import ALU, ASrcMux, BSrcMux
 from .control import Control
 from .datapath import DataPath
 from .decode import Decode
@@ -22,6 +22,8 @@ class Top(Component):
         ###
 
         self.alu = ALU(32)
+        self.a_src = ASrcMux()
+        self.b_src = BSrcMux()
         self.control = Control()
         self.datapath = DataPath(formal=formal)
         self.decode = Decode(formal=formal)
@@ -52,6 +54,8 @@ class Top(Component):
         m = Module()
 
         m.submodules.alu = self.alu
+        m.submodules.a_src = self.a_src
+        m.submodules.b_src = self.b_src
         m.submodules.control = self.control
         m.submodules.datapath = self.datapath
         m.submodules.decode = self.decode
@@ -67,77 +71,28 @@ class Top(Component):
         # ALU conns
         connect(m, self.alu.ctrl, self.control.alu)
 
-        # ALU conns
         m.d.comb += [
-            self.alu.a.eq(self.a_input),
-            self.alu.b.eq(self.b_input),
+            self.alu.a.eq(self.a_src.data),
+            self.a_src.latch.eq(self.control.latch_a),
+            self.a_src.sel.eq(self.control.a_src),
+            self.a_src.gp.eq(self.datapath.gp.dat_r),
+            self.a_src.imm.eq(self.decode.imm),
+            self.a_src.alu.eq(self.alu.o),
+
+            self.alu.b.eq(self.b_src.data),
+            self.b_src.latch.eq(self.control.latch_b),
+            self.b_src.sel.eq(self.control.b_src),
+            self.b_src.mem_sel.eq(self.control.mem_sel),
+            self.b_src.mem_extend.eq(self.control.mem_extend),
+            self.b_src.data_adr.eq(data_adr),
+            self.b_src.gp.eq(self.datapath.gp.dat_r),
+            self.b_src.imm.eq(self.decode.imm),
+            self.b_src.pc.eq(self.datapath.pc.dat_r),
+            self.b_src.dat_r.eq(self.bus.dat_r),
+            self.b_src.csr_imm.eq(self.decode.src_a),
+            self.b_src.csr.eq(self.datapath.csr.dat_r),
+            self.b_src.mcause.eq(self.exception_router.out.mcause)
         ]
-
-        # Connect ALU sources
-        with m.If(self.control.latch_a):
-            with m.Switch(self.control.a_src):
-                with m.Case(ASrc.GP):
-                    m.d.sync += self.a_input.eq(self.datapath.gp.dat_r)
-                with m.Case(ASrc.IMM):
-                    m.d.sync += self.a_input.eq(self.decode.imm)
-                with m.Case(ASrc.ZERO):
-                    m.d.sync += self.a_input.eq(0)
-                with m.Case(ASrc.ALU_O):
-                    m.d.sync += self.a_input.eq(self.alu.o)
-                with m.Case(ASrc.FOUR):
-                    m.d.sync += self.a_input.eq(4)
-                with m.Case(ASrc.NEG_ONE):
-                    m.d.sync += self.a_input.eq(C(-1, 32))
-                with m.Case(ASrc.THIRTY_ONE):
-                    m.d.sync += self.a_input.eq(31)
-
-        raw_dat_r = Signal.like(self.b_input)
-        with m.If(self.control.latch_b):
-            with m.Switch(self.control.b_src):
-                with m.Case(BSrc.GP):
-                    m.d.sync += self.b_input.eq(self.datapath.gp.dat_r)
-                with m.Case(BSrc.IMM):
-                    m.d.sync += self.b_input.eq(self.decode.imm)
-                with m.Case(BSrc.ONE):
-                    m.d.sync += self.b_input.eq(1)
-                with m.Case(BSrc.PC):
-                    m.d.sync += self.b_input.eq(Cat(C(0, 2),
-                                                    self.datapath.pc.dat_r))
-                with m.Case(BSrc.DAT_R):
-                    with m.Switch(self.control.mem_sel):
-                        with m.Case(MemSel.BYTE):
-                            with m.If(data_adr[0:2] == 0):
-                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[0:8])
-                            with m.Elif(data_adr[0:2] == 1):
-                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[8:16])
-                            with m.Elif(data_adr[0:2] == 2):
-                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[16:24])
-                            with m.Else():
-                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[24:])
-
-                            with m.If(self.control.mem_extend == MemExtend.SIGN):  # noqa: E501
-                                m.d.sync += self.b_input.eq(raw_dat_r[0:8].as_signed())  # noqa: E501
-                            with m.Else():
-                                m.d.sync += self.b_input.eq(raw_dat_r[0:8])
-                        with m.Case(MemSel.HWORD):
-                            with m.If(data_adr[1] == 0):
-                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[0:16])
-                            with m.Else():
-                                m.d.comb += raw_dat_r.eq(self.bus.dat_r[16:])
-
-                            with m.If(self.control.mem_extend == MemExtend.SIGN):  # noqa: E501
-                                m.d.sync += self.b_input.eq(raw_dat_r[0:16].as_signed())  # noqa: E501
-                            with m.Else():
-                                m.d.sync += self.b_input.eq(raw_dat_r[0:16])
-                        with m.Case(MemSel.WORD):
-                            m.d.sync += self.b_input.eq(self.bus.dat_r)
-                with m.Case(BSrc.CSR_IMM):
-                    m.d.sync += self.b_input.eq(self.decode.src_a)
-                with m.Case(BSrc.CSR):
-                    m.d.sync += self.b_input.eq(self.datapath.csr.dat_r)
-                with m.Case(BSrc.MCAUSE_LATCH):
-                    m.d.sync += self.b_input.eq(
-                        self.exception_router.out.mcause)
 
         # Control conns
         m.d.comb += [

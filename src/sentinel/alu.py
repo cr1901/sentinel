@@ -1,7 +1,116 @@
-from .ucodefields import OpType, ALUIMod, ALUOMod
+from .csr import MCause
+from .ucodefields import OpType, ALUIMod, ALUOMod, ASrc, BSrc, MemSel, \
+    MemExtend
 
-from amaranth import Elaboratable, Signal, Module
+from amaranth import Elaboratable, Signal, Module, C, Cat
 from amaranth.lib.wiring import Component, Signature, In, Out
+
+
+class ASrcMux(Component):
+    def __init__(self):
+        sig = {
+            "latch": Out(1),
+            "sel": Out(ASrc),
+            "gp": Out(32),
+            "imm": Out(32),
+            "alu": Out(32),
+            "data": In(32)
+        }
+        super().__init__(Signature(sig).flip())
+
+    def elaborate(self, platform):
+        m = Module()
+
+        with m.If(self.latch):
+            with m.Switch(self.sel):
+                with m.Case(ASrc.GP):
+                    m.d.sync += self.data.eq(self.gp)
+                with m.Case(ASrc.IMM):
+                    m.d.sync += self.data.eq(self.imm)
+                with m.Case(ASrc.ZERO):
+                    m.d.sync += self.data.eq(0)
+                with m.Case(ASrc.ALU_O):
+                    m.d.sync += self.data.eq(self.alu)
+                with m.Case(ASrc.FOUR):
+                    m.d.sync += self.data.eq(4)
+                with m.Case(ASrc.NEG_ONE):
+                    m.d.sync += self.data.eq(C(-1, 32))
+                with m.Case(ASrc.THIRTY_ONE):
+                    m.d.sync += self.data.eq(31)
+
+        return m
+
+
+class BSrcMux(Component):
+    def __init__(self):
+        sig = {
+            "latch": Out(1),
+            "sel": Out(BSrc),
+            "mem_sel": Out(MemSel),
+            "mem_extend": Out(MemExtend),
+            "data_adr": Out(32),
+            "gp": Out(32),
+            "imm": Out(32),
+            "pc": Out(30),
+            "dat_r": Out(32),
+            "csr_imm": Out(5),
+            "csr": Out(32),
+            "mcause": Out(MCause),
+            "data": In(32)
+        }
+        super().__init__(Signature(sig).flip())
+
+    def elaborate(self, platform):
+        m = Module()
+
+        raw_dat_r = Signal.like(self.dat_r)
+
+        with m.If(self.latch):
+            with m.Switch(self.sel):
+                with m.Case(BSrc.GP):
+                    m.d.sync += self.data.eq(self.gp)
+                with m.Case(BSrc.IMM):
+                    m.d.sync += self.data.eq(self.imm)
+                with m.Case(BSrc.ONE):
+                    m.d.sync += self.data.eq(1)
+                with m.Case(BSrc.PC):
+                    m.d.sync += self.data.eq(Cat(C(0, 2), self.pc))
+                with m.Case(BSrc.DAT_R):
+                    with m.Switch(self.mem_sel):
+                        with m.Case(MemSel.BYTE):
+                            with m.If(self.data_adr[0:2] == 0):
+                                m.d.comb += raw_dat_r.eq(self.dat_r[0:8])
+                            with m.Elif(self.data_adr[0:2] == 1):
+                                m.d.comb += raw_dat_r.eq(self.dat_r[8:16])
+                            with m.Elif(self.data_adr[0:2] == 2):
+                                m.d.comb += raw_dat_r.eq(self.dat_r[16:24])
+                            with m.Else():
+                                m.d.comb += raw_dat_r.eq(self.dat_r[24:])
+
+                            with m.If(self.mem_extend == MemExtend.SIGN):  # noqa: E501
+                                m.d.sync += self.data.eq(raw_dat_r[0:8].as_signed())  # noqa: E501
+                            with m.Else():
+                                m.d.sync += self.data.eq(raw_dat_r[0:8])
+                        with m.Case(MemSel.HWORD):
+                            with m.If(self.data_adr[1] == 0):
+                                m.d.comb += raw_dat_r.eq(self.dat_r[0:16])
+                            with m.Else():
+                                m.d.comb += raw_dat_r.eq(self.dat_r[16:])
+
+                            with m.If(self.mem_extend == MemExtend.SIGN):  # noqa: E501
+                                m.d.sync += self.data.eq(raw_dat_r[0:16].as_signed())  # noqa: E501
+                            with m.Else():
+                                m.d.sync += self.data.eq(raw_dat_r[0:16])
+                        with m.Case(MemSel.WORD):
+                            m.d.sync += self.data.eq(self.dat_r)
+                with m.Case(BSrc.CSR_IMM):
+                    m.d.sync += self.data.eq(self.csr_imm)
+                with m.Case(BSrc.CSR):
+                    m.d.sync += self.data.eq(self.csr)
+                with m.Case(BSrc.MCAUSE_LATCH):
+                    m.d.sync += self.data.eq(self.mcause)
+
+        return m
 
 
 class Unit(Elaboratable):
