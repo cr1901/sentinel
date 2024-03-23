@@ -1,3 +1,4 @@
+from .align import ReadDataAlign
 from .csr import MCause
 from .ucodefields import OpType, ALUIMod, ALUOMod, ASrc, BSrc, MemSel, \
     MemExtend
@@ -46,9 +47,11 @@ class BSrcMux(Component):
         sig = {
             "latch": Out(1),
             "sel": Out(BSrc),
+
             "mem_sel": Out(MemSel),
             "mem_extend": Out(MemExtend),
             "data_adr": Out(32),
+
             "gp": Out(32),
             "imm": Out(32),
             "pc": Out(30),
@@ -58,12 +61,20 @@ class BSrcMux(Component):
             "mcause": Out(MCause),
             "data": In(32)
         }
+        self.rdata_align = ReadDataAlign()
         super().__init__(Signature(sig).flip())
 
     def elaborate(self, platform):
         m = Module()
 
-        raw_dat_r = Signal.like(self.dat_r)
+        m.submodules.rdata_align = self.rdata_align
+
+        m.d.comb += [
+            self.rdata_align.mem_sel.eq(self.mem_sel),
+            self.rdata_align.mem_extend.eq(self.mem_extend),
+            self.rdata_align.latched_adr.eq(self.data_adr),
+            self.rdata_align.wb_dat_r.eq(self.dat_r)
+        ]
 
         with m.If(self.latch):
             with m.Switch(self.sel):
@@ -76,33 +87,7 @@ class BSrcMux(Component):
                 with m.Case(BSrc.PC):
                     m.d.sync += self.data.eq(Cat(C(0, 2), self.pc))
                 with m.Case(BSrc.DAT_R):
-                    with m.Switch(self.mem_sel):
-                        with m.Case(MemSel.BYTE):
-                            with m.If(self.data_adr[0:2] == 0):
-                                m.d.comb += raw_dat_r.eq(self.dat_r[0:8])
-                            with m.Elif(self.data_adr[0:2] == 1):
-                                m.d.comb += raw_dat_r.eq(self.dat_r[8:16])
-                            with m.Elif(self.data_adr[0:2] == 2):
-                                m.d.comb += raw_dat_r.eq(self.dat_r[16:24])
-                            with m.Else():
-                                m.d.comb += raw_dat_r.eq(self.dat_r[24:])
-
-                            with m.If(self.mem_extend == MemExtend.SIGN):  # noqa: E501
-                                m.d.sync += self.data.eq(raw_dat_r[0:8].as_signed())  # noqa: E501
-                            with m.Else():
-                                m.d.sync += self.data.eq(raw_dat_r[0:8])
-                        with m.Case(MemSel.HWORD):
-                            with m.If(self.data_adr[1] == 0):
-                                m.d.comb += raw_dat_r.eq(self.dat_r[0:16])
-                            with m.Else():
-                                m.d.comb += raw_dat_r.eq(self.dat_r[16:])
-
-                            with m.If(self.mem_extend == MemExtend.SIGN):  # noqa: E501
-                                m.d.sync += self.data.eq(raw_dat_r[0:16].as_signed())  # noqa: E501
-                            with m.Else():
-                                m.d.sync += self.data.eq(raw_dat_r[0:16])
-                        with m.Case(MemSel.WORD):
-                            m.d.sync += self.data.eq(self.dat_r)
+                    m.d.sync += self.data.eq(self.rdata_align.data)
                 with m.Case(BSrc.CSR_IMM):
                     m.d.sync += self.data.eq(self.csr_imm)
                 with m.Case(BSrc.CSR):

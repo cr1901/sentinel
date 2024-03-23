@@ -139,6 +139,7 @@ class ImmediateGenerator(Component):
         return m
 
 
+# ExceptionControl is aware of CSR decode cycles.
 class ExceptionControl(Component):
     def __init__(self):
         sig = {
