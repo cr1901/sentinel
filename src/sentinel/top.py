@@ -16,10 +16,6 @@ class Top(Component):
     def __init__(self, *, formal=False):
         self.formal = formal
 
-        self.req_next = Signal()
-        self.insn_fetch_curr = Signal()
-        self.insn_fetch_next = Signal()
-
         ###
 
         self.alu = ALU(32)
@@ -60,14 +56,32 @@ class Top(Component):
         m.submodules.wdata_align = self.wdata_align
         # m.submodules.d_src = self.d_src
 
+        # The lone sync logic in Top. They don't fit nicely elsewhere.
         data_adr = Signal.like(self.alu.o)
+        write_data = Signal.like(self.bus.dat_w)
 
         with m.If(self.control.latch_adr):
             m.d.sync += data_adr.eq(self.alu.o)
 
+        with m.If(self.control.latch_data):
+            m.d.sync += write_data.eq(self.wdata_align.wb_dat_w)
+
+        # Bus conns
+        read_data = Signal.like(self.bus.dat_r)
+        mem_ack = Signal()
+        irq = Signal()
+
         m.d.comb += [
-            self.datapath.csr.mip_w.meip.eq(self.irq),
-            self.datapath.csr.ctrl.exception.eq(self.control.except_ctl)
+            self.bus.cyc.eq(self.control.mem_req),
+            self.bus.stb.eq(self.control.mem_req),
+            self.bus.we.eq(self.control.write_mem),
+            self.bus.dat_w.eq(write_data),
+            self.bus.adr.eq(self.addr_align.wb_adr),
+            self.bus.sel.eq(self.addr_align.wb_sel),
+            read_data.eq(self.bus.dat_r),
+            mem_ack.eq(self.bus.ack),
+            irq.eq(self.irq)
+            # self.insn_fetch.eq(self.control.insn_fetch)
         ]
 
         # ALU conns
@@ -87,43 +101,36 @@ class Top(Component):
             self.b_src.gp.eq(self.datapath.gp.dat_r),
             self.b_src.imm.eq(self.decode.imm),
             self.b_src.pc.eq(self.datapath.pc.dat_r),
-            self.b_src.dat_r.eq(self.bus.dat_r),
+            self.b_src.dat_r.eq(read_data),
             self.b_src.csr_imm.eq(self.decode.src_a),
             self.b_src.csr.eq(self.datapath.csr.dat_r),
             self.b_src.mcause.eq(self.exception_router.out.mcause)
         ]
 
-        # Control conns
+        # Control/Decode conns
+        # Load-bearing Signals that do nothing, but somehow save LUTs...
+        req_next = Signal()
+        insn_fetch_next = Signal()
+
         m.d.comb += [
             self.control.opcode.eq(self.decode.opcode),
             self.control.requested_op.eq(self.decode.requested_op),
-            self.req_next.eq(self.control.mem_req),
-            self.insn_fetch_next.eq(self.control.insn_fetch),
-            self.control.mem_valid.eq(self.bus.ack),
-
             # TODO: Spin out into a register of exception sources.
-            self.control.exception.eq(self.exception_router.out.exception)
+            self.control.exception.eq(self.exception_router.out.exception),
+            self.control.mem_valid.eq(mem_ack),
+
+            req_next.eq(self.control.mem_req),
+            insn_fetch_next.eq(self.control.insn_fetch),
+
+            self.decode.insn.eq(read_data),
+            # Decode begins automatically.
+            self.decode.do_decode.eq(self.control.insn_fetch & mem_ack),
         ]
 
-        # An ACK stops the request b/c the microcode's to avoid a 1-cycle delay
-        # due to registered REQ/FETCH signal.
-        m.d.comb += [
-            self.bus.cyc.eq(self.control.mem_req),
-            self.bus.stb.eq(self.control.mem_req),
-            # self.insn_fetch.eq(self.control.insn_fetch)
-        ]
+        # DataPath conns
+        connect(m, self.datapath.gp.ctrl, self.control.gp)
+        connect(m, self.datapath.pc.ctrl, self.control.pc)
 
-        m.d.comb += [
-            self.datapath.gp.ctrl.reg_read.eq(self.control.gp.reg_read),
-            self.datapath.gp.ctrl.reg_write.eq(self.control.gp.reg_write),
-            self.datapath.csr.ctrl.op.eq(self.control.csr.op),
-            self.datapath.pc.ctrl.action.eq(self.control.pc.action)
-        ]
-
-        # connect(m, self.datapath.gp.ctrl, self.control.gp)
-        # connect(m, self.datapath.pc.ctrl, self.control.pc)
-
-        write_data = Signal.like(self.bus.dat_w)
         # This is a load-bearing optimization... yes, they must be a Signal of
         # width 6, not 5, and they must directly connect the inline
         # DataPathSrcMux implementation below to the DataPath.
@@ -132,14 +139,14 @@ class Top(Component):
         reg_r_adr = Signal(6)
         reg_w_adr = Signal(6)
         m.d.comb += [
-            self.bus.we.eq(self.control.write_mem),
-            self.bus.dat_w.eq(write_data),
             self.datapath.gp.dat_w.eq(self.alu.o),
             self.datapath.gp.adr_r.eq(reg_r_adr),
             self.datapath.gp.adr_w.eq(reg_w_adr),
             # FIXME: Compressed insns.
             self.datapath.pc.dat_w.eq(self.alu.o[2:]),
             self.datapath.csr.dat_w.eq(self.alu.o),
+            self.datapath.csr.ctrl.exception.eq(self.control.except_ctl),
+            self.datapath.csr.mip_w.meip.eq(irq)
         ]
 
         # Alignment conns
@@ -149,8 +156,6 @@ class Top(Component):
             self.addr_align.insn_fetch.eq(self.control.insn_fetch),
             self.addr_align.latched_adr.eq(data_adr),
             self.addr_align.pc.eq(self.datapath.pc.dat_r),
-            self.bus.adr.eq(self.addr_align.wb_adr),
-            self.bus.sel.eq(self.addr_align.wb_sel),
 
             self.b_src.mem_sel.eq(self.control.mem_sel),
             self.b_src.mem_extend.eq(self.control.mem_extend),
@@ -159,16 +164,6 @@ class Top(Component):
             self.wdata_align.mem_sel.eq(self.control.mem_sel),
             self.wdata_align.latched_adr.eq(data_adr),
             self.wdata_align.data.eq(self.alu.o),
-        ]
-
-        with m.If(self.control.latch_data):
-            m.d.sync += write_data.eq(self.wdata_align.wb_dat_w)
-
-        # Decode conns
-        m.d.comb += [
-            self.decode.insn.eq(self.bus.dat_r),
-            # Decode begins automatically.
-            self.decode.do_decode.eq(self.control.insn_fetch & self.bus.ack),
         ]
 
         # Datapath Src Conns
