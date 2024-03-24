@@ -3,7 +3,7 @@ from amaranth.lib.data import View
 from amaranth.lib.memory import Memory
 from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 
-from .ucodefields import PcAction, CSROp, ExceptCtl
+from .ucodefields import CSRSel, PcAction, CSROp, ExceptCtl, RegRSel, RegWSel
 
 from .csr import MStatus, MTVec, MIP, MIE, MCause
 
@@ -245,6 +245,58 @@ class CSRFile(Component):
                 mstatus.mie.eq(mstatus.mpie),
                 mstatus.mpie.eq(1)
             ]
+
+        return m
+
+
+class DataPathSrcMux(Component):
+    def __init__(self):
+        sig = {
+            "insn_fetch": Out(1),
+            "reg_r_sel": Out(RegRSel),
+            "reg_w_sel": Out(RegWSel),
+            "csr_sel": Out(CSRSel),
+            "src_a_unreg": Out(5),
+            "src_a": Out(5),
+            "src_b": Out(5),
+            "dst": Out(5),
+            "csr_encoding": Out(4),
+            "csr_target": Out(4),
+
+            "reg_r_adr": In(5),
+            "reg_w_adr": In(5),
+            "allow_zero_wr": In(1),
+            "csr_adr": In(4)
+        }
+        super().__init__(Signature(sig).flip())
+
+    def elaborate(self, platform):
+        m = Module()
+
+        with m.Switch(self.reg_r_sel):
+            with m.Case(RegRSel.INSN_RS1):
+                with m.If(self.insn_fetch):
+                    m.d.comb += self.reg_r_adr.eq(self.src_a_unreg)
+                with m.Else():
+                    m.d.comb += self.reg_r_adr.eq(self.src_a)
+            with m.Case(RegRSel.INSN_RS2):
+                m.d.comb += self.reg_r_adr.eq(self.src_b)
+
+        with m.Switch(self.reg_w_sel):
+            with m.Case(RegWSel.INSN_RD):
+                m.d.comb += self.reg_w_adr.eq(self.dst)
+            with m.Case(RegWSel.ZERO):
+                m.d.comb += [
+                    self.reg_w_adr.eq(0),
+                    self.allow_zero_wr.eq(1)
+                ]
+
+        # CSR Op/Address control (data conns taken care above)
+        with m.Switch(self.csr_sel):
+            with m.Case(CSRSel.INSN_CSR):
+                m.d.comb += self.csr_adr.eq(self.csr_encoding)
+            with m.Case(CSRSel.TRG_CSR):
+                m.d.comb += self.csr_adr.eq(self.csr_target)
 
         return m
 
