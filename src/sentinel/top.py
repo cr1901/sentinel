@@ -5,7 +5,7 @@ from amaranth_soc import wishbone
 from .alu import ALU, ASrcMux, BSrcMux
 from .align import AddressAlign, WriteDataAlign
 from .control import Control
-from .datapath import DataPath, DataPathSrcMux
+from .datapath import DataPath, DataPathSrcMux  # noqa: F401
 from .decode import Decode
 from .exception import ExceptionRouter
 from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
@@ -29,7 +29,7 @@ class Top(Component):
         self.control = Control()
         self.datapath = DataPath(formal=formal)
         self.decode = Decode(formal=formal)
-        self.d_src = DataPathSrcMux()
+        # self.d_src = DataPathSrcMux()
         self.exception_router = ExceptionRouter()
         self.wdata_align = WriteDataAlign()
 
@@ -58,7 +58,7 @@ class Top(Component):
         m.submodules.decode = self.decode
         m.submodules.exception_router = self.exception_router
         m.submodules.wdata_align = self.wdata_align
-        m.submodules.d_src = self.d_src
+        # m.submodules.d_src = self.d_src
 
         data_adr = Signal.like(self.alu.o)
 
@@ -124,10 +124,19 @@ class Top(Component):
         # connect(m, self.datapath.pc.ctrl, self.control.pc)
 
         write_data = Signal.like(self.bus.dat_w)
+        # This is a load-bearing optimization... yes, they must be a Signal of
+        # width 6, not 5, and they must directly connect the inline
+        # DataPathSrcMux implementation below to the DataPath.
+        # No, I don't get it either, and I'm willing to accept the ugliness
+        # for now and come back to it later when I'm refreshed.
+        reg_r_adr = Signal(6)
+        reg_w_adr = Signal(6)
         m.d.comb += [
             self.bus.we.eq(self.control.write_mem),
             self.bus.dat_w.eq(write_data),
             self.datapath.gp.dat_w.eq(self.alu.o),
+            self.datapath.gp.adr_r.eq(reg_r_adr),
+            self.datapath.gp.adr_w.eq(reg_w_adr),
             # FIXME: Compressed insns.
             self.datapath.pc.dat_w.eq(self.alu.o[2:]),
             self.datapath.csr.dat_w.eq(self.alu.o),
@@ -163,23 +172,54 @@ class Top(Component):
         ]
 
         # Datapath Src Conns
-        m.d.comb += [
-            self.d_src.insn_fetch.eq(self.control.insn_fetch),
-            self.d_src.reg_r_sel.eq(self.control.reg_r_sel),
-            self.d_src.reg_w_sel.eq(self.control.reg_w_sel),
-            self.d_src.csr_sel.eq(self.control.csr_sel),
-            self.d_src.src_a_unreg.eq(self.decode.src_a_unreg),
-            self.d_src.src_a.eq(self.decode.src_a),
-            self.d_src.src_b.eq(self.decode.src_b),
-            self.d_src.dst.eq(self.decode.dst),
-            self.d_src.csr_encoding.eq(self.decode.csr_encoding),
-            self.d_src.csr_target.eq(self.control.target[0:4]),
+        # FIXME: This should be replaced with the following glue once I
+        # figure out why DataPathSrcMux doesn't optimize well:
+        # m.d.comb += [
+        #     self.d_src.insn_fetch.eq(self.control.insn_fetch),
+        #     self.d_src.reg_r_sel.eq(self.control.reg_r_sel),
+        #     self.d_src.reg_w_sel.eq(self.control.reg_w_sel),
+        #     self.d_src.csr_sel.eq(self.control.csr_sel),
+        #     self.d_src.src_a_unreg.eq(self.decode.src_a_unreg),
+        #     self.d_src.src_a.eq(self.decode.src_a),
+        #     self.d_src.src_b.eq(self.decode.src_b),
+        #     self.d_src.dst.eq(self.decode.dst),
+        #     self.d_src.csr_encoding.eq(self.decode.csr_encoding),
+        #     self.d_src.csr_target.eq(self.control.target[0:4]),
 
-            self.datapath.gp.adr_r.eq(self.d_src.reg_r_adr),
-            self.datapath.gp.adr_w.eq(self.d_src.reg_w_adr),
-            self.datapath.gp.ctrl.allow_zero_wr.eq(self.d_src.allow_zero_wr),
-            self.datapath.csr.adr.eq(self.d_src.csr_adr)
-        ]
+        #     self.datapath.gp.adr_r.eq(self.d_src.reg_r_adr),
+        #     self.datapath.gp.adr_w.eq(self.d_src.reg_w_adr),
+        #     self.datapath.gp.ctrl.allow_zero_wr.eq(self.d_src.allow_zero_wr),
+        #     self.datapath.csr.adr.eq(self.d_src.csr_adr)
+        # ]
+
+        # DataPathSrcMux inline implementation. Optimizes much better than the
+        # module, especially with the reg_{r,w}_adr intermediate Signals.
+        # Doesn't make much sense to me, but whatever...
+        with m.Switch(self.control.reg_r_sel):
+            with m.Case(RegRSel.INSN_RS1):
+                with m.If(self.control.insn_fetch):
+                    m.d.comb += reg_r_adr.eq(self.decode.src_a_unreg)
+                with m.Else():
+                    m.d.comb += reg_r_adr.eq(self.decode.src_a)
+            with m.Case(RegRSel.INSN_RS2):
+                m.d.comb += reg_r_adr.eq(self.decode.src_b)
+
+        with m.Switch(self.control.reg_w_sel):
+            with m.Case(RegWSel.INSN_RD):
+                m.d.comb += reg_w_adr.eq(self.decode.dst)
+            with m.Case(RegWSel.ZERO):
+                m.d.comb += [
+                    reg_w_adr.eq(0),
+                    self.datapath.gp.ctrl.allow_zero_wr.eq(1)
+                ]
+
+        # CSR Op/Address control (data conns taken care above)
+        m.d.comb += self.datapath.csr.ctrl.op.eq(self.control.csr.op)
+        with m.Switch(self.control.csr_sel):
+            with m.Case(CSRSel.INSN_CSR):
+                m.d.comb += self.datapath.csr.adr.eq(self.decode.csr_encoding)
+            with m.Case(CSRSel.TRG_CSR):
+                m.d.comb += self.datapath.csr.adr.eq(self.control.target[0:4])
 
         # Exception Router sources
         m.d.comb += [
