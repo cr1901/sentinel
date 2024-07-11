@@ -37,6 +37,7 @@ class Bar(enum.Enum):
 @pytest.mark.clks((1.0 / 12e6,))
 def test_ucode_layout_gen(sim_mod):
     _, m = sim_mod
+    # Use Fragment.get to ensure the Module is marked as used.
     Fragment.get(m, None)
 
 
