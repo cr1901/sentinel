@@ -1,6 +1,7 @@
 import pytest
 import enum
 
+from amaranth import Fragment
 from io import StringIO
 
 from sentinel.ucoderom import UCodeROM
@@ -36,7 +37,8 @@ class Bar(enum.Enum):
 @pytest.mark.clks((1.0 / 12e6,))
 def test_ucode_layout_gen(sim_mod):
     _, m = sim_mod
-    m.elaborate(None)
+    # Use Fragment.get to ensure the Module is marked as used.
+    Fragment.get(m, None)
 
 
 @pytest.mark.module(UCodeROM(main_file=StringIO(M5META_TEST_FILE),
