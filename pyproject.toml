@@ -7,7 +7,7 @@ authors = [
 dependencies = [
     "m5meta>=1.0.4",
     "m5pre>=1.0.3",
-    "amaranth @ git+https://github.com/amaranth-lang/amaranth",
+    "amaranth>=0.5.0",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
@@ -61,7 +61,7 @@ dev = [
     "pytest>=7.4.2",
     "doit>=0.36.0",
     "Verilog-VCD>=1.11",
-    "logLUTs @ git+https://github.com/mattvenn/logLUTs@a7fa902",
+    "logLUTs @ git+https://github.com/mattvenn/logLUTs@a7fa902a5f70c7d53a654d850f745e36821fbb78",
     "click>=8.1.7",  # Though I expect users to provide sby, sby requires
                      # this module and doesn't opt-in to PEP 517. So provide
                      # it here.
@@ -77,7 +77,7 @@ riscof = [
     "riscof>=1.25.3",
 ]
 remote = [
-    "amaranth[remote-build] @ git+https://github.com/amaranth-lang/amaranth",
+    "amaranth[remote-build]>=0.5.0",
     "paramiko~=2.7"
 ]
 lint = [
