@@ -28,6 +28,9 @@ markers = [
   "soc: run SoC simulations."
 ]
 addopts="--ignore=tests/upstream/binaries"
+required_plugins = "pytest-amaranth-sim"
+long_vcd_filenames = true
+extend_vcd_time = "41666666"  # extend by half a 12MHz period.
 
 [tool.ruff]
 src = [ "src", "tests" ]  # https://docs.astral.sh/ruff/faq/#how-does-ruff-determine-which-of-my-imports-are-first-party-third-party-etc
@@ -63,8 +66,9 @@ dev = [
     "Verilog-VCD>=1.11",
     "logLUTs @ git+https://github.com/mattvenn/logLUTs@a7fa902a5f70c7d53a654d850f745e36821fbb78",
     "click>=8.1.7",  # Though I expect users to provide sby, sby requires
-                     # this module and doesn't opt-in to PEP 517. So provide
-                     # it here.
+    # this module and doesn't opt-in to PEP 517. So provide
+    # it here.
+    "pytest-amaranth-sim>=0.1.0",
 ]
 examples = [
     "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",

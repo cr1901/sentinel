@@ -4,12 +4,12 @@ from dataclasses import dataclass
 @dataclass
 class RV32Regs:
     @classmethod
-    def from_top_module(cls, m):
+    def from_top_module(cls, m, ctx):
         gpregs = []
         for r_id in range(32):
-            gpregs.append((yield m.cpu.datapath.regfile.mem[r_id]))
+            gpregs.append(ctx.get(m.cpu.datapath.regfile.mem[r_id]))
 
-        return cls(*gpregs, PC=(yield m.cpu.datapath.pc.dat_r))
+        return cls(*gpregs, PC=(ctx.get(m.cpu.datapath.pc.dat_r)))
 
     R0: int = 0
     R1: int = 0
@@ -49,16 +49,16 @@ class RV32Regs:
 @dataclass
 class CSRRegs:
     @classmethod
-    def from_top_module(cls, m):
+    def from_top_module(cls, m, ctx):
         csrregs = {}
 
-        csrregs["MSCRATCH"] = (yield m.cpu.datapath.regfile.mem[0x28])
-        csrregs["MSTATUS"] = (yield m.cpu.datapath.csr.mstatus_r.as_value())  # noqa: E501
-        csrregs["MTVEC"] = (yield m.cpu.datapath.regfile.mem[0x25])
-        csrregs["MIE"] = (yield m.cpu.datapath.csr.mie_r.as_value())
-        csrregs["MIP"] = (yield m.cpu.datapath.csr.mip_r.as_value())
-        csrregs["MEPC"] = (yield m.cpu.datapath.regfile.mem[0x29])
-        csrregs["MCAUSE"] = (yield m.cpu.datapath.regfile.mem[0x2A])
+        csrregs["MSCRATCH"] = ctx.get(m.cpu.datapath.regfile.mem[0x28])
+        csrregs["MSTATUS"] = ctx.get(m.cpu.datapath.csr.mstatus_r.as_value())  # noqa: E501
+        csrregs["MTVEC"] = ctx.get(m.cpu.datapath.regfile.mem[0x25])
+        csrregs["MIE"] = ctx.get(m.cpu.datapath.csr.mie_r.as_value())
+        csrregs["MIP"] = ctx.get(m.cpu.datapath.csr.mip_r.as_value())
+        csrregs["MEPC"] = ctx.get(m.cpu.datapath.regfile.mem[0x29])
+        csrregs["MCAUSE"] = ctx.get(m.cpu.datapath.regfile.mem[0x2A])
 
         return cls(**csrregs)
 

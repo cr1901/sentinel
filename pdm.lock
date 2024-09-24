@@ -5,7 +5,7 @@
 groups = ["default", "dev", "examples", "lint", "remote", "riscof"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:00c31088e3891d643ba7a7c963a03074cf9070964017dfdf6fc4738948ef3075"
+content_hash = "sha256:466bb8e8c209b1bc40eda557315f1985a5f061b98c9ab7d2ceab6bba759913fc"
 
 [[metadata.targets]]
 requires_python = ">=3.11"
@@ -368,6 +368,17 @@ dependencies = [
 files = [
     {file = "importlib_metadata-8.5.0-py3-none-any.whl", hash = "sha256:45e54197d28b7a7f1559e60b95e7c567032b602131fbd588f1497f47880aa68b"},
     {file = "importlib_metadata-8.5.0.tar.gz", hash = "sha256:71522656f0abace1d072b9e5481a48f07c138e00f079c38c8f883823f9c26bd7"},
+]
+
+[[package]]
+name = "in-place"
+version = "1.0.0"
+requires_python = ">=3.8"
+summary = "In-place file processing"
+groups = ["dev"]
+files = [
+    {file = "in_place-1.0.0-py3-none-any.whl", hash = "sha256:df6781ae341cd57b0894a2e56dc6f7b1daad1235550313c004686dd19eba7fcd"},
+    {file = "in_place-1.0.0.tar.gz", hash = "sha256:503048e91e0736cb092787c8017dce1328a62421f8fb81c29d25854c355af5ac"},
 ]
 
 [[package]]
@@ -755,6 +766,22 @@ dependencies = [
 files = [
     {file = "pytest-8.3.3-py3-none-any.whl", hash = "sha256:a6853c7375b2663155079443d2e45de913a911a11d669df02a50814944db57b2"},
     {file = "pytest-8.3.3.tar.gz", hash = "sha256:70b98107bd648308a7952b06e6ca9a50bc660be218d53c257cc1fc94fda10181"},
+]
+
+[[package]]
+name = "pytest-amaranth-sim"
+version = "0.1.0"
+requires_python = ">=3.8"
+summary = "Fixture to automate running Amaranth simulations"
+groups = ["dev"]
+dependencies = [
+    "amaranth>=0.5.0",
+    "in-place>=1.0.0",
+    "pytest>=6.2.0",
+]
+files = [
+    {file = "pytest_amaranth_sim-0.1.0-py3-none-any.whl", hash = "sha256:9495baa49418d966854f61158275c4ceafd7caeecd3a88f323851f47cace0b01"},
+    {file = "pytest_amaranth_sim-0.1.0.tar.gz", hash = "sha256:6d9e8978f9cd388551c3f0727217a8f9d71f1db3e429ddc517f3ba24f6c05b24"},
 ]
 
 [[package]]

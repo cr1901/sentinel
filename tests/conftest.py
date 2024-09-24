@@ -9,11 +9,6 @@ from amaranth.lib.wiring import Signature
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--vcds",
-        action="store_true",
-        help="generate Value Change Dump (vcds) from simulations",
-    )
-    parser.addoption(
         "--runbench", action="store_true", default=False, help="run benchmarks"
     )
     parser.addoption(
@@ -118,23 +113,18 @@ def sim_mod(request, pytestconfig):
 
 
 @pytest.fixture
-def ucode_panic(sim_mod):
-    _, m = sim_mod
+def ucode_panic(mod):
+    m = mod
 
-    def ucode_panic():
-        yield Passive()
-
+    async def ucode_panic(ctx):
         addr = 0
         prev_addr = 0
         count = 0
-        while True:
-            yield Tick()
-
-            if (yield m.cpu.control.ucoderom.addr == 255):
+        async for addr in ctx.tick().sample(m.cpu.control.ucoderom.addr):
+            if addr == 255:
                 raise AssertionError("microcode panic (not implemented)")
 
             prev_addr = addr
-            addr = (yield m.cpu.control.ucoderom.addr)
             if prev_addr == addr:
                 count += 1
                 if count > 100:
