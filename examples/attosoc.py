@@ -1,3 +1,4 @@
+# pyright: reportGeneralTypeIssues=false, reportAttributeAccessIssue=false
 # SoC components. This is more of a "utilities" module.
 
 import argparse
@@ -107,16 +108,17 @@ class WBLeds(Component):
             })).array(8)
         })
 
-        self.bus.memory_map = MemoryMap(addr_width=25, data_width=8,
-                                        name="leds")
+        self.bus.memory_map = MemoryMap(addr_width=25, data_width=8)
         # FIXME: We need something better here than fake empty components
         # representing "I'm attaching registers directly to the peripheral's
         # WB bus without any submodules, and there's no Component representing
         # the register that we can use."
-        self.bus.memory_map.add_resource(Component({}), name=("leds",), size=1)
-        self.bus.memory_map.add_resource(Component({}), name=("inout",),
+        self.bus.memory_map.add_resource(Component({}), name=("leds", "leds"),
                                          size=1)
-        self.bus.memory_map.add_resource(Component({}), name=("oe",), size=1)
+        self.bus.memory_map.add_resource(Component({}), name=("leds", "inout"),
+                                         size=1)
+        self.bus.memory_map.add_resource(Component({}), name=("leds", "oe"),
+                                         size=1)
 
     def elaborate(self, plat):
         m = Module()
@@ -202,7 +204,7 @@ class CSRLeds(Component):
         self.inout_reg = self.InOut()
         self.oe_reg = self.OE()
 
-        builder = csr.Builder(addr_width=4, data_width=8, name="gpio")
+        builder = csr.Builder(addr_width=4, data_width=8)
         builder.add("leds", self.leds_reg)
         builder.add("inout", self.inout_reg, offset=4)
         builder.add("oe", self.oe_reg, offset=8)
@@ -258,9 +260,10 @@ class WBTimer(Component):
             "irq": Out(1),
         })
 
-        self.bus.memory_map = MemoryMap(addr_width=30, data_width=8,
-                                        name="timer")
-        self.bus.memory_map.add_resource(Component({}), name=("irq",), size=1)
+        self.bus.memory_map = MemoryMap(addr_width=30, data_width=8)
+        self.bus.memory_map.add_resource(Component({}),
+                                         name=("timer", "irq"),
+                                         size=1)
 
     def elaborate(self, plat):
         m = Module()
@@ -292,7 +295,7 @@ class CSRTimer(Component):
     def __init__(self):
         self.irq_reg = self.IRQ()
 
-        builder = csr.Builder(addr_width=3, data_width=8, name="timer")
+        builder = csr.Builder(addr_width=3, data_width=8)
         builder.add("irq", self.irq_reg)
 
         mem_map = builder.as_memory_map()
@@ -426,11 +429,10 @@ class WBSerial(Component):
             "tx": Out(1),
             "irq": Out(1),
         })
-        self.bus.memory_map = MemoryMap(addr_width=30, data_width=8,
-                                        name="serial")
-        self.bus.memory_map.add_resource(Component({}), name=("rxtx",),
+        self.bus.memory_map = MemoryMap(addr_width=30, data_width=8)
+        self.bus.memory_map.add_resource(Component({}), name=("serial", "rxtx"),
                                          size=1)
-        self.bus.memory_map.add_resource(Component({}), name=("irq",), size=1)
+        self.bus.memory_map.add_resource(Component({}), name=("serial", "irq"), size=1)
         self.serial = UART(divisor=12000000 // 9600)
 
     def elaborate(self, plat):
@@ -500,7 +502,7 @@ class CSRSerial(Component):
         self.txrx_reg = self.TXRX()
         self.irq_reg = self.IRQ()
 
-        builder = csr.Builder(addr_width=3, data_width=8, name="serial")
+        builder = csr.Builder(addr_width=3, data_width=8)
         builder.add("txrx", self.txrx_reg)
         builder.add("irq", self.irq_reg, offset=4)
 
@@ -664,12 +666,12 @@ class AttoSoC(Elaboratable):
         elif self.bus_type == BusType.CSR:
             # CSR (has to be done first other mem map "frozen" errors?)
             periph_decode = csr.Decoder(addr_width=25, data_width=8,
-                                        alignment=23, name="periph")
-            periph_decode.add(self.leds.bus, addr=0)
+                                        alignment=23)
+            periph_decode.add(self.leds.bus, name="leds", addr=0)
 
             if not self.sim:
-                periph_decode.add(self.timer.bus)
-                periph_decode.add(self.serial.bus)
+                periph_decode.add(self.timer.bus, name="timer")
+                periph_decode.add(self.serial.bus, name="serial")
                 m.submodules.timer = self.timer
                 m.submodules.serial = self.serial
 
