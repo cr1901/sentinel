@@ -118,13 +118,12 @@ def ucode_panic(mod):
 
     async def ucode_panic(ctx):
         addr = 0
-        prev_addr = 0
+        prev_addr = 2
         count = 0
-        async for addr in ctx.tick().sample(m.cpu.control.ucoderom.addr):
+        async for *_, addr in ctx.tick().sample(m.control.ucoderom.addr):
             if addr == 255:
                 raise AssertionError("microcode panic (not implemented)")
 
-            prev_addr = addr
             if prev_addr == addr:
                 count += 1
                 if count > 100:
@@ -132,5 +131,7 @@ def ucode_panic(mod):
                                          "infinite loop")
             else:
                 count = 0
+
+            prev_addr = addr
 
     return ucode_panic

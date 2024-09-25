@@ -1,61 +1,134 @@
 from pathlib import Path
+from amaranth import Signal
 import pytest
 
 from itertools import repeat, chain, islice
 from functools import reduce
 from amaranth.sim import Passive, Tick
+from bronzebeard.asm import assemble
 from elftools.elf.elffile import ELFFile
 
 
 # FIXME: Eventually drop the need for SoC and simulate memory purely with
 # a process like in RISCOF tests? This will be pretty invasive.
 from examples.attosoc import AttoSoC
+from sentinel.top import Top
 
 from conftest import RV32Regs, CSRRegs
 
 
-@pytest.fixture
-def cpu_proc_aux(sim_mod):
-    _, m = sim_mod
+def asm_ids(args):
+    if args is HANDWRITTEN:
+        return "handwritten"
+    else:
+        return None
 
-    def cpu_proc_aux(regs, mem, csrs):
+
+def make_cpu_tb(mod, sim_mem, regs, mem, csrs):
+    m = mod
+
+    async def cpu_testbench(ctx):
         def check_regs(curr):
             expected_regs = curr
-            actual_regs = yield from RV32Regs.from_top_module(m)
+            actual_regs = RV32Regs.from_top_module(m, ctx)
             assert expected_regs == actual_regs
 
         def check_mem(mem):
             if mem:
                 for m_adr, m_dat in mem.items():
-                    assert (yield m.mem.mem[m_adr]) == m_dat
+                    assert sim_mem[m_adr] == m_dat
 
         def check_csrs(curr):
             expected_regs = curr
-            actual_regs = yield from CSRRegs.from_top_module(m)
+            actual_regs = CSRRegs.from_top_module(m, ctx)
             assert expected_regs == actual_regs
 
         for curr_r, curr_m, curr_c in zip(regs, mem, csrs):
             # Wait for insn.
-            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
-                       (yield m.cpu.control.insn_fetch)):
-                yield Tick()
+            await ctx.tick().until(m.bus.cyc & m.bus.stb & \
+                                   m.control.insn_fetch)
 
+            while ctx.get(~m.bus.ack):
+                await ctx.tick()
             # Wait for memory to respond.
-            while not (yield m.cpu.bus.ack):
-                yield Tick()
+            # await ctx.tick().until(m.bus.ack)
 
             # When ACK is asserted, we should always be going to uinsn
             # "check_int".
-            assert (yield m.cpu.control.sequencer.adr) == 2 or \
-                (yield m.cpu.control.sequencer.adr) == 1
-            yield Tick()
+            # TODO: I don't think "2" (ucode reset vector) should be possible.
+            # But I don't remember what past-me was thinking. Do some research.
+            assert ctx.get(m.control.sequencer.adr) == 2 or \
+                ctx.get(m.control.sequencer.adr) == 1
+            await ctx.tick()
 
             # Check results as new insn begins (i.e. prev results).
-            yield from check_regs(curr_r)
-            yield from check_mem(curr_m)
-            yield from check_csrs(curr_c)
+            check_regs(curr_r)
+            check_mem(curr_m)
+            check_csrs(curr_c)
 
-    return cpu_proc_aux
+    return cpu_testbench
+
+
+@pytest.fixture
+def memory(request):
+    source_or_list = request.param
+    mem = [0] * 400
+
+    if isinstance(source_or_list, str):
+        insns = assemble(source_or_list)
+        for adr in range(0, len(insns) // 4):
+            mem[adr] = int.from_bytes(insns[4 * adr:4 * adr + 4],
+                                      byteorder="little")
+    elif isinstance(source_or_list, (bytes, bytearray)):
+        for adr in range(0, len(source_or_list) // 4):
+            mem[adr] = int.from_bytes(source_or_list[4 * adr:4 * adr + 4],
+                                      byteorder="little")
+    else:
+        for adr in range(0, len(source_or_list)):
+            mem[adr] = source_or_list[adr]
+
+    return mem
+
+
+@pytest.fixture
+def memory_process(mod, memory):
+    m = mod
+
+    async def memory_process(ctx):
+        stims = [m.bus.cyc & m.bus.stb, m.bus.adr, m.bus.dat_w, m.bus.we,
+                 m.bus.sel]
+
+        while True:
+            clk_hit, rst_active, wb_cyc, addr, dat_w, we, sel = \
+                await ctx.tick().sample(*stims)
+
+            if rst_active:
+                pass
+            elif clk_hit and wb_cyc:
+                if we:
+                    dat_r = memory[addr]
+
+                    if sel & 0x1:
+                        dat_r = (dat_r & 0xffffff00) | (dat_w & 0x000000ff)
+                    if sel & 0x2:
+                        dat_r = (dat_r & 0xffff00ff) | (dat_w & 0x0000ff00)
+                    if sel & 0x4:
+                        dat_r = (dat_r & 0xff00ffff) | (dat_w & 0x00ff0000)
+                    if sel & 0x8:
+                        dat_r = (dat_r & 0x00ffffff) | (dat_w & 0xff000000)
+
+                    memory[addr] = dat_r
+                else:
+                    # TODO: Some memories will dup byte/half data on the
+                    # inactive lines. Worth adding?
+                    ctx.set(m.bus.dat_r, memory[addr])
+                ctx.set(m.bus.ack, 1)
+                # TODO: Wait states? See bus_proc_aux in previous versions for
+                # inspiration.
+                await ctx.tick()
+                ctx.set(m.bus.ack, 0)
+
+    return memory_process
 
 
 @pytest.fixture
@@ -75,31 +148,7 @@ def basic_ports(sim_mod):
 
 # This test is a handwritten exercise of going through all RV32I insns. If
 # this test fails, than surely all other, more thorough tests will fail.
-@pytest.mark.module(AttoSoC(sim=True))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.skip(reason="Not yet adapted to new Amaranth sim API")
-def test_seq(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
-    sim, m = sim_mod
-
-    def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
-        yield Passive()
-
-        for ws, irq in zip(wait_states, irqs):
-            # Wait for memory
-            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
-                       (yield m.cpu.control.insn_fetch)):
-                yield Tick()
-
-            # Wait state
-            # FIXME: Need add_comb_process to force wait_state to start at
-            # right time. Wait states probably work fine
-            # anyway.
-            for _ in range(ws):
-                yield Tick()
-
-            yield Tick()
-
-    m.rom = """
+HANDWRITTEN = """
         addi x0, x0, 0  # 0
         addi x1, x0, 1
         slli x1, x1, 0
@@ -161,6 +210,10 @@ bgeu_dst2:
         lw x14, x1, 512
 """
 
+
+@pytest.mark.parametrize("mod,clks,memory", [(Top(), 1.0 / 12e6, HANDWRITTEN)],
+                         indirect=["memory"], ids=asm_ids)
+def test_seq(sim, mod, memory, ucode_panic, memory_process):
     regs = [
         RV32Regs(),
         RV32Regs(PC=4 >> 2),
@@ -292,16 +345,10 @@ bgeu_dst2:
         {0x26C >> 2: 0x03e4e400, 0x270 >> 2: 0xFFFFE000},
     ]
 
-    csrs = [CSRRegs()]*len(regs)
+    csrs = [CSRRegs()] * len(regs)
 
-    def bus_proc():
-        yield from bus_proc_aux(wait_states=chain([1], repeat(0)))
-
-    def cpu_proc():
-        yield from cpu_proc_aux(regs, ram, csrs)
-
-    sim.ports = basic_ports
-    sim.run(testbenches=[cpu_proc], sync_processes=[ucode_panic])
+    sim.run(testbenches=[make_cpu_tb(mod, memory, regs, ram, csrs)],
+            processes=[ucode_panic, memory_process])
 
 
 @pytest.mark.module(AttoSoC(sim=True))
