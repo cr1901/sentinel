@@ -1,10 +1,8 @@
-import functools
+from typing import Union
 import pytest
 
-from amaranth import Value
-from amaranth.hdl import ValueCastable
-from amaranth.sim import Simulator, Passive, Tick
-from amaranth.lib.wiring import Signature
+from dataclasses import astuple, dataclass, field
+from bronzebeard.asm import assemble
 
 
 def pytest_addoption(parser):
@@ -31,87 +29,6 @@ def pytest_collection_modifyitems(config, items):
                 item.add_marker(skip_soc)
 
 
-class SimulatorFixture:
-    def __init__(self, req, cfg):
-        mod = req.node.get_closest_marker("module").args[0]
-        # FIXME: Depending on module contents, some amaranth code, such as
-        # amaranth_soc.csr classes don't interact well with elaborating
-        # the same object multiple times. This happens during parametrized
-        # tests. Therefore, provide an escape hatch to create a fresh object
-        # for all arguments of a parameterized test.
-        #
-        # Ideally, I should figure out the exact conditions under where it's
-        # safe to reuse an already-elaborated object (if ever); the tests
-        # didn't break until I started using amaranth_soc.csr. But this will
-        # do for now.
-        if isinstance(mod, functools.partial):
-            self.mod = mod()
-        else:
-            self.mod = mod
-
-        self.name = req.node.name
-        self.vcds = cfg.getoption("vcds")
-        self.clks = req.node.get_closest_marker("clks").args[0]
-
-    @property
-    def ports(self):
-        if hasattr(self, "_ports"):
-            return self._ports
-        else:
-            # Back-compat
-            if hasattr(self.mod, "ports"):
-                return self.mod.ports()
-            # Stolen from Amaranth 33c2246- intended to be "new" way to
-            # populate GTKW files.
-            elif hasattr(self.mod, "signature") and \
-                    isinstance(self.mod.signature, Signature):
-                ports = []
-                for path, member, value in self.mod.signature.flatten(self.mod):  # noqa: E501
-                    if isinstance(value, ValueCastable):
-                        value = value.as_value()
-                    if isinstance(value, Value):
-                        ports.append(value)
-                return ports
-            else:
-                return ()
-
-    @ports.setter
-    def ports(self, ports):
-        self._ports = ports
-
-    def run(self, testbenches=[], sync_processes=[], comb_processes=[]):
-        # Don't elaborate until we're ready to sim. This causes weird
-        # behaviors if you modify the object after elaboration. For instance,
-        # changing a Memory's init file after elaboration causes memory
-        # contents to not what's on the bus according to the Python Simulator.
-        sim = Simulator(self.mod)
-
-        for c in self.clks:
-            sim.add_clock(c)
-
-        for t in testbenches:
-            sim.add_testbench(t)
-
-        for s in sync_processes:
-            sim.add_process(s)
-
-        for p in comb_processes:
-            sim.add_process(p)
-
-        if self.vcds:
-            with sim.write_vcd(self.name + ".vcd", self.name + ".gtkw",
-                               traces=self.ports):
-                sim.run()
-        else:
-            sim.run()
-
-
-@pytest.fixture
-def sim_mod(request, pytestconfig):
-    simfix = SimulatorFixture(request, pytestconfig)
-    return (simfix, simfix.mod)
-
-
 @pytest.fixture
 def ucode_panic(mod):
     m = mod
@@ -135,3 +52,78 @@ def ucode_panic(mod):
             prev_addr = addr
 
     return ucode_panic
+
+
+@dataclass
+class MemoryArgs:
+    start: int = 0
+    size: int = 400
+    init: Union[str, bytes, bytearray, list[int]] = field(default_factory=list)
+
+
+class Memory(list):
+    def __init__(self, start, size):
+        super().__init__([0] * size)
+        self.range = range(start, start + size)
+
+
+@pytest.fixture
+def memory(request):
+    (start, size, source_or_list) = astuple(request.param)
+    mem = Memory(start, size)
+
+    if isinstance(source_or_list, str):
+        insns = assemble(source_or_list)
+        for adr in range(0, len(insns) // 4):
+            mem[adr] = int.from_bytes(insns[4 * adr:4 * adr + 4],
+                                      byteorder="little")
+    elif isinstance(source_or_list, (bytes, bytearray)):
+        for adr in range(0, len(source_or_list) // 4):
+            mem[adr] = int.from_bytes(source_or_list[4 * adr:4 * adr + 4],
+                                      byteorder="little")
+    else:
+        for adr in range(0, len(source_or_list)):
+            mem[adr] = source_or_list[adr]
+
+    return mem
+
+
+@pytest.fixture
+def memory_process(mod, memory):
+    m = mod
+
+    async def memory_process(ctx):
+        stims = [m.bus.cyc & m.bus.stb, m.bus.adr, m.bus.dat_w, m.bus.we,
+                 m.bus.sel]
+
+        while True:
+            clk_hit, rst_active, wb_cyc, addr, dat_w, we, sel = \
+                await ctx.tick().sample(*stims)
+
+            if rst_active:
+                pass
+            elif clk_hit and wb_cyc and addr in memory.range:
+                if we:
+                    dat_r = memory[addr - memory.range.start]
+
+                    if sel & 0x1:
+                        dat_r = (dat_r & 0xffffff00) | (dat_w & 0x000000ff)
+                    if sel & 0x2:
+                        dat_r = (dat_r & 0xffff00ff) | (dat_w & 0x0000ff00)
+                    if sel & 0x4:
+                        dat_r = (dat_r & 0xff00ffff) | (dat_w & 0x00ff0000)
+                    if sel & 0x8:
+                        dat_r = (dat_r & 0x00ffffff) | (dat_w & 0xff000000)
+
+                    memory[addr] = dat_r
+                else:
+                    # TODO: Some memories will dup byte/half data on the
+                    # inactive lines. Worth adding?
+                    ctx.set(m.bus.dat_r, memory[addr - memory.range.start])
+                ctx.set(m.bus.ack, 1)
+                # TODO: Wait states? See bus_proc_aux in previous versions for
+                # inspiration.
+                await ctx.tick()
+                ctx.set(m.bus.ack, 0)
+
+    return memory_process

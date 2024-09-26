@@ -41,6 +41,7 @@ def mod(request):
     return m
 
 
+# Required because we're wrapping the CPU.
 @pytest.fixture
 def ucode_panic(mod):
     m = mod

@@ -1,22 +1,23 @@
-from dataclasses import astuple, dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Union
 from amaranth import Signal
 import pytest
 
-from itertools import repeat, chain, islice
-from functools import reduce
-from amaranth.sim import Passive, Tick
-from bronzebeard.asm import assemble
-from elftools.elf.elffile import ELFFile
-
-
-# FIXME: Eventually drop the need for SoC and simulate memory purely with
-# a process like in RISCOF tests? This will be pretty invasive.
-from examples.attosoc import AttoSoC
 from sentinel.top import Top
 
 from conftest import RV32Regs, CSRRegs
+from tests.conftest import MemoryArgs
+
+
+# Generate prettier names by not bothering to parameterize on these.
+@pytest.fixture(scope="function")
+def mod():
+    return Top()
+
+
+@pytest.fixture(scope="module")
+def clks():
+    return 1.0 / 12e6
 
 
 def make_cpu_tb(mod, sim_mem, regs, mem, csrs):
@@ -62,81 +63,6 @@ def make_cpu_tb(mod, sim_mem, regs, mem, csrs):
             check_csrs(curr_c)
 
     return cpu_testbench
-
-
-@dataclass
-class MemoryArgs:
-    start: int = 0
-    size: int = 400
-    init: Union[str, bytes, bytearray, list[int]] = field(default_factory=list)
-
-
-class Memory(list):
-    def __init__(self, start, size):
-        super().__init__([0] * size)
-        self.range = range(start, start + size)
-
-
-@pytest.fixture
-def memory(request):
-    (start, size, source_or_list) = astuple(request.param)
-    mem = Memory(start, size)
-
-    if isinstance(source_or_list, str):
-        insns = assemble(source_or_list)
-        for adr in range(0, len(insns) // 4):
-            mem[adr] = int.from_bytes(insns[4 * adr:4 * adr + 4],
-                                      byteorder="little")
-    elif isinstance(source_or_list, (bytes, bytearray)):
-        for adr in range(0, len(source_or_list) // 4):
-            mem[adr] = int.from_bytes(source_or_list[4 * adr:4 * adr + 4],
-                                      byteorder="little")
-    else:
-        for adr in range(0, len(source_or_list)):
-            mem[adr] = source_or_list[adr]
-
-    return mem
-
-
-@pytest.fixture
-def memory_process(mod, memory):
-    m = mod
-
-    async def memory_process(ctx):
-        stims = [m.bus.cyc & m.bus.stb, m.bus.adr, m.bus.dat_w, m.bus.we,
-                 m.bus.sel]
-
-        while True:
-            clk_hit, rst_active, wb_cyc, addr, dat_w, we, sel = \
-                await ctx.tick().sample(*stims)
-
-            if rst_active:
-                pass
-            elif clk_hit and wb_cyc and addr in memory.range:
-                if we:
-                    dat_r = memory[addr - memory.range.start]
-
-                    if sel & 0x1:
-                        dat_r = (dat_r & 0xffffff00) | (dat_w & 0x000000ff)
-                    if sel & 0x2:
-                        dat_r = (dat_r & 0xffff00ff) | (dat_w & 0x0000ff00)
-                    if sel & 0x4:
-                        dat_r = (dat_r & 0xff00ffff) | (dat_w & 0x00ff0000)
-                    if sel & 0x8:
-                        dat_r = (dat_r & 0x00ffffff) | (dat_w & 0xff000000)
-
-                    memory[addr] = dat_r
-                else:
-                    # TODO: Some memories will dup byte/half data on the
-                    # inactive lines. Worth adding?
-                    ctx.set(m.bus.dat_r, memory[addr - memory.range.start])
-                ctx.set(m.bus.ack, 1)
-                # TODO: Wait states? See bus_proc_aux in previous versions for
-                # inspiration.
-                await ctx.tick()
-                ctx.set(m.bus.ack, 0)
-
-    return memory_process
 
 
 @dataclass
@@ -482,29 +408,41 @@ handler:
 )
 
 
-@pytest.mark.parametrize("mod,clks,memory,program_state",
+@pytest.mark.parametrize("memory,program_state",
                          [
-                             pytest.param(
-                                 Top(), 1.0 / 12e6,
-                                 MemoryArgs(init=HANDWRITTEN.program),
-                                 HANDWRITTEN, id="handwritten"),
-                             pytest.param(
-                                 Top(), 1.0 / 12e6,
-                                 MemoryArgs(init=CSR_R0.program),
-                                 CSR_R0, id="csr_r0"),
-                             pytest.param(
-                                 Top(), 1.0 / 12e6,
-                                 MemoryArgs(init=CSRW.program),
-                                 CSRW, id="csrw"),
-                             pytest.param(
-                                 Top(), 1.0 / 12e6,
-                                 MemoryArgs(init=EXCEPTION.program),
-                                 EXCEPTION, id="exception"),
+                             pytest.param(MemoryArgs(init=HANDWRITTEN.program),
+                                          HANDWRITTEN, id="handwritten"),
+                             pytest.param(MemoryArgs(init=CSR_R0.program),
+                                          CSR_R0, id="csr_r0"),
+                             pytest.param(MemoryArgs(init=CSRW.program),
+                                          CSRW, id="csrw"),
+                             pytest.param(MemoryArgs(init=EXCEPTION.program),
+                                          EXCEPTION, id="exception"),
                          ], indirect=["memory"])
 def test_seq(sim, mod, memory, ucode_panic, memory_process, program_state):
     sim.run(testbenches=[make_cpu_tb(mod, memory, program_state.regs,
                                      program_state.ram, program_state.csrs)],
             processes=[ucode_panic, memory_process])
+
+
+@pytest.fixture
+def restart_timeout():
+    return Signal(1)
+
+
+@pytest.fixture
+def timeout_process(restart_timeout):
+    async def timeout_process(ctx):
+        while True:
+            for _ in range(65536):
+                *_, restart_ack = await ctx.tick().sample(restart_timeout)
+                if restart_ack:
+                    break
+            else:
+                raise AssertionError("CPU (but not microcode) probably stuck "
+                                     "in infinite loop")
+
+    return timeout_process
 
 
 # This is a prime-counting program. It is provided with/disassembled from
@@ -550,25 +488,8 @@ countdown:
 """
 
 
-@pytest.mark.parametrize("mod,clks,memory",
-                         [pytest.param(Top(), 1.0 / 12e6,
-                                       MemoryArgs(init=PRIMES),
-                                       id="default")],
-                         indirect=["memory"])
-def test_primes(sim, mod, memory_process, ucode_panic):
+def primes_io_tb(mod, restart_timeout):
     m = mod
-
-    restart_timeout = Signal(1)
-
-    async def timeout_process(ctx):
-        while True:
-            for _ in range(65536):
-                *_, restart_ack = await ctx.tick().sample(restart_timeout)
-                if restart_ack:
-                    break
-            else:
-                raise AssertionError("CPU (but not microcode) probably stuck "
-                                     "in infinite loop")
 
     async def io_tb(ctx):
         primes = [3, 5, 7, 11, 13, 17, 2]
@@ -590,6 +511,17 @@ def test_primes(sim, mod, memory_process, ucode_panic):
             await ctx.tick()
             ctx.set(m.bus.ack, 0)
             ctx.set(restart_timeout, 0)
+
+    return io_tb
+
+
+@pytest.mark.parametrize("memory,mk_io_tb",
+                         [pytest.param(MemoryArgs(init=PRIMES),
+                                       primes_io_tb, id="primes")],
+                         indirect=["memory"])
+def test_loop(sim, mod, mk_io_tb, restart_timeout, memory_process, ucode_panic,
+              timeout_process):
+    io_tb = mk_io_tb(mod, restart_timeout)
 
     sim.run(testbenches=[io_tb], processes=[ucode_panic, memory_process,
                                             timeout_process])

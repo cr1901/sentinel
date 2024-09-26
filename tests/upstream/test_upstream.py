@@ -1,29 +1,42 @@
-import functools
 import pytest
 
-from amaranth.sim import Tick
 from enum import Enum, auto
 
-# FIXME: Eventually go to RISCOF approach? Less invasive than test_top, and
-# avoids treating examples as a namespace package (hack? :()) but will it be
-# for much gain?
-from examples.attosoc import AttoSoC
+from sentinel.top import Top
+from tests.conftest import Memory
 
 
+# Generate prettier names by not bothering to parameterize on these.
+@pytest.fixture(scope="function")
+def mod():
+    return Top()
+
+
+@pytest.fixture(scope="module")
+def clks():
+    return 1.0 / 12e6
+
+
+# Special memory fixture to load the upstream tests.
 @pytest.fixture
-def test_bin(sim_mod, request):
-    _, m = sim_mod
+def memory(request):
     rootdir = request.config.rootdir
     test_name = rootdir / "tests" / "upstream" / "binaries" / request.param
 
     with open(test_name, "rb") as fp:
         bytebin = fp.read()
 
-    m.rom = bytebin
+    mem = Memory(0, 4096)
+
+    for adr in range(0, len(bytebin) // 4):
+        mem[adr] = int.from_bytes(bytebin[4 * adr:4 * adr + 4],
+                                  byteorder="little")
+
+    return mem
 
 
 @pytest.fixture
-def wait_for_host_write(sim_mod, request):
+def wait_for_host_write(mod, request):
     class HOST_STATE(Enum):
         WAITING_FIRST = auto()
         FIRST_ACCESS_ACK = auto()
@@ -32,35 +45,40 @@ def wait_for_host_write(sim_mod, request):
         DONE = auto()
         TIMEOUT = auto()
 
-    _, m = sim_mod
+    m = mod
 
     # TODO: Convert into SoC module (use wishbone.Decoder and friends)?
-    def wait_for_host_write():
+    async def wait_for_host_write(ctx):
         i = 0
         state = HOST_STATE.WAITING_FIRST
-        val = None
+        val = 0xdeadbeef
 
         while True:
+            stims = [m.bus.cyc & m.bus.stb, m.bus.adr, m.bus.dat_w, m.bus.we,
+                     m.bus.sel]
+            *_, wb_cyc, addr, dat_w, we, sel = await ctx.tick().sample(*stims)
+
+            i += 1
+            if i > 65535:
+                state = HOST_STATE.TIMEOUT
+
             match state:
                 case HOST_STATE.WAITING_FIRST:
-                    if ((yield m.cpu.bus.adr) == 0x4000000 >> 2) and \
-                            (yield m.cpu.bus.sel == 0b1111) and \
-                            (yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb):
-                        yield m.cpu.bus.ack.eq(1)
+                    if (addr == 0x4000000 >> 2) and (sel == 0b1111) and wb_cyc:
+                        ctx.set(m.bus.ack, 1)
                         state = HOST_STATE.FIRST_ACCESS_ACK
                 case HOST_STATE.FIRST_ACCESS_ACK:
-                    val = (yield m.cpu.bus.dat_w)
-                    yield m.cpu.bus.ack.eq(0)
+                    val = dat_w
+                    ctx.set(m.bus.ack, 0)
                     state = HOST_STATE.WAITING_SECOND
                 case HOST_STATE.WAITING_SECOND:
-                    if (yield m.cpu.bus.adr) == ((0x4000000 + 4) >> 2) and \
-                            (yield m.cpu.bus.sel == 0b1111) and \
-                            (yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb):
-                        yield m.cpu.bus.ack.eq(1)
+                    if addr == ((0x4000000 + 4) >> 2) and (sel == 0b1111) and \
+                            wb_cyc:
+                        ctx.set(m.bus.ack, 1)
                         state = HOST_STATE.SECOND_ACCESS_ACK
                 case HOST_STATE.SECOND_ACCESS_ACK:
-                    val |= ((yield m.cpu.bus.dat_w) << 32)
-                    yield m.cpu.bus.ack.eq(0)
+                    val |= (dat_w << 32)
+                    ctx.set(m.bus.ack, 0)
                     state = HOST_STATE.DONE
                 case HOST_STATE.DONE:
                     assert (val >> 1, val & 1) == (0, 1)
@@ -69,19 +87,14 @@ def wait_for_host_write(sim_mod, request):
                     raise AssertionError("CPU (but not microcode) probably "
                                          "stuck in infinite loop")
 
-            yield Tick()
-            i += 1
-            if i > 65535:
-                state = HOST_STATE.TIMEOUT
-
     return wait_for_host_write
 
 
 RV32UI_TESTS = [
-    "add", "addi", "and",  "andi", "auipc", "beq",  "bge",  "bgeu", "blt",
+    "add", "addi", "and", "andi", "auipc", "beq", "bge", "bgeu", "blt",
     "bltu", "bne",
     pytest.param("fence_i", marks=pytest.mark.xfail(reason="Zifencei not implemented")),  # noqa: E501
-    "jal",  "jalr", "lb", "lbu", "lh",  "lhu",
+    "jal", "jalr", "lb", "lbu", "lh", "lhu",
     "lui", "lw",
     pytest.param("ma_data", marks=pytest.mark.xfail(reason="misaligned access are traps")),  # noqa: E501
     "or", "ori", "sb", "sh", "simple", "sll", "slli",
@@ -90,13 +103,10 @@ RV32UI_TESTS = [
 ]
 
 
-@pytest.mark.module(functools.partial(AttoSoC, sim=True, num_bytes=4096))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.parametrize("test_bin", RV32UI_TESTS, indirect=True)
-@pytest.mark.skip(reason="Not yet adapted to new Amaranth sim API")
-def test_rv32ui(sim_mod, ucode_panic, test_bin, wait_for_host_write):
-    sim, m = sim_mod
-    sim.run(testbenches=[wait_for_host_write], sync_processes=[ucode_panic])
+@pytest.mark.parametrize("memory", RV32UI_TESTS, indirect=True)
+def test_rv32ui(sim, ucode_panic, wait_for_host_write, memory_process):
+    sim.run(testbenches=[wait_for_host_write], processes=[ucode_panic,
+                                                          memory_process])
 
 
 RV32MI_TESTS = [
@@ -108,10 +118,7 @@ RV32MI_TESTS = [
 ]
 
 
-@pytest.mark.module(functools.partial(AttoSoC, sim=True, num_bytes=4096))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.parametrize("test_bin", RV32MI_TESTS, indirect=True)
-@pytest.mark.skip(reason="Not yet adapted to new Amaranth sim API")
-def test_rv32mi(sim_mod, ucode_panic, test_bin, wait_for_host_write):
-    sim, m = sim_mod
-    sim.run(testbenches=[wait_for_host_write], sync_processes=[ucode_panic])
+@pytest.mark.parametrize("memory", RV32MI_TESTS, indirect=True)
+def test_rv32mi(sim, ucode_panic, wait_for_host_write, memory_process):
+    sim.run(testbenches=[wait_for_host_write], processes=[ucode_panic,
+                                                          memory_process])

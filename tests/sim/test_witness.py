@@ -1,5 +1,4 @@
 import pytest
-from amaranth import Elaboratable, Module, Signal
 from sentinel.top import Top
 
 from conftest import RV32Regs, CSRRegs
