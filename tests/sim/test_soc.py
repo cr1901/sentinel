@@ -12,6 +12,8 @@ from examples.attosoc import AttoSoC
 
 
 # Fixture overrides for SoC tests.
+# Required because we have to initialize memory before passing to sim fixture.
+# Otherwise amaranth 0.5 will throw an "AlreadyElaborated" error.
 @pytest.fixture
 def mod(request):
     m = AttoSoC(num_bytes=0x1000)

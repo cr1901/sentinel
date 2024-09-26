@@ -32,28 +32,26 @@ class Bar(enum.Enum):
 
 # This is a test by itself because creating the signature from the microcode
 # assembly file can be tricky.
-@pytest.mark.module(UCodeROM(main_file=StringIO(M5META_TEST_FILE),
-                             enum_map={"bar": Bar}))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.skip(reason="Not yet adapted to new Amaranth sim API")
-def test_ucode_layout_gen(sim_mod):
-    _, m = sim_mod
+def test_ucode_layout_gen():
+    m = UCodeROM(main_file=StringIO(M5META_TEST_FILE),
+                 enum_map={"bar": Bar})
     # Use Fragment.get to ensure the Module is marked as used.
     Fragment.get(m, None)
 
 
-@pytest.mark.module(UCodeROM(main_file=StringIO(M5META_TEST_FILE),
-                             enum_map={"bar": Bar}))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.parametrize("dummy", [1, 2])
-@pytest.mark.skip(reason="Not yet implemented.")
-def test_twice_init(sim_mod, dummy):
-    sim, m = sim_mod
+@pytest.mark.parametrize("mod,clks,dummy", [
+                         (UCodeROM(main_file=StringIO(M5META_TEST_FILE),
+                                   enum_map={"bar": Bar}),
+                          1.0 / 12e6,
+                          [1, 2])])
+# @pytest.mark.skip(reason="Not yet implemented.")
+def test_twice_init(sim, mod, dummy):
+    m = mod
 
-    def ucode_proc():
-        yield m.addr.eq(0)
-        yield
-        yield m.addr.eq(1)
-        yield
+    async def ucode_tb(ctx):
+        ctx.set(m.addr, 0)
+        ctx.tick()
+        ctx.set(m.addr, 1)
+        ctx.tick()
 
-    sim.run(sync_processes=[ucode_proc])
+    sim.run(processes=[ucode_tb])
