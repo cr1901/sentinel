@@ -7,7 +7,7 @@ class RV32Regs:
     def from_top_module(cls, m, ctx):
         gpregs = []
         for r_id in range(32):
-            gpregs.append(ctx.get(m.datapath.regfile.mem[r_id]))
+            gpregs.append(ctx.get(m.datapath.regfile.m_data[r_id]))
 
         return cls(*gpregs, PC=(ctx.get(m.datapath.pc.dat_r)))
 
@@ -52,13 +52,13 @@ class CSRRegs:
     def from_top_module(cls, m, ctx):
         csrregs = {}
 
-        csrregs["MSCRATCH"] = ctx.get(m.datapath.regfile.mem[0x28])
+        csrregs["MSCRATCH"] = ctx.get(m.datapath.regfile.m_data[0x28])
         csrregs["MSTATUS"] = ctx.get(m.datapath.csr.mstatus_r.as_value())  # noqa: E501
-        csrregs["MTVEC"] = ctx.get(m.datapath.regfile.mem[0x25])
+        csrregs["MTVEC"] = ctx.get(m.datapath.regfile.m_data[0x25])
         csrregs["MIE"] = ctx.get(m.datapath.csr.mie_r.as_value())
         csrregs["MIP"] = ctx.get(m.datapath.csr.mip_r.as_value())
-        csrregs["MEPC"] = ctx.get(m.datapath.regfile.mem[0x29])
-        csrregs["MCAUSE"] = ctx.get(m.datapath.regfile.mem[0x2A])
+        csrregs["MEPC"] = ctx.get(m.datapath.regfile.m_data[0x29])
+        csrregs["MCAUSE"] = ctx.get(m.datapath.regfile.m_data[0x2A])
 
         return cls(**csrregs)
 

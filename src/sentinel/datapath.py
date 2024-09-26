@@ -94,22 +94,22 @@ class RegFile(Component):
         # 0xdeadbeef is a fake init value to ensure that microcode reset
         # properly initializes r0. If somehow we ever get to ASIC stage,
         # this will be removed.
-        self.mem = MemoryData(shape=32, depth=32*2, init=[0xdeadbeef])
-        self._mem = Memory(self.mem)
+        self.m_data = MemoryData(shape=32, depth=32*2, init=[0xdeadbeef])
+        self.mem = Memory(self.m_data)
 
         # Formal needs to create several more read ports transparent
         # to a single write port. However, FormalTop elaborates before
         # Regfile, so squirrel away a reference.
-        self.w_port = self._mem.write_port()
+        self.w_port = self.mem.write_port()
 
         super().__init__()
 
     def elaborate(self, platform):
         m = Module()
-        m.submodules.mem = self._mem
+        m.submodules.mem = self.mem
 
         w_port = self.w_port
-        r_port = self._mem.read_port(transparent_for=(w_port,))
+        r_port = self.mem.read_port(transparent_for=(w_port,))
 
         m.d.comb += [
             self.priv.dat_r.eq(r_port.data),
