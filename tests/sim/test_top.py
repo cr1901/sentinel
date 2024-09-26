@@ -19,16 +19,6 @@ from sentinel.top import Top
 from conftest import RV32Regs, CSRRegs
 
 
-def asm_label(var, label):
-    def inner(args):
-        if isinstance(args, MemoryArgs) and args.init is var:
-            return label
-        else:
-            return None
-
-    return inner
-
-
 def make_cpu_tb(mod, sim_mem, regs, mem, csrs):
     m = mod
 
@@ -149,24 +139,18 @@ def memory_process(mod, memory):
     return memory_process
 
 
-@pytest.fixture
-def basic_ports(sim_mod):
-    _, m = sim_mod
-
-    return [m.cpu.bus.cyc,
-            m.cpu.bus.stb, m.cpu.bus.ack, m.cpu.bus.we, m.cpu.bus.sel,
-            m.cpu.bus.dat_r, m.cpu.bus.dat_w, m.cpu.bus.adr,
-
-            m.cpu.control.ucoderom.addr,
-            m.cpu.control.ucoderom.fields.as_value(),
-
-            m.cpu.alu.ctrl.op, m.cpu.alu.a, m.cpu.alu.b,
-            m.cpu.alu.o]
+@dataclass
+class SeqArgs:
+    program: str
+    regs: list[RV32Regs]
+    ram: list[Union[dict, None]]
+    csrs: list[CSRRegs]
 
 
 # This test is a handwritten exercise of going through all RV32I insns. If
 # this test fails, than surely all other, more thorough tests will fail.
-HANDWRITTEN = """
+HANDWRITTEN = SeqArgs(
+    program="""
         addi x0, x0, 0  # 0
         addi x1, x0, 1
         slli x1, x1, 0
@@ -226,15 +210,9 @@ bgeu_dst2:
         lhu x13, x1, 518
         sb x1, x0, 512  # 0xC0
         lw x14, x1, 512
-"""
+""",
 
-
-@pytest.mark.parametrize("mod,clks,memory", [(Top(), 1.0 / 12e6,
-                                              MemoryArgs(init=HANDWRITTEN))],
-                         indirect=["memory"], ids=asm_label(HANDWRITTEN,
-                                                            "handwritten"))
-def test_seq(sim, mod, memory, ucode_panic, memory_process):
-    regs = [
+    regs=[
         RV32Regs(),
         RV32Regs(PC=4 >> 2),
         RV32Regs(R1=1, PC=8 >> 2),
@@ -338,9 +316,9 @@ def test_seq(sim, mod, memory, ucode_panic, memory_process):
                  R10=(2**32 - 4096) + 100, R9=0x0000E000, R8=0x20000000,
                  R7=0xE0000000, R6=0x80000000, R5=2**32 - 1, R4=0xFFFFE000,
                  R3=16, R2=0x3E4, R1=0x6C, PC=0xC8 >> 2),
-    ]
+    ],
 
-    ram = [
+    ram=[
         None,  # 0x0
         None, None, None, None, None, None, None, None,  # 0x20
         None, None, None, None, None, None, None, None,  # 0x40
@@ -363,11 +341,169 @@ def test_seq(sim, mod, memory, ucode_panic, memory_process):
 
         {0x26C >> 2: 0x03e4e400, 0x270 >> 2: 0xFFFFE000},
         {0x26C >> 2: 0x03e4e400, 0x270 >> 2: 0xFFFFE000},
+    ],
+
+    csrs=[CSRRegs()] * 50
+)
+
+CSR_R0 = SeqArgs(
+    program="""
+        addi x1, x0, 1  # 0
+        csrrs x1, x0, -0xEF  # mvendorid
+""",
+
+    regs=[
+        RV32Regs(),
+        RV32Regs(R1=1, PC=4 >> 2),
+        RV32Regs(R1=0, PC=8 >> 2),
+    ],
+
+    ram=[
+        None,  # 0x0
+        None,
+        None
+    ],
+
+    csrs=[CSRRegs()] * 3
+)
+
+
+CSRW = SeqArgs(
+    program="""
+        csrrwi x0, 31, 0x340   # mscratch  # 0x00
+        csrrwi x1, 17, 0x340   # mscratch
+        csrrci x2,  1, 0x340   # mscratch
+        csrrwi x0,  8, 0x300   # mstatus
+        csrrwi x3,  9, 0x300   # mstatus  # 0x10
+        csrrsi x4,  1, 0x340   # mscratch
+        csrrsi x0,  2, 0x340   # mscratch
+        csrrci x0,  2, 0x340   # mscratch
+        csrrci x5,  0, 0x340   # mscratch  # 0x20
+        csrrsi x1,  0, 0x300   # mstatus
+        csrrw x0,  x3, 0x340   # mscratch
+        csrrw x2,  x4, 0x340   # mscratch
+        xori  x2, x0, -1  # 0x30
+        csrrw x0, x2, 0x340  # mscratch
+        csrrc x4, x4, 0x340  # mscratch
+        csrrc x2, x0, 0x340  # mscratch
+        csrrs x2, x0, 0x300   # mstatus  # 0x40
+        slli  x2, x2, 1
+        csrrs x3, x2, 0x340 # mscratch
+""",
+
+    regs=[
+        RV32Regs(),
+        RV32Regs(PC=4 >> 2),
+        RV32Regs(R1=31, PC=8 >> 2),
+        RV32Regs(R2=17, R1=31, PC=0xC >> 2),
+        RV32Regs(R2=17, R1=31, PC=0x10 >> 2),
+        RV32Regs(R3=0b11000_0000_1000, R2=17, R1=31, PC=0x14 >> 2),
+        RV32Regs(R4=16, R3=0b11000_0000_1000, R2=17, R1=31, PC=0x18 >> 2),
+        RV32Regs(R4=16, R3=0b11000_0000_1000, R2=17, R1=31, PC=0x1C >> 2),
+        RV32Regs(R4=16, R3=0b11000_0000_1000, R2=17, R1=31, PC=0x20 >> 2),
+        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=17, R1=31,
+                 PC=0x24 >> 2),
+        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=17,
+                 R1=0b11000_0000_1000, PC=0x28 >> 2),
+        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=17,
+                 R1=0b11000_0000_1000, PC=0x2C >> 2),
+        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=0b11000_0000_1000,
+                 R1=0b11000_0000_1000, PC=0x30 >> 2),
+        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=0xffffffff,
+                 R1=0b11000_0000_1000, PC=0x34 >> 2),
+        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=0xffffffff,
+                 R1=0b11000_0000_1000, PC=0x38 >> 2),
+        RV32Regs(R5=17, R4=0xffffffff, R3=0b11000_0000_1000, R2=0xffffffff,
+                 R1=0b11000_0000_1000, PC=0x3C >> 2),
+        RV32Regs(R5=17, R4=0xffffffff, R3=0b11000_0000_1000, R2=0xffffffef,
+                 R1=0b11000_0000_1000, PC=0x40 >> 2),
+        RV32Regs(R5=17, R4=0xffffffff, R3=0b11000_0000_1000,
+                 R2=0b11000_0000_1000, R1=0b11000_0000_1000, PC=0x44 >> 2),
+        RV32Regs(R5=17, R4=0xffffffff, R3=0b11000_0000_1000,
+                 R2=0b11_0000_0001_0000,
+                 R1=0b11000_0000_1000, PC=0x48 >> 2),
+        RV32Regs(R5=17, R4=0xffffffff, R3=0xffffffef, R2=0b11_0000_0001_0000,
+                 R1=0b11000_0000_1000, PC=0x4C >> 2),
+    ],
+
+    ram=[None] * 20,
+
+    csrs=[
+        CSRRegs(),  # 0x0
+        CSRRegs(MSCRATCH=31),
+        CSRRegs(MSCRATCH=17),
+        CSRRegs(MSCRATCH=16),
+        CSRRegs(MSCRATCH=16, MSTATUS=0b11000_0000_1000),  # 0x10
+        CSRRegs(MSCRATCH=16, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=17, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=19, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=17, MSTATUS=0b11000_0000_1000),  # 0x20
+        CSRRegs(MSCRATCH=17, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=17, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=0b11000_0000_1000, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=16, MSTATUS=0b11000_0000_1000),  # 0x30
+        CSRRegs(MSCRATCH=16, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=0xffffffff, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=0b11000_0000_1000),  # 0x40
+        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=0b11000_0000_1000),
+        CSRRegs(MSCRATCH=0xffffffff, MSTATUS=0b11000_0000_1000),
     ]
+)
 
-    csrs = [CSRRegs()] * len(regs)
 
-    sim.run(testbenches=[make_cpu_tb(mod, memory, regs, ram, csrs)],
+EXCEPTION = SeqArgs(
+    # ECALL sets xEPC to the ECALL insn, not the following one!
+    program="""
+         csrrwi x0, 16, 0x305  # mtvec
+         ecall
+         nop
+         nop
+handler:
+         dw 0b00110000001000000000000001110011  # mret
+""",
+
+    regs=[
+        RV32Regs(),
+        RV32Regs(PC=4 >> 2),
+        RV32Regs(PC=0x10 >> 2),
+        RV32Regs(PC=4 >> 2),
+    ],
+
+    ram=[None] * 4,
+
+    csrs=[
+        CSRRegs(),  # 0x0
+        CSRRegs(MTVEC=0x10),
+        CSRRegs(MTVEC=0x10, MCAUSE=11, MEPC=0x4),
+        CSRRegs(MSTATUS=0b11000_1000_0000, MTVEC=0x10, MCAUSE=11, MEPC=0x4),
+    ]
+)
+
+
+@pytest.mark.parametrize("mod,clks,memory,program_state",
+                         [
+                             pytest.param(
+                                 Top(), 1.0 / 12e6,
+                                 MemoryArgs(init=HANDWRITTEN.program),
+                                 HANDWRITTEN, id="handwritten"),
+                             pytest.param(
+                                 Top(), 1.0 / 12e6,
+                                 MemoryArgs(init=CSR_R0.program),
+                                 CSR_R0, id="csr_r0"),
+                             pytest.param(
+                                 Top(), 1.0 / 12e6,
+                                 MemoryArgs(init=CSRW.program),
+                                 CSRW, id="csrw"),
+                             pytest.param(
+                                 Top(), 1.0 / 12e6,
+                                 MemoryArgs(init=EXCEPTION.program),
+                                 EXCEPTION, id="exception"),
+                         ], indirect=["memory"])
+def test_seq(sim, mod, memory, ucode_panic, memory_process, program_state):
+    sim.run(testbenches=[make_cpu_tb(mod, memory, program_state.regs,
+                                     program_state.ram, program_state.csrs)],
             processes=[ucode_panic, memory_process])
 
 
@@ -414,9 +550,11 @@ countdown:
 """
 
 
-@pytest.mark.parametrize("mod,clks,memory", [(Top(), 1.0 / 12e6,
-                                              MemoryArgs(init=PRIMES))],
-                         indirect=["memory"], ids=asm_label(PRIMES, "primes"))
+@pytest.mark.parametrize("mod,clks,memory",
+                         [pytest.param(Top(), 1.0 / 12e6,
+                                       MemoryArgs(init=PRIMES),
+                                       id="default")],
+                         indirect=["memory"])
 def test_primes(sim, mod, memory_process, ucode_panic):
     m = mod
 
@@ -455,286 +593,3 @@ def test_primes(sim, mod, memory_process, ucode_panic):
 
     sim.run(testbenches=[io_tb], processes=[ucode_panic, memory_process,
                                             timeout_process])
-
-
-@pytest.mark.module(AttoSoC(sim=True))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.skip(reason="Not yet adapted to new API")
-def test_csr_ro0(sim_mod, ucode_panic, cpu_proc_aux):
-    sim, m = sim_mod
-
-    def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
-        yield Passive()
-
-        for ws, irq in zip(wait_states, irqs):
-            # Wait for memory
-            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
-                       (yield m.cpu.control.insn_fetch)):
-                yield Tick()
-
-            # Wait state
-            # FIXME: Need add_comb_process to force wait_state to start at
-            # right time. Wait states probably work fine
-            # anyway.
-            for _ in range(ws):
-                yield Tick()
-
-            yield Tick()
-
-    m.rom = """
-        addi x1, x0, 1  # 0
-        csrrs x1, x0, -0xEF  # mvendorid
-"""
-
-    regs = [
-        RV32Regs(),
-        RV32Regs(R1=1, PC=4 >> 2),
-        RV32Regs(R1=0, PC=8 >> 2),
-    ]
-
-    ram = [
-        None,  # 0x0
-        None,
-        None
-    ]
-
-    csrs = [CSRRegs()]*3
-
-    def cpu_proc():
-        yield from cpu_proc_aux(regs, ram, csrs)
-
-    sim.run(testbenches=[cpu_proc], sync_processes=[ucode_panic])
-
-
-@pytest.mark.module(AttoSoC(sim=True))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.skip(reason="Not yet adapted to new Amaranth sim API")
-def test_csrw(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
-    sim, m = sim_mod
-
-    def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
-        yield Passive()
-
-        for ws, irq in zip(wait_states, irqs):
-            # Wait for memory
-            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
-                       (yield m.cpu.control.insn_fetch)):
-                yield Tick()
-
-            # Wait state
-            # FIXME: Need add_comb_process to force wait_state to start at
-            # right time. Wait states probably work fine
-            # anyway.
-            for _ in range(ws):
-                yield Tick()
-
-            yield Tick()
-
-    m.rom = """
-        csrrwi x0, 31, 0x340   # mscratch  # 0x00
-        csrrwi x1, 17, 0x340   # mscratch
-        csrrci x2,  1, 0x340   # mscratch
-        csrrwi x0,  8, 0x300   # mstatus
-        csrrwi x3,  9, 0x300   # mstatus  # 0x10
-        csrrsi x4,  1, 0x340   # mscratch
-        csrrsi x0,  2, 0x340   # mscratch
-        csrrci x0,  2, 0x340   # mscratch
-        csrrci x5,  0, 0x340   # mscratch  # 0x20
-        csrrsi x1,  0, 0x300   # mstatus
-        csrrw x0,  x3, 0x340   # mscratch
-        csrrw x2,  x4, 0x340   # mscratch
-        xori  x2, x0, -1  # 0x30
-        csrrw x0, x2, 0x340  # mscratch
-        csrrc x4, x4, 0x340  # mscratch
-        csrrc x2, x0, 0x340  # mscratch
-        csrrs x2, x0, 0x300   # mstatus  # 0x40
-        slli  x2, x2, 1
-        csrrs x3, x2, 0x340 # mscratch
-"""
-
-    regs = [
-        RV32Regs(),
-        RV32Regs(PC=4 >> 2),
-        RV32Regs(R1=31, PC=8 >> 2),
-        RV32Regs(R2=17, R1=31, PC=0xC >> 2),
-        RV32Regs(R2=17, R1=31, PC=0x10 >> 2),
-        RV32Regs(R3=0b11000_0000_1000, R2=17, R1=31, PC=0x14 >> 2),
-        RV32Regs(R4=16, R3=0b11000_0000_1000, R2=17, R1=31, PC=0x18 >> 2),
-        RV32Regs(R4=16, R3=0b11000_0000_1000, R2=17, R1=31, PC=0x1C >> 2),
-        RV32Regs(R4=16, R3=0b11000_0000_1000, R2=17, R1=31, PC=0x20 >> 2),
-        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=17, R1=31,
-                 PC=0x24 >> 2),
-        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=17,
-                 R1=0b11000_0000_1000, PC=0x28 >> 2),
-        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=17,
-                 R1=0b11000_0000_1000, PC=0x2C >> 2),
-        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=0b11000_0000_1000,
-                 R1=0b11000_0000_1000, PC=0x30 >> 2),
-        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=0xffffffff,
-                 R1=0b11000_0000_1000, PC=0x34 >> 2),
-        RV32Regs(R5=17, R4=16, R3=0b11000_0000_1000, R2=0xffffffff,
-                 R1=0b11000_0000_1000, PC=0x38 >> 2),
-        RV32Regs(R5=17, R4=0xffffffff, R3=0b11000_0000_1000, R2=0xffffffff,
-                 R1=0b11000_0000_1000, PC=0x3C >> 2),
-        RV32Regs(R5=17, R4=0xffffffff, R3=0b11000_0000_1000, R2=0xffffffef,
-                 R1=0b11000_0000_1000, PC=0x40 >> 2),
-        RV32Regs(R5=17, R4=0xffffffff, R3=0b11000_0000_1000,
-                 R2=0b11000_0000_1000, R1=0b11000_0000_1000, PC=0x44 >> 2),
-        RV32Regs(R5=17, R4=0xffffffff, R3=0b11000_0000_1000,
-                 R2=0b11_0000_0001_0000,
-                 R1=0b11000_0000_1000, PC=0x48 >> 2),
-        RV32Regs(R5=17, R4=0xffffffff, R3=0xffffffef, R2=0b11_0000_0001_0000,
-                 R1=0b11000_0000_1000, PC=0x4C >> 2),
-    ]
-
-    ram = [
-        None,  # 0x0
-        None,
-        None,
-        None,
-        None,  # 0x10
-        None,
-        None,
-        None,
-        None,  # 0x20
-        None,
-        None,
-        None,
-        None,  # 0x30
-        None,
-        None,
-        None,
-        None,  # 0x40
-        None,
-        None,
-        None,
-    ]
-
-    csrs = [
-        CSRRegs(),  # 0x0
-        CSRRegs(MSCRATCH=31),
-        CSRRegs(MSCRATCH=17),
-        CSRRegs(MSCRATCH=16),
-        CSRRegs(MSCRATCH=16, MSTATUS=0b11000_0000_1000),  # 0x10
-        CSRRegs(MSCRATCH=16, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=17, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=19, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=17, MSTATUS=0b11000_0000_1000),  # 0x20
-        CSRRegs(MSCRATCH=17, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=17, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=0b11000_0000_1000, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=16, MSTATUS=0b11000_0000_1000),  # 0x30
-        CSRRegs(MSCRATCH=16, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=0xffffffff, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=0b11000_0000_1000),  # 0x40
-        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=0xffffffef, MSTATUS=0b11000_0000_1000),
-        CSRRegs(MSCRATCH=0xffffffff, MSTATUS=0b11000_0000_1000),
-    ]
-
-    def cpu_proc():
-        yield from cpu_proc_aux(regs, ram, csrs)
-
-    sim.ports = basic_ports
-    sim.run(sync_processes=[cpu_proc, ucode_panic])
-
-
-@pytest.mark.module(AttoSoC(sim=True))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.skip(reason="Not yet adapted to new Amaranth sim API")
-def test_exception(sim_mod, ucode_panic, cpu_proc_aux, basic_ports):
-    sim, m = sim_mod
-
-    def bus_proc_aux(wait_states=repeat(0), irqs=repeat(False)):
-        yield Passive()
-
-        for ws, irq in zip(wait_states, irqs):
-            # Wait for memory
-            while not ((yield m.cpu.bus.cyc) and (yield m.cpu.bus.stb) and
-                       (yield m.cpu.control.insn_fetch)):
-                yield Tick()
-
-            # Wait state
-            # FIXME: Need add_comb_process to force wait_state to start at
-            # right time. Wait states probably work fine
-            # anyway.
-            for _ in range(ws):
-                yield Tick()
-
-            yield Tick()
-
-    # ECALL sets xEPC to the ECALL insn, not the following one!
-    m.rom = """
-         csrrwi x0, 16, 0x305  # mtvec
-         ecall
-         nop
-         nop
-handler:
-         dw 0b00110000001000000000000001110011  # mret
-"""
-
-    regs = [
-        RV32Regs(),
-        RV32Regs(PC=4 >> 2),
-        RV32Regs(PC=0x10 >> 2),
-        RV32Regs(PC=4 >> 2),
-    ]
-
-    ram = [
-        None,  # 0x0
-        None,
-        None,
-        None
-    ]
-
-    csrs = [
-        CSRRegs(),  # 0x0
-        CSRRegs(MTVEC=0x10),
-        CSRRegs(MTVEC=0x10, MCAUSE=11, MEPC=0x4),
-        CSRRegs(MSTATUS=0b11000_1000_0000, MTVEC=0x10, MCAUSE=11, MEPC=0x4),
-    ]
-
-    def cpu_proc():
-        yield from cpu_proc_aux(regs, ram, csrs)
-
-    sim.ports = basic_ports
-    sim.run(testbenches=[cpu_proc], sync_processes=[ucode_panic])
-
-
-# Infrequently-used test mostly for testing address decoding. Should not cause
-# failure if user does not have Rust installed.
-@pytest.mark.module(AttoSoC(sim=False, num_bytes=0x1000))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.soc
-@pytest.mark.skip(reason="Not yet adapted to new Amaranth sim API")
-def test_rust(sim_mod, ucode_panic, request):
-    sim, m = sim_mod
-
-    firmware_dir = request.config.rootdir / \
-        Path("target/riscv32i-unknown-none-elf/release/examples")
-    firmware_bin = firmware_dir / "attosoc"
-
-    if not firmware_bin.isfile():
-        pytest.skip("attosoc binary not present")
-
-    with open(firmware_bin, "rb") as fp:  # noqa: E501
-        def append_bytes(a, b):
-            return a + b
-
-        def seg_data(seg):
-            return seg.data()
-
-        segs = ELFFile(fp).iter_segments()
-        text_ro_and_data_segs = islice(segs, 2)
-        m.rom = reduce(append_bytes,
-                       map(seg_data, text_ro_and_data_segs),
-                       b"")
-
-    def io_proc():
-        for _ in range(2000):
-            yield Tick()
-
-        assert (yield m.serial.tx) == 0
-
-    sim.run(testbenches=[io_proc], sync_processes=[ucode_panic])
