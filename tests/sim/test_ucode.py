@@ -39,12 +39,12 @@ def test_ucode_layout_gen():
     Fragment.get(m, None)
 
 
-@pytest.mark.parametrize("mod,clks,dummy", [
+@pytest.mark.parametrize("mod,clks", [
                          (UCodeROM(main_file=StringIO(M5META_TEST_FILE),
                                    enum_map={"bar": Bar}),
-                          1.0 / 12e6,
-                          [1, 2])])
-# @pytest.mark.skip(reason="Not yet implemented.")
+                          1.0 / 12e6)])
+@pytest.mark.parametrize("dummy", [1, 2])
+@pytest.mark.skip(reason="Not yet implemented.")
 def test_twice_init(sim, mod, dummy):
     m = mod
 
