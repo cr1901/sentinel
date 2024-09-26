@@ -1,4 +1,6 @@
+from dataclasses import astuple, dataclass, field
 from pathlib import Path
+from typing import Union
 from amaranth import Signal
 import pytest
 
@@ -17,11 +19,14 @@ from sentinel.top import Top
 from conftest import RV32Regs, CSRRegs
 
 
-def asm_ids(args):
-    if args is HANDWRITTEN:
-        return "handwritten"
-    else:
-        return None
+def asm_label(var, label):
+    def inner(args):
+        if isinstance(args, MemoryArgs) and args.init is var:
+            return label
+        else:
+            return None
+
+    return inner
 
 
 def make_cpu_tb(mod, sim_mem, regs, mem, csrs):
@@ -69,10 +74,23 @@ def make_cpu_tb(mod, sim_mem, regs, mem, csrs):
     return cpu_testbench
 
 
+@dataclass
+class MemoryArgs:
+    start: int = 0
+    size: int = 400
+    init: Union[str, bytes, bytearray, list[int]] = field(default_factory=list)
+
+
+class Memory(list):
+    def __init__(self, start, size):
+        super().__init__([0] * size)
+        self.range = range(start, start + size)
+
+
 @pytest.fixture
 def memory(request):
-    source_or_list = request.param
-    mem = [0] * 400
+    (start, size, source_or_list) = astuple(request.param)
+    mem = Memory(start, size)
 
     if isinstance(source_or_list, str):
         insns = assemble(source_or_list)
@@ -104,9 +122,9 @@ def memory_process(mod, memory):
 
             if rst_active:
                 pass
-            elif clk_hit and wb_cyc:
+            elif clk_hit and wb_cyc and addr in memory.range:
                 if we:
-                    dat_r = memory[addr]
+                    dat_r = memory[addr - memory.range.start]
 
                     if sel & 0x1:
                         dat_r = (dat_r & 0xffffff00) | (dat_w & 0x000000ff)
@@ -121,7 +139,7 @@ def memory_process(mod, memory):
                 else:
                     # TODO: Some memories will dup byte/half data on the
                     # inactive lines. Worth adding?
-                    ctx.set(m.bus.dat_r, memory[addr])
+                    ctx.set(m.bus.dat_r, memory[addr - memory.range.start])
                 ctx.set(m.bus.ack, 1)
                 # TODO: Wait states? See bus_proc_aux in previous versions for
                 # inspiration.
@@ -211,8 +229,10 @@ bgeu_dst2:
 """
 
 
-@pytest.mark.parametrize("mod,clks,memory", [(Top(), 1.0 / 12e6, HANDWRITTEN)],
-                         indirect=["memory"], ids=asm_ids)
+@pytest.mark.parametrize("mod,clks,memory", [(Top(), 1.0 / 12e6,
+                                              MemoryArgs(init=HANDWRITTEN))],
+                         indirect=["memory"], ids=asm_label(HANDWRITTEN,
+                                                            "handwritten"))
 def test_seq(sim, mod, memory, ucode_panic, memory_process):
     regs = [
         RV32Regs(),
@@ -351,18 +371,12 @@ def test_seq(sim, mod, memory, ucode_panic, memory_process):
             processes=[ucode_panic, memory_process])
 
 
-@pytest.mark.module(AttoSoC(sim=True))
-@pytest.mark.clks((1.0 / 12e6,))
-@pytest.mark.skip(reason="Not yet adapted to new Amaranth sim API")
-def test_primes(sim_mod, ucode_panic):
-    sim, m = sim_mod
-
-    # This is a prime-counting program. It is provided with/disassembled from
-    # nextpnr-ice40's examples (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
-    # but I don't know about its origins otherwise.
-    # I have modified a hardcoded delay from 360000 to 2, as well as stopping
-    # after 17 for simulation speed.
-    m.rom = """
+# This is a prime-counting program. It is provided with/disassembled from
+# nextpnr-ice40's examples (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
+# but I don't know about its origins otherwise.
+# I have modified a hardcoded delay from 360000 to 2, as well as stopping
+# after 17 for simulation speed.
+PRIMES = """
         li      s0,2
         lui     s1,0x2000  # IO port at 0x2000000
         li      s3,18  #  Originally 256
@@ -399,7 +413,26 @@ countdown:
         ret
 """
 
-    def io_proc():
+
+@pytest.mark.parametrize("mod,clks,memory", [(Top(), 1.0 / 12e6,
+                                              MemoryArgs(init=PRIMES))],
+                         indirect=["memory"], ids=asm_label(PRIMES, "primes"))
+def test_primes(sim, mod, memory_process, ucode_panic):
+    m = mod
+
+    restart_timeout = Signal(1)
+
+    async def timeout_process(ctx):
+        while True:
+            for _ in range(65536):
+                *_, restart_ack = await ctx.tick().sample(restart_timeout)
+                if restart_ack:
+                    break
+            else:
+                raise AssertionError("CPU (but not microcode) probably stuck "
+                                     "in infinite loop")
+
+    async def io_tb(ctx):
         primes = [3, 5, 7, 11, 13, 17, 2]
         # 19, 23, 29, 31, 37, 41, 43, 47, 53,
         # 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109,
@@ -408,21 +441,20 @@ countdown:
         # 251, 2]
 
         for p in primes:
-            for _ in range(65536):
-                if ((yield m.cpu.bus.adr == 0x2000000 >> 2) and
-                        (yield m.cpu.bus.cyc) and
-                        (yield m.cpu.bus.stb) and
-                        (yield m.cpu.bus.ack)):
-                    assert (yield m.cpu.bus.dat_w) == p
-                    break
-                else:
-                    yield Tick()
-            else:
-                raise AssertionError("CPU (but not microcode) probably stuck "
-                                     "in infinite loop")
-            yield Tick()
+            *_, dat_w = await ctx.tick().sample(m.bus.dat_w).until(
+                (m.bus.adr == 0x2000000 >> 2) & m.bus.cyc & \
+                m.bus.stb)
 
-    sim.run(testbenches=[io_proc], sync_processes=[ucode_panic])
+            ctx.set(m.bus.ack, 1)
+            assert dat_w == p
+            ctx.set(restart_timeout, 1)
+
+            await ctx.tick()
+            ctx.set(m.bus.ack, 0)
+            ctx.set(restart_timeout, 0)
+
+    sim.run(testbenches=[io_tb], processes=[ucode_panic, memory_process,
+                                            timeout_process])
 
 
 @pytest.mark.module(AttoSoC(sim=True))
