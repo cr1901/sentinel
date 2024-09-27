@@ -8,55 +8,28 @@ from enum import Enum, auto
 import riscof.utils as utils
 from riscof.pluginTemplate import pluginTemplate
 
+import sys
+
+# FIXME: This is unfortunate... but we need some code from the tests :(...
+this_dir = Path(os.path.realpath(__file__)).parent
+sentinel_root_dir = this_dir.parent.parent.parent
+sys.path.insert(0, str(sentinel_root_dir))
+
+from tests.conftest import Memory, mproc_inner  # noqa: E402
+from tests.upstream.test_upstream import wfhw_inner  # noqa: E402
+
 logger = logging.getLogger()
 
 
-class HOST_STATE(Enum):
-    WAITING_FIRST = auto()
-    FIRST_ACCESS_ACK = auto()
-    WAITING_SECOND = auto()
-    SECOND_ACCESS_ACK = auto()
-    DONE = auto()
-    TIMEOUT = auto()
+def mk_wait_for_host_write(top, sig_file, memory):
+    async def wait_for_host_write(ctx):
+        val = await wfhw_inner(top, ctx)
+        begin_sig = val & 0xffffffff
+        end_sig = (val >> 32) & 0xffffffff
 
-
-def wait_for_host_write(top, sig_file, bin_):
-    def wait_for_host_write():
-        i = 0
-        state = HOST_STATE.WAITING_FIRST
-
-        while True:
-            match state:
-                case HOST_STATE.WAITING_FIRST:
-                    if ((yield top.bus.adr) == 0x4000000 >> 2) and \
-                            (yield top.bus.sel == 0b1111) and \
-                            (yield top.bus.cyc) and (yield top.bus.stb):
-                        # yield top.bus.ack.eq(1)
-                        state = HOST_STATE.FIRST_ACCESS_ACK
-                case HOST_STATE.FIRST_ACCESS_ACK:
-                    begin_sig = (yield top.bus.dat_w)
-                    # yield top.bus.ack.eq(0)
-                    state = HOST_STATE.WAITING_SECOND
-                case HOST_STATE.WAITING_SECOND:
-                    if (yield top.bus.adr) == ((0x4000000 + 4) >> 2) and \
-                            (yield top.bus.sel == 0b1111) and \
-                            (yield top.bus.cyc) and (yield top.bus.stb):
-                        # yield top.bus.ack.eq(1)
-                        state = HOST_STATE.SECOND_ACCESS_ACK
-                case HOST_STATE.SECOND_ACCESS_ACK:
-                    end_sig = (yield top.bus.dat_w)
-                    # yield top.bus.ack.eq(0)
-                    state = HOST_STATE.DONE
-                case HOST_STATE.DONE:
-                    break
-                case HOST_STATE.TIMEOUT:
-                    raise AssertionError("CPU (but not microcode) probably "
-                                         "stuck in infinite loop")
-
-            yield
-            i += 1
-            if i > 65535:
-                state = HOST_STATE.TIMEOUT
+        # I don't feel like doing alignment so convert the 32-bit memory
+        # list into bytes and index on a byte-basis.
+        bin_ = b"".join(b.to_bytes(4, 'little') for b in memory)
 
         # The end state of the simulation is to print out the locations
         # of the beginning and ending signatures. They can then
@@ -73,51 +46,9 @@ def wait_for_host_write(top, sig_file, bin_):
     return wait_for_host_write
 
 
-def read_write_mem(top, bin_):
-    def read_write_mem():
-        yield Passive()
-
-        ios = (0x4000000 >> 2, 0x4000000 + 4 >> 2)
-        while True:
-            yield top.bus.dat_r.eq(0)
-            yield top.bus.ack.eq(0)
-
-            if ((yield top.bus.cyc) and (yield top.bus.stb)):
-                if not (yield top.bus.ack):
-                    yield top.bus.ack.eq(1)
-
-                if ((yield top.bus.we) and (yield top.bus.ack) and
-                        ((yield top.bus.adr) not in ios)):
-                    data_word = (yield top.bus.dat_w)
-                    sel = (yield top.bus.sel)
-                    word_adr = (yield top.bus.adr) << 2
-
-                    if sel & 0b0001:
-                        bin_[word_adr] = data_word & 0xff
-                    if sel & 0b0010:
-                        bin_[word_adr + 1] = (data_word >> 8) & 0xff
-                    if sel & 0b0100:
-                        bin_[word_adr + 2] = (data_word >> 16) & 0xff
-                    if sel & 0b1000:
-                        bin_[word_adr + 3] = (data_word >> 24) & 0xff
-
-                elif ((not (yield top.bus.ack)) and
-                        ((yield top.bus.adr) not in ios)):
-                    data_word = 0
-                    sel = (yield top.bus.sel)
-                    word_adr = (yield top.bus.adr) << 2
-
-                    if sel & 0b0001:
-                        data_word |= bin_[word_adr]
-                    if sel & 0b0010:
-                        data_word |= bin_[word_adr + 1] << 8
-                    if sel & 0b0100:
-                        data_word |= bin_[word_adr + 2] << 16
-                    if sel & 0b1000:
-                        data_word |= bin_[word_adr + 3] << 24
-
-                    yield top.bus.dat_r.eq(data_word)
-            yield
+def mk_read_write_mem(top, memory):
+    async def read_write_mem(ctx):
+        await mproc_inner(top, ctx, memory)
 
     return read_write_mem
 
@@ -289,11 +220,17 @@ class sentinel(pluginTemplate):
                 with open(test_dir / bin, "rb") as fp:
                     bin_ = bytearray(fp.read())
 
+                mem = Memory(start=0, size=len(bin_))
+
+                for adr in range(0, len(bin_) // 4):
+                    mem[adr] = int.from_bytes(bin_[4 * adr:4 * adr + 4],
+                                            byteorder="little")
+
                 logger.debug("Executing in Amaranth simulator")
                 sim = Simulator(top)
                 sim.add_clock(1/(12e6))
-                sim.add_sync_process(wait_for_host_write(top, sig_file, bin_))
-                sim.add_sync_process(read_write_mem(top, bin_))
+                sim.add_testbench(mk_wait_for_host_write(top, sig_file, mem))
+                sim.add_process(mk_read_write_mem(top, mem))
 
                 vcd = test_dir / Path(test.stem).with_suffix(".vcd")
                 gtkw = test_dir / Path(test.stem).with_suffix(".gtkw")

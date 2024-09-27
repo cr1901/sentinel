@@ -88,42 +88,48 @@ def memory(request):
     return mem
 
 
+async def mproc_inner(mod, ctx, memory):
+    m = mod
+
+    stims = [m.bus.cyc & m.bus.stb, m.bus.adr, m.bus.dat_w, m.bus.we,
+                m.bus.sel]
+
+    while True:
+        clk_hit, rst_active, wb_cyc, addr, dat_w, we, sel = \
+            await ctx.tick().sample(*stims)
+
+        if rst_active:
+            pass
+        elif clk_hit and wb_cyc and addr in memory.range:
+            if we:
+                dat_r = memory[addr - memory.range.start]
+
+                if sel & 0x1:
+                    dat_r = (dat_r & 0xffffff00) | (dat_w & 0x000000ff)
+                if sel & 0x2:
+                    dat_r = (dat_r & 0xffff00ff) | (dat_w & 0x0000ff00)
+                if sel & 0x4:
+                    dat_r = (dat_r & 0xff00ffff) | (dat_w & 0x00ff0000)
+                if sel & 0x8:
+                    dat_r = (dat_r & 0x00ffffff) | (dat_w & 0xff000000)
+
+                memory[addr] = dat_r
+            else:
+                # TODO: Some memories will dup byte/half data on the
+                # inactive lines. Worth adding?
+                ctx.set(m.bus.dat_r, memory[addr - memory.range.start])
+            ctx.set(m.bus.ack, 1)
+            # TODO: Wait states? See bus_proc_aux in previous versions for
+            # inspiration.
+            await ctx.tick()
+            ctx.set(m.bus.ack, 0)
+
+
 @pytest.fixture
 def memory_process(mod, memory):
     m = mod
 
     async def memory_process(ctx):
-        stims = [m.bus.cyc & m.bus.stb, m.bus.adr, m.bus.dat_w, m.bus.we,
-                 m.bus.sel]
-
-        while True:
-            clk_hit, rst_active, wb_cyc, addr, dat_w, we, sel = \
-                await ctx.tick().sample(*stims)
-
-            if rst_active:
-                pass
-            elif clk_hit and wb_cyc and addr in memory.range:
-                if we:
-                    dat_r = memory[addr - memory.range.start]
-
-                    if sel & 0x1:
-                        dat_r = (dat_r & 0xffffff00) | (dat_w & 0x000000ff)
-                    if sel & 0x2:
-                        dat_r = (dat_r & 0xffff00ff) | (dat_w & 0x0000ff00)
-                    if sel & 0x4:
-                        dat_r = (dat_r & 0xff00ffff) | (dat_w & 0x00ff0000)
-                    if sel & 0x8:
-                        dat_r = (dat_r & 0x00ffffff) | (dat_w & 0xff000000)
-
-                    memory[addr] = dat_r
-                else:
-                    # TODO: Some memories will dup byte/half data on the
-                    # inactive lines. Worth adding?
-                    ctx.set(m.bus.dat_r, memory[addr - memory.range.start])
-                ctx.set(m.bus.ack, 1)
-                # TODO: Wait states? See bus_proc_aux in previous versions for
-                # inspiration.
-                await ctx.tick()
-                ctx.set(m.bus.ack, 0)
+        await mproc_inner(m, ctx, memory)
 
     return memory_process
