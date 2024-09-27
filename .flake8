@@ -18,5 +18,6 @@ extend-exclude = .venv/,
 # https://github.com/astral-sh/ruff/issues/458
 select=E1,E2,E3,W,DOC
 style=numpy
-skip_checking_short_docstrings=False
+skip_checking_short_docstrings=True
+check_class_attributes=False
 arg_type_hints_in_signature=False

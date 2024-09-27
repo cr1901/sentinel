@@ -50,8 +50,13 @@ lint.pycodestyle.max-line-length = 79  # flake8 compat
 "tests/riscof/sail_cSim/**" = ["F", "E", "W", "D"]
 "tests/upstream/riscv-tests/**" = ["F", "E", "W", "D"]
 
-[tool.pyright]
+[[tool.pyright.executionEnvironments]]
+root = "examples/attosoc.py"
 reportInvalidTypeForm = false
+reportGeneralTypeIssues=false
+reportAttributeAccessIssue=false
+reportPossiblyUnboundVariable=false
+reportOperatorIssue=false
 
 [tool.pdm.version]
 source = "scm"

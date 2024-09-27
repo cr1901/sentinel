@@ -1,4 +1,4 @@
-# pyright: reportGeneralTypeIssues=false, reportAttributeAccessIssue=false
+"""Small example SoC to demonstrate Sentinel on small FPGAs."""
 # SoC components. This is more of a "utilities" module.
 
 import argparse
@@ -29,19 +29,31 @@ from sentinel.top import Top
 
 
 class WBMemory(Component):
-    def __init__(self, *, sim=False, num_bytes=0x400):
+    """Memory exposed over the Wishbone bus.
+
+    Granularity is always 8, and data width is always 32. The RAM itself
+    consumes 25 bits (32 MB) of address space starting at address 0.
+
+    Parameters
+    ----------
+    num_bytes: int
+        Size of the memory in number of bytes.
+
+    Attributes
+    ----------
+    bus : In(wishbone.Signature)
+        Wishbone bus interface.
+    num_bytes: int
+        Size of the memory in number of bytes.
+    """
+
+    def __init__(self, *, num_bytes=0x400):
         bus_signature = wishbone.Signature(addr_width=23, data_width=32,
                                            granularity=8)
         sig = {
             "bus": In(bus_signature)
         }
 
-        if sim:
-            sig["ctrl"] = Out(Signature({
-                "force_ws": Out(1)  # noqa: F821
-            }))
-
-        self.sim = sim
         self.num_bytes = num_bytes
         self._mem_set = False
 
@@ -51,17 +63,21 @@ class WBMemory(Component):
         self.bus.memory_map = MemoryMap(addr_width=25, data_width=8)
         # But only actually _use_ a small chunk of it.
         self.bus.memory_map.add_resource(self, name=("ram",), size=num_bytes)
-        self.mem = Memory(shape=32, depth=self.num_bytes//4, init=[])
+        self.mem = Memory(shape=32, depth=self.num_bytes // 4, init=[])
 
     @property
     def init(self):
+        """User contents of memory, if any.
+
+        Contents always start at address 0.
+        """
         return self.mem.init
 
     @init.setter
     def init(self, mem):
         self.mem.init[:len(mem)] = mem
 
-    def elaborate(self, plat):
+    def elaborate(self, plat):  # noqa: D102
         m = Module()
 
         m.submodules.mem = self.mem
@@ -79,11 +95,7 @@ class WBMemory(Component):
         with m.If(self.bus.stb & self.bus.cyc & self.bus.we):
             m.d.comb += w_port.en.eq(self.bus.sel)
 
-        if self.sim:
-            ack_cond = self.bus.stb & self.bus.cyc & ~self.bus.ack & \
-                      ~self.ctrl.force_ws
-        else:
-            ack_cond = self.bus.stb & self.bus.cyc & ~self.bus.ack
+        ack_cond = self.bus.stb & self.bus.cyc & ~self.bus.ack
 
         with m.If(ack_cond):
             m.d.sync += self.bus.ack.eq(1)
@@ -94,6 +106,35 @@ class WBMemory(Component):
 
 
 class WBLeds(Component):
+    """GPIO peripheral over the CSR bus.
+
+    Attributes
+    ----------
+    bus : In(wishbone.Signature)
+        Wishbone bus interface.
+
+    leds : Out(8)
+        LED outputs.
+
+    gpio
+        Array of 8 GPIO pins. Each GPIO pin has the following signature:
+
+        ```
+        Signature({
+            "i": In(1),
+            "o": Out(1),
+            "oe": Out(1)
+        })
+        ```
+
+    Registers
+    ---------
+    * LEDs Output Register
+    * Bidirectional GPIO Register
+    * Bidirectional Output Enable Register
+        * Bit set == Output Enabled.
+    """
+
     def __init__(self):
         bus_signature = wishbone.Signature(addr_width=25, data_width=8,
                                            granularity=8)
@@ -101,10 +142,10 @@ class WBLeds(Component):
         super().__init__({
             "bus": In(bus_signature),
             "leds": Out(8),
-            "gpio": In(Signature({
-                 "i": In(1),
-                 "o": Out(1),
-                 "oe": Out(1)
+            "gpio": Out(Signature({
+                "i": In(1),
+                "o": Out(1),
+                "oe": Out(1)
             })).array(8)
         })
 
@@ -120,14 +161,14 @@ class WBLeds(Component):
         self.bus.memory_map.add_resource(Component({}), name=("leds", "oe"),
                                          size=1)
 
-    def elaborate(self, plat):
+    def elaborate(self, plat):  # noqa: D102
         m = Module()
 
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.ack & self.bus.we
-                  & (self.bus.adr[0:2] == 0) & self.bus.sel[0]):
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.ack & self.bus.we & \
+                  (self.bus.adr[0:2] == 0) & self.bus.sel[0]):
             m.d.sync += self.leds.eq(self.bus.dat_w)
 
-        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack &
+        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack & \
                   (self.bus.adr[0:2] == 1) & self.bus.sel[0]):
             with m.If(~self.bus.we):
                 for i in range(8):
@@ -136,8 +177,8 @@ class WBLeds(Component):
                 for i in range(8):
                     m.d.sync += self.gpio[i].o.eq(self.bus.dat_w[i])
 
-        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack & self.bus.we
-                  & (self.bus.adr[0:2] == 2) & self.bus.sel[0]):
+        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack & self.bus.we & \
+                  (self.bus.adr[0:2] == 2) & self.bus.sel[0]):
             for i in range(8):
                 m.d.sync += self.gpio[i].oe.eq(self.bus.dat_w[i])
 
@@ -157,8 +198,8 @@ class RWStrobe(csr.FieldAction):
     shape : :ref:`shape-castable <lang-shapecasting>`
         Shape of the field.
 
-    Interface attributes
-    --------------------
+    Attributes
+    ----------
     port : :class:`FieldPort`
         Field port.
     r_data : Signal(shape)
@@ -170,15 +211,16 @@ class RWStrobe(csr.FieldAction):
     w_stb : Signal()
         Write strobe. Driven by ``port.w_stb``. See :class:`FieldPort`.
     """
+
     def __init__(self, shape):
         super().__init__(shape, access=csr.FieldPort.Access.RW, members={
             "r_data": In(shape),
-            "r_stb":  Out(1),
+            "r_stb": Out(1),
             "w_data": Out(shape),
-            "w_stb":  Out(1),
+            "w_stb": Out(1),
         })
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
         m.d.comb += [
             self.port.r_data.eq(self.r_data),
@@ -190,13 +232,47 @@ class RWStrobe(csr.FieldAction):
 
 
 class CSRLeds(Component):
+    """GPIO peripheral over the CSR bus.
+
+    Attributes
+    ----------
+    bus : In(csr.Signature)
+        CSR bus interface- forwards to CSR bridge bus.
+
+    leds : Out(8)
+        LED outputs.
+
+    gpio
+        Array of 8 GPIO pins. Each GPIO pin has the following signature:
+
+        ```
+        Signature({
+            "i": In(1),
+            "o": Out(1),
+            "oe": Out(1)
+        })
+        ```
+
+    bridge : csr.Bridge
+        CSR bridge holding the registers.
+    """
+
     class Leds(csr.Register, access=csr.Element.Access.W):
+        """LEDs Output Register."""
+
         leds: csr.Field(csr.action.W, 8)
 
     class InOut(csr.Register, access=csr.Element.Access.RW):
+        """Bidirectional GPIO Register."""
+
         inout: csr.Field(RWStrobe, 8)
 
     class OE(csr.Register, access=csr.Element.Access.W):
+        """Bidirectional Output Enable Register.
+
+        Bit set == Output Enabled.
+        """
+
         oe: csr.Field(csr.action.W, 8)
 
     def __init__(self):
@@ -215,17 +291,17 @@ class CSRLeds(Component):
         sig = {
             "bus": Out(self.bridge.bus.signature),
             "leds": Out(8),
-            "gpio": In(Signature({
-                 "i": In(1),
-                 "o": Out(1),
-                 "oe": Out(1)
+            "gpio": Out(Signature({
+                "i": In(1),
+                "o": Out(1),
+                "oe": Out(1)
             })).array(8)
         }
 
         super().__init__(sig)
         self.bus.memory_map = self.bridge.bus.memory_map
 
-    def elaborate(self, plat):
+    def elaborate(self, plat):  # noqa: D102
         m = Module()
         m.submodules.bridge = self.bridge
 
@@ -251,6 +327,24 @@ class CSRLeds(Component):
 
 
 class WBTimer(Component):
+    """Basic 15-bit timer with IRQ, exposed over the Wishbone bus.
+
+    IRQ is set whenever bit 14 is set. IRQ and bit 14 is cleared on read of
+    the IRQ register.
+
+    Attributes
+    ----------
+    bus : In(wishbone.Signature)
+        Wishbone bus holding the registers.
+
+    irq : Out(1)
+        IRQ line
+
+    Registers
+    ---------
+    * IRQ Register
+    """
+
     def __init__(self):
         bus_signature = wishbone.Signature(addr_width=30, data_width=8,
                                            granularity=8)
@@ -265,7 +359,7 @@ class WBTimer(Component):
                                          name=("timer", "irq"),
                                          size=1)
 
-    def elaborate(self, plat):
+    def elaborate(self, plat):  # noqa: D102
         m = Module()
 
         prescalar = Signal(15)
@@ -289,7 +383,29 @@ class WBTimer(Component):
 
 
 class CSRTimer(Component):
+    """Basic 15-bit timer with IRQ, exposed over the CSR bus.
+
+    IRQ is set whenever bit 14 is set. IRQ and bit 14 is cleared on read of
+    the IRQ register.
+
+    Attributes
+    ----------
+    bus : In(csr.Signature)
+        CSR bus interface- forwards to CSR bridge bus.
+
+    irq : Out(1)
+        IRQ line
+
+    bridge : csr.Bridge
+        CSR bridge holding the registers.
+    """
+
     class IRQ(csr.Register, access=csr.Element.Access.R):
+        """Interrupt Request Register.
+
+        Bit 0: Bit 14 of the 15-bit prescaler is set. Read to clear bit 14.
+        """
+
         irq: csr.Field(csr.action.R, 1)
 
     def __init__(self):
@@ -309,7 +425,7 @@ class CSRTimer(Component):
         super().__init__(sig)
         self.bus.memory_map = self.bridge.bus.memory_map
 
-    def elaborate(self, plat):
+    def elaborate(self, plat):  # noqa: D102
         m = Module()
         m.submodules.bridge = self.bridge
 
@@ -332,13 +448,18 @@ class CSRTimer(Component):
 
 # Taken from: https://github.com/amaranth-lang/amaranth/blob/f9da3c0d166dd2be189945dca5a94e781e74afeb/examples/basic/uart.py  # noqa: E501
 class UART(Elaboratable):
-    """
+    """Basic hardcoded UART.
+
     Parameters
     ----------
     divisor : int
         Set to ``round(clk-rate / baud-rate)``.
         E.g. ``12e6 / 115200`` = ``104``.
+
+    data_bits : int
+        Number of data bits in character.
     """
+
     def __init__(self, divisor, data_bits=8):
         assert divisor >= 4
 
@@ -358,7 +479,7 @@ class UART(Elaboratable):
         self.rx_rdy = Signal()
         self.rx_ack = Signal()
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         tx_phase = Signal(range(self.divisor))
@@ -419,6 +540,33 @@ class UART(Elaboratable):
 
 
 class WBSerial(Component):
+    """UART exposed over the Wishbone bus.
+
+    Attributes
+    ----------
+    bus : In(wishbone.Signature)
+        Wishbone bus holding the registers.
+
+    rx : In(1)
+        Serial RX
+
+    tx : Out(1)
+        Serial TX
+
+    irq : Out(1)
+        IRQ line
+
+    serial: UART
+        The wrapper serial device
+
+    Registers
+    ---------
+    * Transmit and Receive Register
+    * IRQ Register
+        * Bit 0: RX register full
+        * Bit 1: TX register empty
+    """
+
     def __init__(self):
         bus_signature = wishbone.Signature(addr_width=30, data_width=8,
                                            granularity=8)
@@ -430,12 +578,13 @@ class WBSerial(Component):
             "irq": Out(1),
         })
         self.bus.memory_map = MemoryMap(addr_width=30, data_width=8)
-        self.bus.memory_map.add_resource(Component({}), name=("serial", "rxtx"),
-                                         size=1)
-        self.bus.memory_map.add_resource(Component({}), name=("serial", "irq"), size=1)
+        self.bus.memory_map.add_resource(Component({}),
+                                         name=("serial", "rxtx"), size=1)
+        self.bus.memory_map.add_resource(Component({}),
+                                         name=("serial", "irq"), size=1)
         self.serial = UART(divisor=12000000 // 9600)
 
-    def elaborate(self, plat):
+    def elaborate(self, plat):  # noqa: D102
         m = Module()
         m.submodules.ser_internal = self.serial
 
@@ -457,7 +606,7 @@ class WBSerial(Component):
             tx_ack_prev.eq(self.serial.tx_ack),
         ]
 
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] &
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] & \
                   ~self.bus.adr[0]):
             m.d.sync += self.bus.dat_r.eq(self.serial.rx_data)
             with m.If(~self.bus.we):
@@ -469,7 +618,7 @@ class WBSerial(Component):
                     self.serial.tx_rdy.eq(1)
                 ]
 
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] &
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] & \
                   self.bus.adr[0] & ~self.bus.we & ~self.bus.ack):
             m.d.sync += [
                 self.bus.dat_r.eq(Cat(rx_rdy_irq, tx_ack_irq)),
@@ -492,10 +641,38 @@ class WBSerial(Component):
 
 
 class CSRSerial(Component):
+    """UART exposed over the CSR bus.
+
+    Attributes
+    ----------
+    bus : In(csr.Signature)
+        CSR bus interface- forwards to CSR bridge bus.
+
+    rx : In(1)
+        Serial RX
+
+    tx : Out(1)
+        Serial TX
+
+    irq : Out(1)
+        IRQ line
+
+    bridge : csr.Bridge
+        CSR bridge holding the registers.
+    """
+
     class TXRX(csr.Register, access=csr.Element.Access.RW):
+        """Transmit and Receive Register."""
+
         txrx: csr.Field(RWStrobe, 8)
 
     class IRQ(csr.Register, access=csr.Element.Access.R):
+        """Interrupt Request Register.
+
+        Bit 0: RX register full
+        Bit 1: TX register empty
+        """
+
         irq: csr.Field(csr.action.R, 2)
 
     def __init__(self):
@@ -520,7 +697,7 @@ class CSRSerial(Component):
         self.serial = UART(divisor=12000000 // 9600)
         self.bus.memory_map = self.bridge.bus.memory_map
 
-    def elaborate(self, plat):
+    def elaborate(self, plat):  # noqa: D102
         m = Module()
         m.submodules.ser_internal = self.serial
         m.submodules.bridge = self.bridge
@@ -572,6 +749,17 @@ class CSRSerial(Component):
 
 
 class BusType(enum.Enum):
+    """Choose between Wishbone and CSR Peripheral Interfacing.
+
+    Attributes
+    ----------
+    WB : int
+        Use Wishbone bus.
+
+    CSR: int
+        Use CSR bus.
+    """
+
     WB = auto()
     CSR = auto()
 
@@ -579,49 +767,73 @@ class BusType(enum.Enum):
 # Reimplementation of nextpnr-ice40's AttoSoC example (https://github.com/YosysHQ/nextpnr/tree/master/ice40/smoketest/attosoc),  # noqa: E501
 # to exercise attaching Sentinel to amaranth-soc's wishbone components.
 class AttoSoC(Elaboratable):
+    """AttoSoC constructor.
+
+    Create a Sentinel SoC with LEDs/GPIO, timer, and UART.
+
+    Parameters
+    ----------
+    num_bytes: int
+        Size of the RAM in bytes.
+
+    bus_type: BusType
+        Bus used for peripherals.
+
+    Attributes
+    ----------
+    cpu
+        The Sentinel CPU
+    mem
+        CPU Memory
+    leds
+        The LEDs/GPIO peripheral
+
+    timer
+        The timer peripheral
+
+    serial
+        The UART peripheral
+    """
+
     # CSR is the default because it's what's encouraged. However, the default
     # for the demo is WB because that's what fits on the ICE40HX1K!
-    def __init__(self, *, sim=False, num_bytes=0x400, bus_type=BusType.CSR):
+    def __init__(self, *, num_bytes=0x400, bus_type=BusType.CSR):
         self.cpu = Top()
-        self.mem = WBMemory(sim=sim, num_bytes=num_bytes)
+        self.mem = WBMemory(num_bytes=num_bytes)
         self.decoder = wishbone.Decoder(addr_width=30, data_width=32,
                                         granularity=8, alignment=25)
-        self.sim = sim
         self.bus_type = bus_type
 
         match bus_type:
             case BusType.WB:
                 self.leds = WBLeds()
-
-                if not self.sim:
-                    self.timer = WBTimer()
-                    self.serial = WBSerial()
+                self.timer = WBTimer()
+                self.serial = WBSerial()
             case BusType.CSR:
                 self.leds = CSRLeds()
-
-                if not self.sim:
-                    self.timer = CSRTimer()
-                    self.serial = CSRSerial()
+                self.timer = CSRTimer()
+                self.serial = CSRSerial()
 
     @property
     def rom(self):
+        """Memory contents of user program, if any."""
         return self.mem.init
 
     @rom.setter
     def rom(self, source_or_list):
         if isinstance(source_or_list, str):
             insns = assemble(source_or_list)
-            self.mem.init = [int.from_bytes(insns[adr:adr+4],
+            self.mem.init = [int.from_bytes(insns[adr:adr + 4],
                                             byteorder="little")
                              for adr in range(0, len(insns), 4)]
         elif isinstance(source_or_list, (bytes, bytearray)):
-            self.mem.init = [int.from_bytes(source_or_list[adr:adr+4],
+            self.mem.init = [int.from_bytes(source_or_list[adr:adr + 4],
                                             byteorder="little")
                              for adr in range(0, len(source_or_list), 4)]
         else:
             self.mem.init = source_or_list
 
-    def elaborate(self, plat):
+    def elaborate(self, plat):  # noqa: D102
         m = Module()
 
         m.submodules.cpu = self.cpu
@@ -656,12 +868,11 @@ class AttoSoC(Elaboratable):
         if self.bus_type == BusType.WB:
             self.decoder.add(flipped(self.leds.bus), sparse=True)
 
-            if not self.sim:
-                m.submodules.timer = self.timer
-                self.decoder.add(flipped(self.timer.bus), sparse=True)
+            m.submodules.timer = self.timer
+            self.decoder.add(flipped(self.timer.bus), sparse=True)
 
-                m.submodules.serial = self.serial
-                self.decoder.add(flipped(self.serial.bus), sparse=True)
+            m.submodules.serial = self.serial
+            self.decoder.add(flipped(self.serial.bus), sparse=True)
 
         elif self.bus_type == BusType.CSR:
             # CSR (has to be done first other mem map "frozen" errors?)
@@ -669,11 +880,10 @@ class AttoSoC(Elaboratable):
                                         alignment=23)
             periph_decode.add(self.leds.bus, name="leds", addr=0)
 
-            if not self.sim:
-                periph_decode.add(self.timer.bus, name="timer")
-                periph_decode.add(self.serial.bus, name="serial")
-                m.submodules.timer = self.timer
-                m.submodules.serial = self.serial
+            periph_decode.add(self.timer.bus, name="timer")
+            periph_decode.add(self.serial.bus, name="serial")
+            m.submodules.timer = self.timer
+            m.submodules.serial = self.serial
 
             # Connect peripherals to Wishbone
             periph_wb = WishboneCSRBridge(periph_decode.bus, data_width=32)
@@ -682,14 +892,13 @@ class AttoSoC(Elaboratable):
             m.submodules.periph_bus = periph_decode
             m.submodules.periph_wb = periph_wb
 
-        if not self.sim:
-            if plat:
-                m.d.comb += [
-                    self.serial.rx.eq(ser.rx.i),
-                    ser.tx.o.eq(self.serial.tx)
-                ]
+        if plat:
+            m.d.comb += [
+                self.serial.rx.eq(ser.rx.i),
+                ser.tx.o.eq(self.serial.tx)
+            ]
 
-            m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
+        m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
 
         def destruct_res(res):
             ls = []
@@ -714,6 +923,7 @@ class AttoSoC(Elaboratable):
 
 
 def demo(args):
+    """AttoSoC generator entry point."""
     match args.i:
         case "wishbone":
             bus_type = BusType.WB
@@ -861,6 +1071,7 @@ def demo(args):
 
 
 def main():
+    """AttoSoC generator command-line parser."""
     parser = argparse.ArgumentParser(description="Sentinel AttoSoC Demo generator")  # noqa: E501
     parser.add_argument("-n", help="dry run", action="store_true")
     parser.add_argument("-b", help="build directory (default build if local, "
