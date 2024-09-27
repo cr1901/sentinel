@@ -1,3 +1,11 @@
+# ruff: noqa: D403, D400 # Docstrings become CLI help fragments.
+# flake8: noqa: DOC201  # Docstrings become CLI help fragments.
+"""Task driver for Sentinel.
+
+DoIt tasks are typically called from PDM. The DoIt tasks and may call PDM
+scripts recursively to implement a super-powered PDM "composite" type.
+"""
+
 from pathlib import Path
 import subprocess
 from shutil import copy2, move, rmtree
@@ -19,8 +27,8 @@ from doit.reporter import ConsoleReporter
 # Tasks typically only skip printing titles if they're private. For the
 # list_sby_status tasks, I want to skip the titles because it interfaces
 # with their extra stdout when parallelism is on.
-class MaybeSuppressReporter(ConsoleReporter):
-    def execute_task(self, task):
+class MaybeSuppressReporter(ConsoleReporter): # noqa: D101
+    def execute_task(self, task):  # noqa: D102
         if task.meta and task.meta.get("suppress_reporter", False):
             pass
         else:
@@ -37,17 +45,17 @@ DOIT_CONFIG = {
 # Helpers
 # doit actions must return certain types. None is one of these, but
 # paths are not (like in copy2).
-def copy_(src, dst):
+def copy_(src, dst):  # noqa: D103
     copy2(src, dst)
 
 
 # Ditto.
-def move_(src, dst):
+def move_(src, dst):  # noqa: D103
     move(src, dst)
 
 
 # Iterate over multiple trees and remove them!
-def rmtrees(paths):
+def rmtrees(paths):  # noqa: D103
     for p in paths:
         rmtree(p, ignore_errors=True)
 
@@ -58,12 +66,12 @@ def rmtrees(paths):
 # multiprocessing limitation this by dispatching to a single print_title
 # function whose evaluation is deferred using partial. Note this runs before
 # custom reporters (like MaybeSuppressReporter), and so can be combined.
-def print_title(task, title):
+def print_title(task, title):  # noqa: D103
     return title
 
 
 # Generic tasks
-def git_init(repo_dir):
+def git_init(repo_dir):  # noqa: D103
     submod = repo_dir / ".git"
     return {
         "basename": "_git_init",
@@ -75,7 +83,7 @@ def git_init(repo_dir):
     }
 
 
-def task_git():
+def task_git():  # noqa: D103
     riscof_tests = Path("./tests/riscof/")
 
     yield {
@@ -92,12 +100,12 @@ def task_git():
 
 
 def task__git_rev():
-    "get git revision"
+    """get git revision"""
     return {'actions': ["git rev-parse HEAD"]}
 
 
 def task__demo():
-    "create a demo bitstream (for benchmarking)"
+    """create a demo bitstream (for benchmarking)"""
     pyfiles = [s for s in Path("./src/sentinel").glob("*.py")] + \
               [Path("./examples/attosoc.py")]
 
@@ -110,7 +118,7 @@ def task__demo():
 # These two tasks do not require "pdm run" because I had trouble installing
 # matplotlib into the venv. Intended usage in cases like mine is
 # "doit bench_luts" or "doit plot_luts".
-def task_luts():
+def task_luts():  # noqa: D103
     build_dir = Path("./build-bench")
     yosys_log = build_dir / "top.rpt"
     nextpnr_log = build_dir / "top.tim"
@@ -148,7 +156,7 @@ def task_luts():
 
 
 def task_ucode():
-    "assemble microcode and copy non-bin artifacts to root"
+    """assemble microcode and copy non-bin artifacts to root"""
     ucode = Path("./src/sentinel/microcode.asm")
     hex_ = ucode.with_suffix(".asm_block_ram.hex")
     fdef = ucode.with_suffix(".asm_block_ram.fdef")
@@ -168,7 +176,7 @@ def task_ucode():
 
 
 # RISCOF
-def opam_vars():
+def opam_vars():  # noqa: D103
     out = subprocess.run("opam env", shell=True, stdout=subprocess.PIPE).stdout
 
     vars = os.environ.copy()
@@ -182,7 +190,7 @@ def opam_vars():
     return {"env": vars}
 
 
-def compress(src, dst):
+def compress(src, dst):  # noqa: D103
     with open(src, "rb") as fp:
         c_bytes = gzip.compress(fp.read())
 
@@ -190,7 +198,7 @@ def compress(src, dst):
         fp.write(c_bytes)
 
 
-def decompress(src, dst):
+def decompress(src, dst):  # noqa: D103
     with open(src, "rb") as fp:
         d_bytes = gzip.decompress(fp.read())
 
@@ -200,17 +208,17 @@ def decompress(src, dst):
     os.chmod(dst, 0o775)
 
 
-def run_with_env(cmd, cwd, env):
+def run_with_env(cmd, cwd, env):  # noqa: D103
     return subprocess.run(cmd, cwd=cwd, env=env, shell=True).check_returncode()
 
 
 def task__opam():
-    "extract environment vars from opam"
+    """extract environment vars from opam"""
     return {"actions": [(opam_vars,)], "verbosity": 2}
 
 
 def task__decompress_sail():
-    "decompress previously-built SAIL emulator"
+    """decompress previously-built SAIL emulator"""
     riscof_tests = Path("./tests/riscof/")
     comp_emu = riscof_tests / "bin/riscv_sim_RV32.gz"
     bin_emu = riscof_tests / "bin/riscv_sim_RV32"
@@ -226,7 +234,7 @@ def task__decompress_sail():
 
 
 def task__build_sail():
-    "build SAIL RISC-V emulators in opam environment, compress"
+    """build SAIL RISC-V emulators in opam environment, compress"""
     riscof_tests = Path("./tests/riscof/")
     emu = riscof_tests / "sail-riscv" / "c_emulator/riscv_sim_RV32"
     # FIXME: Imprecise.
@@ -253,7 +261,7 @@ def task__build_sail():
 
 
 def task__riscof_gen():
-    "run RISCOF's testlist command to prepare RISCOF files and directories"
+    """run RISCOF's testlist command to prepare RISCOF files and directories"""
     riscof_tests = Path("./tests/riscof/")
 
     sentinel_plugin = riscof_tests / "sentinel"
@@ -272,8 +280,7 @@ def task__riscof_gen():
 
 # This is required because RISCOF expects dut/ref dirs to not exist.
 def task__clean_dut_ref_dirs():
-    "remove dut/ref directories from last RISCOF run"
-
+    """remove dut/ref directories from last RISCOF run"""
     riscof_tests = Path("./tests/riscof/")
     riscof_work = riscof_tests / "riscof_work"
 
@@ -286,11 +293,11 @@ def task__clean_dut_ref_dirs():
     }
 
 
-def save_last_testfile(testfile):
+def save_last_testfile(testfile):  # noqa: D103
     return {"last_testfile": testfile}
 
 
-def last_testfile(task, values, testfile):
+def last_testfile(task, values, testfile):  # noqa: D103
     path_tf = Path(testfile)
     if not path_tf.exists():
         return False
@@ -316,7 +323,7 @@ def last_testfile(task, values, testfile):
                "default": "./tests/riscof/riscof_work/test_list.yaml",
                "help": "path to alternate test list"}])
 def task_run_riscof(testfile):
-    "run RISCOF tests against Sentinel/Sail, and report results, removes previous run's artifacts"  # noqa: E501
+    """run RISCOF tests against Sentinel/Sail, and report results, removes previous run's artifacts"""  # noqa: E501
     riscof_tests = Path("./tests/riscof/")
     riscof_work = riscof_tests / "riscof_work"
 
@@ -400,7 +407,7 @@ SBY_TESTS = (
 # config files haven't actually changed (and thus genchecks.py need not be
 # run).
 def task__formal_gen_sentinel():
-    "generate Sentinel subdir and Verilog in RISC-V Formal cores dir"
+    """generate Sentinel subdir and Verilog in RISC-V Formal cores dir"""
     formal_tests = Path("./tests/formal/")
     cores_dir = formal_tests / "riscv-formal" / "cores"
     sentinel_dir = cores_dir / "sentinel"
@@ -415,7 +422,7 @@ def task__formal_gen_sentinel():
 
 
 def task__formal_gen_files():
-    "copy Sentinel files and run RISC-V Formal's genchecks.py script"
+    """copy Sentinel files and run RISC-V Formal's genchecks.py script"""
     formal_tests = Path("./tests/formal/")
     cores_dir = formal_tests / "riscv-formal" / "cores"
     sentinel_dir = cores_dir / "sentinel"
@@ -435,7 +442,7 @@ def task__formal_gen_files():
     }
 
 
-def maybe_disasm_move_vcd(sentinel_dir, root, sby_file):
+def maybe_disasm_move_vcd(sentinel_dir, root, sby_file):  # noqa: D103
     sby_dir: Path = sby_file.with_suffix("")
     trace_names = [t for t in (sby_dir / "engine_0").glob("trace*.vcd")]
 
@@ -458,7 +465,7 @@ def maybe_disasm_move_vcd(sentinel_dir, root, sby_file):
 
 
 def task_run_sby():
-    "run symbiyosys flow on Sentinel, \"doit list --all run_sby\" for choices"
+    r"""run symbiyosys flow on Sentinel, "doit list --all run_sby" for choices"""  # noqa: E501
     root = Path(".")
     formal_tests = Path("./tests/formal/")
     cores_dir = formal_tests / "riscv-formal" / "cores"
@@ -510,7 +517,7 @@ def task_run_sby():
 
 # Customize the status task(s) to print all output on a single line.
 # Think like autoconf scripts "checking for foo... yes"!
-def echo_sby_status(checks_dir, c):
+def echo_sby_status(checks_dir, c):  # noqa: D103
     # TODO: Handle "not run yet" if status doesn't exist? What about
     # "out-of-date"?
     with open(checks_dir / c / "status", "r") as fp:
@@ -523,7 +530,7 @@ def echo_sby_status(checks_dir, c):
 
 
 def task_list_sby_status():
-    "list \"run_sby\" subtasks' status, \"doit list --all list_sby_status\" for choices"  # noqa: E501
+    r"""list "run_sby" subtasks' status, "doit list --all list_sby_status" for choices"""  # noqa: E501
     formal_tests = Path("./tests/formal/")
     cores_dir = formal_tests / "riscv-formal" / "cores"
     sentinel_dir = cores_dir / "sentinel"
@@ -551,7 +558,7 @@ UNSUPPORTED_UPSTREAM = ("breakpoint",)
 # and objdump are invoked with. It might not be perfect (but seems to work
 # fine).
 def task_compile_upstream():
-    "compile riscv-tests tests to ELF, \"doit list --all compile_upstream\" for choices"  # noqa: E501
+    r"""compile riscv-tests tests to ELF, "doit list --all compile_upstream" for choices"""  # noqa: E501
     flags = "-march=rv32g -mabi=ilp32 -static -mcmodel=medany \
 -fvisibility=hidden -nostdlib -nostartfiles"
 
@@ -600,11 +607,11 @@ def task_compile_upstream():
         }
 
 
-def save_last_platform_and_bus(platform, bus):
+def save_last_platform_and_bus(platform, bus):  # noqa: D103
     return {"last_platform": platform, "last_bus": bus}
 
 
-def last_platform_and_bus(task, values, platform, bus):
+def last_platform_and_bus(task, values, platform, bus):  # noqa: D103
     task.value_savers.append(partial(save_last_platform_and_bus,
                                      platform, bus))
     return values.get("last_platform") == platform and \
@@ -619,7 +626,7 @@ def last_platform_and_bus(task, values, platform, bus):
                "default": "wishbone",
                "help": "peripheral interconnect bus type"}])
 def task__make_rand_firmware(platform, interface):
-    "create a baseline gateware for firmware development"
+    """create a baseline gateware for firmware development"""
     pyfiles = [s for s in Path("./src/sentinel").glob("*.py")] + \
               [Path("./examples/attosoc.py")]
     build_dir = Path("./build-rust")
@@ -636,7 +643,7 @@ def task__make_rand_firmware(platform, interface):
 
 
 def task__replace_rust_firmware():
-    "compile rust firmware and replace image inside baseline gateware"
+    """compile rust firmware and replace image inside baseline gateware"""
     rs_files = [s for s in chain(Path("sentinel-rt/examples").glob("*.rs"),
                                  Path("sentinel-rt/src").glob("*.rs"))] + \
                [s for s in Path(".").glob("*/Cargo.toml")] + \
