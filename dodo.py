@@ -600,20 +600,25 @@ def task_compile_upstream():
         }
 
 
-def save_last_platform(platform):
-    return {"last_platform": platform}
+def save_last_platform_and_bus(platform, bus):
+    return {"last_platform": platform, "last_bus": bus}
 
 
-def last_platform(task, values, platform):
-    task.value_savers.append(partial(save_last_platform, platform))
-    return values.get("last_platform") == platform
+def last_platform_and_bus(task, values, platform, bus):
+    task.value_savers.append(partial(save_last_platform_and_bus,
+                                     platform, bus))
+    return values.get("last_platform") == platform and \
+        values.get("last_bus") == bus
 
 
 # Rust firmware development
 @task_params([{"name": "platform", "short": "p",
                "default": "icestick",
-               "help": "platform to build baseline gateware"}])
-def task__make_rand_firmware(platform):
+               "help": "platform to build baseline gateware"},
+              {"name": "interface", "short": "i",
+               "default": "wishbone",
+               "help": "peripheral interconnect bus type"}])
+def task__make_rand_firmware(platform, interface):
     "create a baseline gateware for firmware development"
     pyfiles = [s for s in Path("./src/sentinel").glob("*.py")] + \
               [Path("./examples/attosoc.py")]
@@ -622,10 +627,11 @@ def task__make_rand_firmware(platform):
     rand_asc = build_dir / "rand.asc"
 
     return {
-        "actions": ["pdm demo -b build-rust -r -x rand -p {platform}"],
+        "actions": ["pdm demo -b build-rust -r -x rand -p {platform} -i {interface}"],  # noqa: E501
         "targets": [rand_hex, rand_asc],
         "file_dep": pyfiles + [Path("./src/sentinel/microcode.asm")],
-        "uptodate": [partial(last_platform, platform=platform)],
+        "uptodate": [partial(last_platform_and_bus, platform=platform,
+                             bus=interface)],
     }
 
 
@@ -644,7 +650,7 @@ def task__replace_rust_firmware():
     top_bin = build_dir / "top.bin"
 
     return {
-        "actions": ["pdm _rust-firmware",
+        "actions": ["cargo build --release --example=attosoc",
                     f"pdm demo -b build-rust -n -g {attosoc_elf} -x firmware",
                     f"icebram {rand_hex} {firmware_hex} < {rand_asc} > {top_asc}",  # noqa: E501
                     f"icepack {top_asc} {top_bin}"],  # noqa: E501
