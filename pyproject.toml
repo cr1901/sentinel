@@ -33,31 +33,46 @@ long_vcd_filenames = true
 extend_vcd_time = "41666666"  # extend by half a 12MHz period.
 
 [tool.ruff]
-preview = true
 src = [ "src", "tests" ]  # https://docs.astral.sh/ruff/faq/#how-does-ruff-determine-which-of-my-imports-are-first-party-third-party-etc
 line-length = 79  # flake8 compat
 # Also, accept the risks of preview mode to try the unstable E checks and pydoclint support.
 # These will also catch missing docstrings and other nits, which pydoclint doesn't.
-lint.extend-select = ["E1", "E2", "E3", "RUF100", "E5", "W", "D", "DOC"]
-lint.pydocstyle.convention = "numpy"
-lint.pycodestyle.max-line-length = 79  # flake8 compat
+extend-exclude = [ 
+    # External code- submodules or auto-generated.
+    "tests/formal/riscv-formal/**",
+    "tests/upstream/riscv-tests/**" ,
+    "tests/riscof/sail_cSim/**"
+]
+
+[tool.ruff.lint]
+preview = true
+extend-select = ["E1", "E2", "E3", "RUF100", "E5", "W", "D", "DOC"]
+pydocstyle.convention = "numpy"
+pycodestyle.max-line-length = 79  # flake8 compat
 
 [tool.ruff.lint.per-file-ignores]
 # Short docstrings become CLI help fragments.
 "dodo.py" = ["D400", "D403", "DOC201", "DOC402"]
 # Tolerate missing strings for tests- they are not a public API.
 "tests/**/*.py" = ["D10"]
-# External code
-"tests/formal/riscv-formal/**" = ["F", "E", "W", "D"]
-"tests/riscof/sail_cSim/**" = ["F", "E", "W", "D"]
-"tests/upstream/riscv-tests/**" = ["F", "E", "W", "D"]
+"tests/riscof/sentinel/riscof_sentinel.py" = ["E402"]  # sys.path modified
 
-[tool.pyright]
+[[tool.pyright.executionEnvironments]]
+root = "examples/attosoc.py"
 reportInvalidTypeForm = false
-reportGeneralTypeIssues=false
-reportAttributeAccessIssue=false
-reportPossiblyUnboundVariable=false
-reportOperatorIssue=false
+reportGeneralTypeIssues = false
+reportAttributeAccessIssue = false
+reportPossiblyUnboundVariable = false
+reportOperatorIssue = false
+
+[[tool.pyright.executionEnvironments]]
+root = "tests/formal"
+reportArgumentType = false
+
+[[tool.pyright.executionEnvironments]]
+root = "tests/riscof/sentinel"
+reportIncompatibleMethodOverride = false
+reportMissingImports = false  # sys.path modified
 
 [tool.pdm.version]
 source = "scm"

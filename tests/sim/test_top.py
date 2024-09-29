@@ -41,7 +41,7 @@ def make_cpu_tb(mod, sim_mem, regs, mem, csrs):
 
         for curr_r, curr_m, curr_c in zip(regs, mem, csrs):
             # Wait for insn.
-            await ctx.tick().until(m.bus.cyc & m.bus.stb & \
+            await ctx.tick().until(m.bus.cyc & m.bus.stb &
                                    m.control.insn_fetch)
 
             while ctx.get(~m.bus.ack):
@@ -501,8 +501,8 @@ def primes_io_tb(mod, restart_timeout):
 
         for p in primes:
             *_, dat_w = await ctx.tick().sample(m.bus.dat_w).until(
-                (m.bus.adr == 0x2000000 >> 2) & m.bus.cyc & \
-                m.bus.stb)
+                (m.bus.adr == 0x2000000 >> 2) & m.bus.cyc &
+                 m.bus.stb)
 
             ctx.set(m.bus.ack, 1)
             assert dat_w == p

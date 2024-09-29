@@ -53,7 +53,7 @@ class CSRRegs:
         csrregs = {}
 
         csrregs["MSCRATCH"] = ctx.get(m.datapath.regfile.m_data[0x28])
-        csrregs["MSTATUS"] = ctx.get(m.datapath.csr.mstatus_r.as_value())  # noqa: E501
+        csrregs["MSTATUS"] = ctx.get(m.datapath.csr.mstatus_r.as_value())
         csrregs["MTVEC"] = ctx.get(m.datapath.regfile.m_data[0x25])
         csrregs["MIE"] = ctx.get(m.datapath.csr.mie_r.as_value())
         csrregs["MIP"] = ctx.get(m.datapath.csr.mip_r.as_value())

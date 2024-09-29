@@ -2,8 +2,7 @@ import os
 import logging
 from pathlib import Path
 from sentinel.top import Top
-from amaranth.sim import Simulator, Passive
-from enum import Enum, auto
+from amaranth.sim import Simulator
 
 import riscof.utils as utils
 from riscof.pluginTemplate import pluginTemplate
@@ -15,8 +14,8 @@ this_dir = Path(os.path.realpath(__file__)).parent
 sentinel_root_dir = this_dir.parent.parent.parent
 sys.path.insert(0, str(sentinel_root_dir))
 
-from tests.conftest import Memory, mproc_inner  # noqa: E402
-from tests.upstream.test_upstream import wfhw_inner  # noqa: E402
+from tests.conftest import Memory, mproc_inner
+from tests.upstream.test_upstream import wfhw_inner
 
 logger = logging.getLogger()
 
@@ -118,8 +117,8 @@ class sentinel(pluginTemplate):
         # assigned later in the runTests function
         self.compile_cmd = 'riscv64-unknown-elf-gcc -march={0} \
         -static -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles -g\
-        -T '+self.pluginpath+'/env/link.ld\
-        -I '+self.pluginpath+'/env/\
+        -T ' + self.pluginpath + '/env/link.ld\
+        -I ' + self.pluginpath + '/env/\
         -I ' + archtest_env + ' {1} -o {2} {3}'
 
         # add more utility snippets here
@@ -150,7 +149,7 @@ class sentinel(pluginTemplate):
 
         # TODO: The following assumes you are using the riscv-gcc toolchain. If
         #       not please change appropriately
-        self.compile_cmd = self.compile_cmd+' -mabi=' + \
+        self.compile_cmd = self.compile_cmd + ' -mabi=' + \
             ('lp64 ' if 64 in ispec['supported_xlen'] else 'ilp32 ')
 
     # Sentinel elects to use the alternate template to avoid a dependency on
@@ -228,7 +227,7 @@ class sentinel(pluginTemplate):
 
                 logger.debug("Executing in Amaranth simulator")
                 sim = Simulator(top)
-                sim.add_clock(1/(12e6))
+                sim.add_clock(1 / 12e6)
                 sim.add_testbench(mk_wait_for_host_write(top, sig_file, mem))
                 sim.add_process(mk_read_write_mem(top, mem))
 

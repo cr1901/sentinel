@@ -25,7 +25,7 @@ def mod(request):
     if not firmware_bin.isfile():
         pytest.skip("attosoc binary not present")
 
-    with open(firmware_bin, "rb") as fp:  # noqa: E501
+    with open(firmware_bin, "rb") as fp:
         def append_bytes(a, b):
             return a + b
 

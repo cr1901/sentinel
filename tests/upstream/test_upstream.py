@@ -60,7 +60,8 @@ async def wfhw_inner(mod, ctx):
 
         match state:
             case HOST_STATE.WAITING_FIRST:
-                if (addr == 0x4000000 >> 2) and (sel == 0b1111) and wb_cyc:
+                if (addr == 0x4000000 >> 2) and (sel == 0b1111) and \
+                        wb_cyc and we:
                     ctx.set(m.bus.ack, 1)
                     state = HOST_STATE.FIRST_ACCESS_ACK
             case HOST_STATE.FIRST_ACCESS_ACK:
@@ -69,7 +70,7 @@ async def wfhw_inner(mod, ctx):
                 state = HOST_STATE.WAITING_SECOND
             case HOST_STATE.WAITING_SECOND:
                 if addr == ((0x4000000 + 4) >> 2) and (sel == 0b1111) and \
-                        wb_cyc:
+                        wb_cyc and we:
                     ctx.set(m.bus.ack, 1)
                     state = HOST_STATE.SECOND_ACCESS_ACK
             case HOST_STATE.SECOND_ACCESS_ACK:
