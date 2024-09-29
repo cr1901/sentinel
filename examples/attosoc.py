@@ -164,11 +164,11 @@ class WBLeds(Component):
     def elaborate(self, plat):  # noqa: D102
         m = Module()
 
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.ack & self.bus.we & \
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.ack & self.bus.we &
                   (self.bus.adr[0:2] == 0) & self.bus.sel[0]):
             m.d.sync += self.leds.eq(self.bus.dat_w)
 
-        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack & \
+        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack &
                   (self.bus.adr[0:2] == 1) & self.bus.sel[0]):
             with m.If(~self.bus.we):
                 for i in range(8):
@@ -177,7 +177,7 @@ class WBLeds(Component):
                 for i in range(8):
                     m.d.sync += self.gpio[i].o.eq(self.bus.dat_w[i])
 
-        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack & self.bus.we & \
+        with m.If(self.bus.stb & self.bus.cyc & ~self.bus.ack & self.bus.we &
                   (self.bus.adr[0:2] == 2) & self.bus.sel[0]):
             for i in range(8):
                 m.d.sync += self.gpio[i].oe.eq(self.bus.dat_w[i])
@@ -316,7 +316,7 @@ class CSRLeds(Component):
                     self.inout_reg.f.inout.w_data[i])
 
         for i in range(8):
-            m.d.comb += self.inout_reg.f.inout.r_data[i].eq(self.gpio[i].i)  # noqa: E501
+            m.d.comb += self.inout_reg.f.inout.r_data[i].eq(self.gpio[i].i)
 
         with m.If(self.oe_reg.f.oe.w_stb):
             for i in range(8):
@@ -606,7 +606,7 @@ class WBSerial(Component):
             tx_ack_prev.eq(self.serial.tx_ack),
         ]
 
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] & \
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] &
                   ~self.bus.adr[0]):
             m.d.sync += self.bus.dat_r.eq(self.serial.rx_data)
             with m.If(~self.bus.we):
@@ -618,7 +618,7 @@ class WBSerial(Component):
                     self.serial.tx_rdy.eq(1)
                 ]
 
-        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] & \
+        with m.If(self.bus.stb & self.bus.cyc & self.bus.sel[0] &
                   self.bus.adr[0] & ~self.bus.we & ~self.bus.ack):
             m.d.sync += [
                 self.bus.dat_r.eq(Cat(rx_rdy_irq, tx_ack_irq)),
@@ -922,7 +922,7 @@ class AttoSoC(Elaboratable):
         return m
 
 
-def demo(args):  # noqa: DOC101, DOC103, DOC201
+def demo(args):
     """AttoSoC generator entry point."""
     match args.i:
         case "wishbone":

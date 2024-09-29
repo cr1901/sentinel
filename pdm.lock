@@ -5,7 +5,7 @@
 groups = ["default", "dev", "examples", "lint", "remote", "riscof"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:466bb8e8c209b1bc40eda557315f1985a5f061b98c9ab7d2ceab6bba759913fc"
+content_hash = "sha256:07d2e833de8d31f322b7cf9f700a95e8b483b68948504aeac6937b6a60973751"
 
 [[metadata.targets]]
 requires_python = ">=3.11"
@@ -191,7 +191,7 @@ name = "click"
 version = "8.1.7"
 requires_python = ">=3.7"
 summary = "Composable command line interface toolkit"
-groups = ["dev", "lint", "riscof"]
+groups = ["dev", "riscof"]
 dependencies = [
     "colorama; platform_system == \"Windows\"",
     "importlib-metadata; python_version < \"3.8\"",
@@ -217,7 +217,7 @@ name = "colorama"
 version = "0.4.6"
 requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,!=3.5.*,!=3.6.*,>=2.7"
 summary = "Cross-platform colored terminal text."
-groups = ["dev", "lint", "riscof"]
+groups = ["dev", "riscof"]
 marker = "platform_system == \"Windows\" or sys_platform == \"win32\""
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
@@ -285,17 +285,6 @@ files = [
 ]
 
 [[package]]
-name = "docstring-parser-fork"
-version = "0.0.9"
-requires_python = "<4.0,>=3.7"
-summary = "Parse Python docstrings in reST, Google and Numpydoc format"
-groups = ["lint"]
-files = [
-    {file = "docstring_parser_fork-0.0.9-py3-none-any.whl", hash = "sha256:0be85ad00cb25bf5beeb673e46e777facf0f47552fa3a7570d120ef7e3374401"},
-    {file = "docstring_parser_fork-0.0.9.tar.gz", hash = "sha256:95b23cc5092af85080c716a6da68360f5ae4fcffa75f4a3aca5e539783cbcc3d"},
-]
-
-[[package]]
 name = "doit"
 version = "0.36.0"
 requires_python = ">=3.8"
@@ -308,22 +297,6 @@ dependencies = [
 files = [
     {file = "doit-0.36.0-py3-none-any.whl", hash = "sha256:ebc285f6666871b5300091c26eafdff3de968a6bd60ea35dd1e3fc6f2e32479a"},
     {file = "doit-0.36.0.tar.gz", hash = "sha256:71d07ccc9514cb22fe59d98999577665eaab57e16f644d04336ae0b4bae234bc"},
-]
-
-[[package]]
-name = "flake8"
-version = "7.1.1"
-requires_python = ">=3.8.1"
-summary = "the modular source code checker: pep8 pyflakes and co"
-groups = ["lint"]
-dependencies = [
-    "mccabe<0.8.0,>=0.7.0",
-    "pycodestyle<2.13.0,>=2.12.0",
-    "pyflakes<3.3.0,>=3.2.0",
-]
-files = [
-    {file = "flake8-7.1.1-py2.py3-none-any.whl", hash = "sha256:597477df7860daa5aa0fdd84bf5208a043ab96b8e96ab708770ae0364dd03213"},
-    {file = "flake8-7.1.1.tar.gz", hash = "sha256:049d058491e228e03e67b390f311bbf88fce2dbaa8fa673e7aea87b7198b8d38"},
 ]
 
 [[package]]
@@ -531,17 +504,6 @@ files = [
 ]
 
 [[package]]
-name = "mccabe"
-version = "0.7.0"
-requires_python = ">=3.6"
-summary = "McCabe checker, plugin for flake8"
-groups = ["lint"]
-files = [
-    {file = "mccabe-0.7.0-py2.py3-none-any.whl", hash = "sha256:6c2d30ab6be0e4a46919781807b4f0d834ebdd6c6e3dca0bda5a15f863427b6e"},
-    {file = "mccabe-0.7.0.tar.gz", hash = "sha256:348e0240c33b60bbdf4e523192ef919f28cb2c3d7d5c7794f74009290f236325"},
-]
-
-[[package]]
 name = "packaging"
 version = "24.1"
 requires_python = ">=3.8"
@@ -600,17 +562,6 @@ files = [
 ]
 
 [[package]]
-name = "pycodestyle"
-version = "2.12.1"
-requires_python = ">=3.8"
-summary = "Python style guide checker"
-groups = ["lint"]
-files = [
-    {file = "pycodestyle-2.12.1-py2.py3-none-any.whl", hash = "sha256:46f0fb92069a7c28ab7bb558f05bfc0110dac69a0cd23c61ea0040283a9d78b3"},
-    {file = "pycodestyle-2.12.1.tar.gz", hash = "sha256:6838eae08bbce4f6accd5d5572075c63626a15ee3e6f842df996bf62f6d73521"},
-]
-
-[[package]]
 name = "pycparser"
 version = "2.22"
 requires_python = ">=3.8"
@@ -622,38 +573,6 @@ files = [
 ]
 
 [[package]]
-name = "pydoclint"
-version = "0.5.8"
-requires_python = ">=3.8"
-summary = "A Python docstring linter that checks arguments, returns, yields, and raises sections"
-groups = ["lint"]
-dependencies = [
-    "click>=8.1.0",
-    "docstring-parser-fork>=0.0.9",
-    "tomli>=2.0.1; python_version < \"3.11\"",
-]
-files = [
-    {file = "pydoclint-0.5.8-py2.py3-none-any.whl", hash = "sha256:d6def78cfde442b5d1418ad5eaa440b60f66123ce4ed87e39ef72b82bc7eed48"},
-    {file = "pydoclint-0.5.8.tar.gz", hash = "sha256:2477531d961740a170d338287a9eff28e5c2fdfec7b867e27831f894f67181b1"},
-]
-
-[[package]]
-name = "pydoclint"
-version = "0.5.8"
-extras = ["flake8"]
-requires_python = ">=3.8"
-summary = "A Python docstring linter that checks arguments, returns, yields, and raises sections"
-groups = ["lint"]
-dependencies = [
-    "flake8>=4",
-    "pydoclint==0.5.8",
-]
-files = [
-    {file = "pydoclint-0.5.8-py2.py3-none-any.whl", hash = "sha256:d6def78cfde442b5d1418ad5eaa440b60f66123ce4ed87e39ef72b82bc7eed48"},
-    {file = "pydoclint-0.5.8.tar.gz", hash = "sha256:2477531d961740a170d338287a9eff28e5c2fdfec7b867e27831f894f67181b1"},
-]
-
-[[package]]
 name = "pyelftools"
 version = "0.26"
 summary = "Library for analyzing ELF files and DWARF debugging information"
@@ -661,17 +580,6 @@ groups = ["examples", "riscof"]
 files = [
     {file = "pyelftools-0.26-py2.py3-none-any.whl", hash = "sha256:cc0ea0de82b240a73ef4056fce44acbb4727dca7d66759371aff2bad457ed711"},
     {file = "pyelftools-0.26.tar.gz", hash = "sha256:86ac6cee19f6c945e8dedf78c6ee74f1112bd14da5a658d8c9d4103aed5756a2"},
-]
-
-[[package]]
-name = "pyflakes"
-version = "3.2.0"
-requires_python = ">=3.8"
-summary = "passive checker of Python programs"
-groups = ["lint"]
-files = [
-    {file = "pyflakes-3.2.0-py2.py3-none-any.whl", hash = "sha256:84b5be138a2dfbb40689ca07e2152deb896a65c3a3e24c251c5c62489568074a"},
-    {file = "pyflakes-3.2.0.tar.gz", hash = "sha256:1c61603ff154621fb2a9172037d84dca3500def8c8b630657d1701f026f8af3f"},
 ]
 
 [[package]]

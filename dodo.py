@@ -659,7 +659,7 @@ def task__replace_rust_firmware():
         "actions": ["cargo build --release --example=attosoc",
                     f"pdm demo -b build-rust -n -g {attosoc_elf} -x firmware",
                     f"icebram {rand_hex} {firmware_hex} < {rand_asc} > {top_asc}",  # noqa: E501
-                    f"icepack {top_asc} {top_bin}"],  # noqa: E501
+                    f"icepack {top_asc} {top_bin}"],
         "targets": [top_bin],
         "setup": ["_make_rand_firmware"],
         "file_dep": rs_files + [rand_asc]

@@ -33,18 +33,18 @@ long_vcd_filenames = true
 extend_vcd_time = "41666666"  # extend by half a 12MHz period.
 
 [tool.ruff]
+preview = true
 src = [ "src", "tests" ]  # https://docs.astral.sh/ruff/faq/#how-does-ruff-determine-which-of-my-imports-are-first-party-third-party-etc
-external = [ "DOC" ]  # pydoclint
 line-length = 79  # flake8 compat
-# These will catch missing docstrings and other nits, which pydoclint doesn't.
-# Also, add stable-but-disabled E checks
-lint.extend-select = ["E4", "E5", "E7", "E9", "D"]
+# Also, accept the risks of preview mode to try the unstable E checks and pydoclint support.
+# These will also catch missing docstrings and other nits, which pydoclint doesn't.
+lint.extend-select = ["E1", "E2", "E3", "RUF100", "E5", "W", "D", "DOC"]
 lint.pydocstyle.convention = "numpy"
 lint.pycodestyle.max-line-length = 79  # flake8 compat
 
 [tool.ruff.lint.per-file-ignores]
-# Docstrings become CLI help fragments.
-"dodo.py" = ["D400", "D403"]
+# Short docstrings become CLI help fragments.
+"dodo.py" = ["D400", "D403", "DOC201", "DOC402"]
 # Tolerate missing strings for tests- they are not a public API.
 "tests/**/*.py" = ["D10"]
 # External code
@@ -52,8 +52,7 @@ lint.pycodestyle.max-line-length = 79  # flake8 compat
 "tests/riscof/sail_cSim/**" = ["F", "E", "W", "D"]
 "tests/upstream/riscv-tests/**" = ["F", "E", "W", "D"]
 
-[[tool.pyright.executionEnvironments]]
-root = "examples/attosoc.py"
+[tool.pyright]
 reportInvalidTypeForm = false
 reportGeneralTypeIssues=false
 reportAttributeAccessIssue=false
@@ -92,16 +91,13 @@ remote = [
     "paramiko~=2.7"
 ]
 lint = [
-    "ruff>=0.3.2",
-    "flake8>=7.0.0",
-    "pydoclint[flake8]>=0.4.1",
+    "ruff>=0.6.7",
 ]
 
 [tool.pdm.scripts]
 lint = { composite = [
-    # Python- flake8 include pydoclint
+    # Python
     "ruff check",
-    "flake8",
     # Rust- _clippy includes "cargo check": https://stackoverflow.com/a/57477060
     "cargo clippy --release --examples",
     "cargo doc --release --examples"
