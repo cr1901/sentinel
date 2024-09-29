@@ -1,5 +1,3 @@
-# ruff: noqa: D403, D400 # Docstrings become CLI help fragments.
-# flake8: noqa: DOC201  # Docstrings become CLI help fragments.
 """Task driver for Sentinel.
 
 DoIt tasks are typically called from PDM. The DoIt tasks and may call PDM
@@ -27,7 +25,7 @@ from doit.reporter import ConsoleReporter
 # Tasks typically only skip printing titles if they're private. For the
 # list_sby_status tasks, I want to skip the titles because it interfaces
 # with their extra stdout when parallelism is on.
-class MaybeSuppressReporter(ConsoleReporter): # noqa: D101
+class MaybeSuppressReporter(ConsoleReporter):  # noqa: D101
     def execute_task(self, task):  # noqa: D102
         if task.meta and task.meta.get("suppress_reporter", False):
             pass
@@ -157,7 +155,7 @@ def task_luts():  # noqa: D103
 
 def task_ucode():
     """assemble microcode and copy non-bin artifacts to root"""
-    ucode = Path("./src/sentinel/microcode.asm")
+    ucode = Path("./src/sentinel/icrocode.asm")
     hex_ = ucode.with_suffix(".asm_block_ram.hex")
     fdef = ucode.with_suffix(".asm_block_ram.fdef")
 
@@ -167,9 +165,9 @@ def task_ucode():
                     (move_, (fdef, Path(".") / fdef.name))
                     ],
         "params": [{
-                    "name": "ucodefile",
-                    "default": str(ucode)
-                    }],
+            "name": "ucodefile",
+            "default": str(ucode)
+        }],
         "targets": [Path(".") / hex_.name, Path(".") / fdef.name],
         "file_dep": [ucode],
     }
@@ -255,7 +253,7 @@ def task__build_sail():
         "file_dep": src_files,
         "targets": [emu, riscof_tests / "bin/riscv_sim_RV32.gz"],
         "getargs": {
-                "env": ("_opam", "env")
+            "env": ("_opam", "env")
         }
     }
 
@@ -366,7 +364,8 @@ def task_run_riscof(testfile):
                   "_riscof_gen",
                   "_clean_dut_ref_dirs"],
         "file_dep": pyfiles + sailp_files + sentp_files + [
-                        config_ini, Path("./src/sentinel/microcode.asm")],
+            config_ini, Path("./src/sentinel/microcode.asm")
+        ],
         "uptodate": [partial(last_testfile, testfile=testfile)],
     }
 

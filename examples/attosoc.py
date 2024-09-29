@@ -922,7 +922,7 @@ class AttoSoC(Elaboratable):
         return m
 
 
-def demo(args):
+def demo(args):  # noqa: DOC101, DOC103, DOC201
     """AttoSoC generator entry point."""
     match args.i:
         case "wishbone":

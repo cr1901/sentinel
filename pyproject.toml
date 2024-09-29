@@ -43,6 +43,8 @@ lint.pydocstyle.convention = "numpy"
 lint.pycodestyle.max-line-length = 79  # flake8 compat
 
 [tool.ruff.lint.per-file-ignores]
+# Docstrings become CLI help fragments.
+"dodo.py" = ["D400", "D403"]
 # Tolerate missing strings for tests- they are not a public API.
 "tests/**/*.py" = ["D10"]
 # External code

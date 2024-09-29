@@ -17,7 +17,11 @@ extend-exclude = .venv/,
 # https://github.com/astral-sh/ruff/issues/2402
 # https://github.com/astral-sh/ruff/issues/458
 select=E1,E2,E3,W,DOC
+per-file-ignores =
+     # Single-line docstrings become CLI help fragments.
+     dodo.py:DOC101,DOC103,DOC201,DOC402,DOC404
+# Pydoclint
 style=numpy
-skip_checking_short_docstrings=True
+skip_checking_short_docstrings=False
 check_class_attributes=False
 arg_type_hints_in_signature=False
