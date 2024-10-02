@@ -47,10 +47,11 @@ fields block_ram: {
 
   // Either read or write a register in the register file. _Which_ register
   // to read/write comes from the decoded insn.
-  // Read contents will be on the data bus the next cycle, _except_
-  // when insn_rs1 is paired with insn_fetch (in which contents are valid
-  // on the current cycle). Written contents will be valid on the next cycle.
-  // Reads are transparent.
+  // Read contents will be on the data bus the next cycle. When insn_rs1 is
+  // paired with insn_fetch, the address sent to the reg file comes directly
+  // from bits 15 to 20 on the WB DAT_R bus. Otheriwse, the address sent to the 
+  // reg file is retrieved from a holding register for bits 15 to 20 of the
+  // previously-decoded instruction word.
   reg_read: bool, default 0;
   reg_write: bool, default 0;
   reg_r_sel: enum { insn_rs1 = 0; insn_rs2 = 1; }, default insn_rs1;

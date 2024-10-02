@@ -339,9 +339,9 @@ class Sequencer(Elaboratable):
         # ucode ROM location read after sync reset ends. Feeding self.adr with
         # the reset value of self.next_adr works fine.
         #
-        # In principle this line is not needed, but iCE40 has a BRAM bug that
-        # prevents the intended logic self.adr logic from firing without this
-        # line. Read below for more info.
+        # In principle these lines are not needed, but iCE40 has a BRAM bug
+        # that prevents the intended logic self.adr logic from firing without
+        # these lines. Read below for more info.
         #
         # Detailed background:
         #
@@ -361,28 +361,30 @@ class Sequencer(Elaboratable):
         # properly until ~3us after internal POR. This will be many clock
         # cycles after POR is released by iCE40. By default, Amaranth will
         # generate a POR circuit that accomodates this behavior by holding the
-        # sync domain in rst for 15 us after POR ends). But self.adr feeds
+        # sync domain in rst for 15 us after POR ends. But self.adr feeds
         # back into the ucode BRAM, which in turns feeds the _reset-less_ read
-        # latches, without any intermediate storage elements. So the POR
-        # circuit does not apply.
+        # latches, without any intermediate storage elements. So Amaranth's POR
+        # circuit does not apply to self.adr in all scenarios without some
+        # guard logic, as below.
         #
-        # Without this line, observed behavior on iCE40 is interesting; for
+        # Without these lines, observed behavior on iCE40 is interesting; for
         # the first clock cycle after POR ends, self.adr is 2. This is the
         # aforementioned Amaranth/yosys behavior correctly firing.
-        # However on subsequent clock cycles, the ucode outputs will take on
-        # _the values the read-latches had just before an internal POR was
-        # triggered_ by e.g. "iceprog -t". Without this line, if the jump_type
-        # ucode field from the read latches isn't JmpType.CONT, self.adr will
-        # read garbage.
+        # However on subsequent clock cycles until ~3us have passed, the ucode
+        # outputs will take on _the values the read-latches had just before an
+        # internal POR was triggered_ by e.g. "iceprog -t". Without this line,
+        # if the jump_type ucode field from the read latches isn't
+        # JmpType.CONT, self.adr will read garbage.
         #
-        # Once the iCE40 BRAM initializes properly, nothing except
-        # self.next_adr holds self.adr at its current position during rst.
+        # Once the iCE40 BRAM initializes properly after ~3us, nothing except
+        # self.next_adr holds self.adr at its current position for the
+        # remaining ~12us that Amaranth holds the design in reset.
         # Thus, the ucode program will start executing until either:
         #
         # * The ucode program gets stuck waiting for insn memory at address 0.
         # * The jmp_type ucode field of the current insn is JumpType.CONT,
-        #   which will stall the program at address 2 until sync reset is
-        #   released.
+        #   which will stall the program at address 2- provided by Amaranth's
+        #   reset value for self.next_adr- until sync reset is released.
         #
         # If the ucode makes it back to address 2, running the ucode program
         # during reset probably has no ill effects. Unfortunately, if we
