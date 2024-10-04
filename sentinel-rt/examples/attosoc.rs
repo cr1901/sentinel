@@ -1,3 +1,10 @@
+/*! Example Rust application for AttoSoC Sentinel SoC.
+
+[Rule 110](https://en.wikipedia.org/wiki/Rule_110) demo using the UART as an
+output medium.
+    
+*/
+
 #![no_std]
 #![no_main]
 
@@ -5,16 +12,15 @@ use panic_halt as _;
 use riscv_rt::entry;
 use riscv::register::{mie, mstatus};
 use core::mem::MaybeUninit;
-use core::ptr::{write_volatile, read_volatile};
+use core::ptr::{write_volatile, read_volatile, addr_of_mut};
 use core::cell::Cell;
 use critical_section::{self, Mutex, CriticalSection};
-use heapless::spsc::{Queue, Consumer};
+use heapless::spsc::{Queue, Producer, Consumer};
 use portable_atomic::{AtomicBool, AtomicU8, Ordering::SeqCst};
 
 
 static RX: Mutex<Cell<Option<u8>>> = Mutex::new(Cell::new(None));
 static TX_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
-static TIMER: AtomicBool = AtomicBool::new(false);
 static COUNT: AtomicU8 = AtomicU8::new(0);
 // SAFETY: Emulating a "Send". We never touch this from non interrupt thread
 // once this is set.
@@ -24,6 +30,7 @@ static mut TX_CONS: MaybeUninit<Consumer<'static, u8, 64>> = MaybeUninit::uninit
 // so I don't bother. Instead, use base u32s to access hardware, so that the
 // same firmware can be used regardless of board.
 pub mod io_addrs {
+    /*! I/O address accessor helpers. */
     use riscv::register::mip;
 
     #[derive(Clone, Copy)]
@@ -109,14 +116,8 @@ fn MachineExternal() {
     let ser = unsafe { SERIAL_BASE.assume_init() };
 
     if (read_timer_int(cs, timer) & 0x01) != 0 {
-        let cnt = COUNT.fetch_add(1, SeqCst);
-
-        // Interrupts 12000000/16834, or ~764 times per second. Tone it
-        // down to 1/10th of a second.
-        if cnt == 72 {
-            COUNT.store(0, SeqCst);
-            TIMER.store(true, SeqCst)
-        }
+        // Interrupts 12000000/16834, or ~764 times per second.
+        COUNT.fetch_add(1, SeqCst);
     }
 
     let ser_int = read_serial_int(cs, ser);
@@ -156,12 +157,32 @@ fn MachineExternal() {
     //  };
 }
 
+fn write_char<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, utf8_char: char) {
+    let mut buf = [0; 4];
+
+    for b in utf8_char.encode_utf8(&mut buf).as_bytes() {
+        let mut queue_full = true;
+        while queue_full {
+            queue_full  = critical_section::with(|cs| {
+                if TX_IN_PROGRESS.load(SeqCst) {
+                    tx_prod.enqueue(*b).is_err()
+                } else {
+                    write_serial_tx(cs, ser, *b);
+                    TX_IN_PROGRESS.store(true, SeqCst);
+                    false
+                }
+            });
+        }
+    }
+}
+
 #[entry]
+#[allow(missing_docs)]
 fn main() -> ! {
     // SAFETY: Interrupts are disabled.
     let queue: &'static mut Queue<u8, 64> = {
         static mut Q: Queue<u8, 64> = Queue::new();
-        unsafe { &mut Q }
+        unsafe { &mut *addr_of_mut!(Q) }
     };
     let (mut tx_prod, consumer) = queue.split();
     unsafe { TX_CONS.write(consumer) };
@@ -181,52 +202,53 @@ fn main() -> ! {
         mie::set_mext();
     }
 
-    critical_section::with(|cs| {
-        write_serial_tx(cs, ser, 'A' as u8)
-    });
+    // App begins here.
+    const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2591}', '\u{2591}', '\u{2592}',
+        '\u{2592}', '\u{2593}', '\u{2588}', '\u{2588}'];
 
-    // do something here
-    let mut i = 0;
-    let mut toggle = false;
+    // Convert from raw value (used for coloring) to what rule 110 expects.
+    const RAW_MAP: [u8; 8] = [0, 1, 1, 1, 0, 1, 1, 0];
+    let mut buffer = [0u8; 40];
+
+    *buffer.last_mut().unwrap() = 1;
+
+    for p in buffer {
+        let shade = UTF8_CHAR_MAP[p as usize];
+        write_char(ser, &mut tx_prod, shade);
+        write_char(ser, &mut tx_prod, shade);
+    }
+
+    write_char(ser, &mut tx_prod, '\n');
 
     loop {
-       critical_section::with(|cs| {
-            match RX.borrow(cs).get() {
-                Some(rx) => {
-                    if TX_IN_PROGRESS.load(SeqCst) {
-                        let _ = tx_prod.enqueue(rx);
-                    } else {
-                        write_serial_tx(cs, ser, rx);
-                        TX_IN_PROGRESS.store(true, SeqCst)
-                    }
+        let end = buffer.len() - 1;
 
-                    RX.borrow(cs).set(None);
-                },
-                None => {}
-            }
+        let mut prev_left: u8 = 0; // Left boundary is 0.
+        let mut prev_center = buffer[0];
+        let mut prev_right;
+    
+        for i in 0..=end {
+            prev_right = *buffer.get(i + 1).unwrap_or(&0);  // Right boundary is 0.
 
-            if TIMER.load(SeqCst) {
-                if TX_IN_PROGRESS.load(SeqCst) {
-                    let _ = tx_prod.enqueue('T' as u8);
-                } else {
-                    write_serial_tx(cs, ser, 'T' as u8);
-                    TX_IN_PROGRESS.store(true, SeqCst)
-                }
+            buffer[i] = 4 * RAW_MAP[prev_left as usize] + 2 * RAW_MAP[prev_center as usize] + RAW_MAP[prev_right as usize];
 
-                i += 1;
-                TIMER.store(false, SeqCst);
-                if i >= 5 {
-                    toggle = !toggle;
-                    i = 0;
-                }
-            }
+            prev_left = prev_center;
+            prev_center = prev_right;
+        }
+    
+        for p in buffer {
+            let shade = UTF8_CHAR_MAP[p as usize];
+            write_char(ser, &mut tx_prod, shade);
+            write_char(ser, &mut tx_prod, shade);
+        }
 
-            // Mirror the low 2 bits of the I/O to the LEDs. Defaults to
-            // in at reset.
-            let inp = read_inp_port(cs, gpio) & 0x03;
-            let toggle_led = (toggle as u8) << 2;
-            let tx_len = (tx_prod.len() as u8) << 3;
-            write_leds(cs, gpio, tx_len | toggle_led | inp);
-        }); 
+        write_char(ser, &mut tx_prod, '\n');
+
+        COUNT.store(0, SeqCst);
+
+        // Wait ~ 1/5th of a second
+        while COUNT.load(SeqCst) < 144 {
+
+        }
     }
 }

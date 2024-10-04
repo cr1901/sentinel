@@ -1,16 +1,6 @@
-#![no_std]
+/*! Stub crate for Sentinel-specific routines.
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+Right now, there's nothing here except examples! In the future, helper
+routines and the like specific to Sentinel functionality will go in here. */
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+#![no_std] 

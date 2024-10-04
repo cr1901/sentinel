@@ -10,3 +10,8 @@ pedantic = { level = "warn", priority = -1}
 
 # Reserved so I remember that it exists...
 [workspace.lints.rustdoc]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = "z"
