@@ -641,12 +641,25 @@ def task__make_rand_firmware(platform, interface):
     }
 
 
-def task__replace_rust_firmware():
-    """compile rust firmware and replace image inside baseline gateware"""
+def task__compile_rust_firmware():
+    """compile Rust firmware and show size"""
     rs_files = [s for s in chain(Path("sentinel-rt/examples").glob("*.rs"),
-                                 Path("sentinel-rt/src").glob("*.rs"))] + \
-               [s for s in Path(".").glob("*/Cargo.toml")] + \
-               [Path("Cargo.toml")]
+                                Path("sentinel-rt/src").glob("*.rs"))] + \
+            [s for s in Path(".").glob("*/Cargo.toml")] + \
+            [Path("Cargo.toml")]
+    attosoc_elf = Path("target/riscv32i-unknown-none-elf/release/examples/attosoc")  # noqa: E501
+
+    return {
+        "actions": ["cargo build --release --example=attosoc",
+                    f"riscv64-unknown-elf-size.exe {attosoc_elf}"],
+        "verbosity": 2,
+        "file_dep": rs_files,
+        "targets": [attosoc_elf]
+    }
+
+
+def task__replace_rust_firmware():
+    """replace random firmware image inside baseline gateware with Rust program"""  # noqa: E501
     attosoc_elf = Path("target/riscv32i-unknown-none-elf/release/examples/attosoc")  # noqa: E501
     build_dir = Path("./build-rust")
     rand_asc = build_dir / "rand.asc"
@@ -656,11 +669,35 @@ def task__replace_rust_firmware():
     top_bin = build_dir / "top.bin"
 
     return {
-        "actions": ["cargo build --release --example=attosoc",
-                    f"pdm demo -b build-rust -n -g {attosoc_elf} -x firmware",
+        "actions": [f"pdm demo -b build-rust -n -g {attosoc_elf} -x firmware",
                     f"icebram {rand_hex} {firmware_hex} < {rand_asc} > {top_asc}",  # noqa: E501
                     f"icepack {top_asc} {top_bin}"],
         "targets": [top_bin],
-        "setup": ["_make_rand_firmware"],
-        "file_dep": rs_files + [rand_asc]
+        "file_dep": [attosoc_elf, rand_asc, rand_hex]
+    }
+
+
+@task_params([{"name": "programmer", "short": "p",
+               "choices": (("ofl", "use openFPGALoader"),
+                           ("iceprog", "use iceprog")),
+               "default": "iceprog",
+               "help": "programmer application to use"}])
+def task__program_rust_firmware(programmer):
+    """load Rust firmware image onto FPGA"""
+    build_dir = Path("./build-rust")
+    top_bin = build_dir / "top.bin"
+
+    match programmer:
+        case "ofl":
+            prog_action = f"openfpgaloader -b ice40_generic {top_bin}"
+        case "iceprog":
+            prog_action = f"iceprog {top_bin}"
+        case _:
+            assert False
+
+    return {
+        "actions": [prog_action],
+        "uptodate": [False],
+        "verbosity": 2,
+        "file_dep": [top_bin]
     }

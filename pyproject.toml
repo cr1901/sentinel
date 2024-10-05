@@ -176,3 +176,11 @@ help="list all RISC-V Formal tests' status"
 [tool.pdm.scripts.riscof-override]
 cmd = "doit run_riscof -t {args}"
 help = "run RISCOF with custom testfile"
+
+# Demo development helpers.
+[tool.doit.tasks._make_rand_firmware]
+platform = "ice40_hx8k_b_evn"
+interface = "csr"
+
+[tool.doit.tasks._program_rust_firmware]
+programmer = "ofl"
