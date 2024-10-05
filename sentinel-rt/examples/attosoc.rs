@@ -205,43 +205,40 @@ fn main() -> ! {
     // App begins here.
     const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2591}', '\u{2591}', '\u{2592}',
         '\u{2592}', '\u{2593}', '\u{2588}', '\u{2588}'];
+    // Alternate character maps:
+    // const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2588}', '\u{2588}', '\u{2588}',
+    //     ' ', '\u{2588}', '\u{2588}', ' '];
+    // const UTF8_CHAR_MAP: [char; 8] = [' ', '.', '-', ':', ';', '!', '#', '@']; // https://www.a1k0n.net/2011/07/20/donut-math.html
+    // const UTF8_CHAR_MAP: [char; 8] = [' ', '#', '#', '#', ' ', '#', '#', ' ']; // https://www.a1k0n.net/2011/07/20/donut-math.html
 
     // Convert from raw value (used for coloring) to what rule 110 expects.
     const RAW_MAP: [u8; 8] = [0, 1, 1, 1, 0, 1, 1, 0];
-    let mut buffer = [0u8; 40];
+    const BUFSIZ: usize = 80;
+    let mut buffer: [u8; BUFSIZ] = [0u8; BUFSIZ];
 
-    *buffer.last_mut().unwrap() = 1;
-
-    for p in buffer {
-        let shade = UTF8_CHAR_MAP[p as usize];
-        write_char(ser, &mut tx_prod, shade);
-        write_char(ser, &mut tx_prod, shade);
-    }
-
-    write_char(ser, &mut tx_prod, '\n');
+    buffer[BUFSIZ - 1] = 1; // Initialize with an interesting value.
 
     loop {
-        let end = buffer.len() - 1;
-
         let mut prev_left: u8 = 0; // Left boundary is 0.
-        let mut prev_center = buffer[0];
-        let mut prev_right;
+        let mut prev_center = buffer[0]; // Calculate column 0 first.
+        let mut prev_right; // Will be correctly calculated in the loop.
     
-        for i in 0..=end {
+        for i in 0..BUFSIZ {
+            // Write each column in the previous row first.
+            let shade = UTF8_CHAR_MAP[buffer[i] as usize];
+            write_char(ser, &mut tx_prod, shade);
+
             prev_right = *buffer.get(i + 1).unwrap_or(&0);  // Right boundary is 0.
 
+            // Prepare the current row to be written on next iteration of
+            // outer loop.
             buffer[i] = 4 * RAW_MAP[prev_left as usize] + 2 * RAW_MAP[prev_center as usize] + RAW_MAP[prev_right as usize];
 
             prev_left = prev_center;
             prev_center = prev_right;
         }
-    
-        for p in buffer {
-            let shade = UTF8_CHAR_MAP[p as usize];
-            write_char(ser, &mut tx_prod, shade);
-            write_char(ser, &mut tx_prod, shade);
-        }
 
+        // Next row.
         write_char(ser, &mut tx_prod, '\n');
 
         COUNT.store(0, SeqCst);
