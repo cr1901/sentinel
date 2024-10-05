@@ -8,6 +8,7 @@ output medium.
 #![no_std]
 #![no_main]
 
+use bitvec::field::BitField;
 use panic_halt as _;
 use riscv_rt::entry;
 use riscv::register::{mie, mstatus};
@@ -17,6 +18,7 @@ use core::cell::Cell;
 use critical_section::{self, Mutex, CriticalSection};
 use heapless::spsc::{Queue, Producer, Consumer};
 use portable_atomic::{AtomicBool, AtomicU8, Ordering::SeqCst};
+use bitvec::prelude::*;
 
 
 static RX: Mutex<Cell<Option<u8>>> = Mutex::new(Cell::new(None));
@@ -176,6 +178,9 @@ fn write_char<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, ut
     }
 }
 
+const BUFSIZ: usize = 80;
+type RuleBuf = BitArr!(for BUFSIZ, in u8, Msb0);
+
 #[entry]
 #[allow(missing_docs)]
 fn main() -> ! {
@@ -212,27 +217,26 @@ fn main() -> ! {
     // const UTF8_CHAR_MAP: [char; 8] = [' ', '#', '#', '#', ' ', '#', '#', ' ']; // https://www.a1k0n.net/2011/07/20/donut-math.html
 
     // Convert from raw value (used for coloring) to what rule 110 expects.
-    const RAW_MAP: [u8; 8] = [0, 1, 1, 1, 0, 1, 1, 0];
-    const BUFSIZ: usize = 80;
-    let mut buffer: [u8; BUFSIZ] = [0u8; BUFSIZ];
+    const RAW_MAP: BitArray<[u8; 1], Lsb0> = bitarr![const u8, Lsb0; 0, 1, 1, 1, 0, 1, 1, 0];
 
-    buffer[BUFSIZ - 1] = 1; // Initialize with an interesting value.
+    let mut buffer: RuleBuf = BitArray::ZERO;
+    *buffer.last_mut().unwrap() = true; // Initialize with an interesting value.
 
     loop {
-        let mut prev_left: u8 = 0; // Left boundary is 0.
+        let mut prev_left = false; // Left boundary is 0.
         let mut prev_center = buffer[0]; // Calculate column 0 first.
-        let mut prev_right; // Will be correctly calculated in the loop.
     
         for i in 0..BUFSIZ {
-            // Write each column in the previous row first.
-            let shade = UTF8_CHAR_MAP[buffer[i] as usize];
-            write_char(ser, &mut tx_prod, shade);
+            let mut prev_right = buffer.get(i + 1).as_deref().copied().unwrap_or(false);  // Right boundary is 0.
+            let idx = 4 * prev_left as u8 + 2 * prev_center as u8 + prev_right as u8;
 
-            prev_right = *buffer.get(i + 1).unwrap_or(&0);  // Right boundary is 0.
+            // Write each column in the previous row first.
+            let shade = UTF8_CHAR_MAP[idx as usize];
+            write_char(ser, &mut tx_prod, shade);
 
             // Prepare the current row to be written on next iteration of
             // outer loop.
-            buffer[i] = 4 * RAW_MAP[prev_left as usize] + 2 * RAW_MAP[prev_center as usize] + RAW_MAP[prev_right as usize];
+            buffer.set(i as usize, RAW_MAP[idx as usize]);
 
             prev_left = prev_center;
             prev_center = prev_right;
