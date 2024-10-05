@@ -178,8 +178,95 @@ fn write_char<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, ut
     }
 }
 
+
+fn do_demo<const N: usize>(ser: SerialBase, gpio: GpioBase, tx_prod: &mut Producer<u8, N>) {
+    const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2591}', '\u{2591}', '\u{2592}',
+        '\u{2592}', '\u{2593}', '\u{2588}', '\u{2588}'];
+    // Alternate character maps:
+    // const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2588}', '\u{2588}', '\u{2588}',
+    //     ' ', '\u{2588}', '\u{2588}', ' '];
+    // const UTF8_CHAR_MAP: [char; 8] = [' ', '.', '-', ':', ';', '!', '#', '@']; // https://www.a1k0n.net/2011/07/20/donut-math.html
+    // const UTF8_CHAR_MAP: [char; 8] = [' ', '#', '#', '#', ' ', '#', '#', ' ']; // https://www.a1k0n.net/2011/07/20/donut-math.html
+
+    // Convert from raw value (used for coloring) to what rule 110 expects.
+    const RAW_MAP: BitArray<[u8; 1], Lsb0> = bitarr![const u8, Lsb0; 0, 1, 1, 1, 0, 1, 1, 0];
+
+    critical_section::with(|cs| {
+        write_leds(cs, gpio, RAW_MAP.load_le());
+    });
+
+    let mut buffer: RuleBuf = BitArray::ZERO;
+    *buffer.last_mut().unwrap() = true; // Initialize with an interesting value.
+
+    // Print initial row. Ignore actual adjacent cell values. Mildly cheating
+    // a bit!
+    for i in 0..BUFSIZ {
+        if buffer[i] {
+            write_char(ser, tx_prod, '\u{2588}');
+        } else {
+            write_char(ser, tx_prod, ' ');
+        }
+    }
+
+    write_char(ser, tx_prod, '\n');
+
+    loop {
+        let mut prev_left = false; // Left boundary is 0.
+        let mut prev_center = buffer[0]; // Calculate column 0 first.
+    
+        for i in 0..BUFSIZ {
+            let prev_right = buffer.get(i + 1).as_deref().copied().unwrap_or(false);  // Right boundary is 0.
+            let idx = 4 * prev_left as u8 + 2 * prev_center as u8 + prev_right as u8;
+
+            // Write each column in the previous row first.
+            let shade = UTF8_CHAR_MAP[idx as usize];
+            write_char(ser, tx_prod, shade);
+
+            // Prepare the current row to be written on next iteration of
+            // outer loop.
+            buffer.set(i as usize, RAW_MAP[idx as usize]);
+
+            prev_left = prev_center;
+            prev_center = prev_right;
+        }
+
+        // Next row.
+        write_char(ser, tx_prod, '\n');
+
+        COUNT.store(0, SeqCst);
+
+        // Wait ~ 1/5th of a second
+        while COUNT.load(SeqCst) < 144 {
+
+        }
+
+        let ctrl_c = critical_section::with(|cs| {
+            match RX.borrow(cs).get() {
+                Some(t) if t == 0x03 => {
+                    RX.borrow(cs).set(None);
+                    true
+                }
+                Some(_) => {
+                    RX.borrow(cs).set(None);
+                    false
+                }
+                _ => false
+            }
+        });
+
+        if ctrl_c {
+            return;
+        }
+    }
+}
+
 const BUFSIZ: usize = 80;
 type RuleBuf = BitArr!(for BUFSIZ, in u8, Msb0);
+
+enum State {
+    Read,
+    Demo
+}
 
 #[entry]
 #[allow(missing_docs)]
@@ -208,48 +295,20 @@ fn main() -> ! {
     }
 
     // App begins here.
-    const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2591}', '\u{2591}', '\u{2592}',
-        '\u{2592}', '\u{2593}', '\u{2588}', '\u{2588}'];
-    // Alternate character maps:
-    // const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2588}', '\u{2588}', '\u{2588}',
-    //     ' ', '\u{2588}', '\u{2588}', ' '];
-    // const UTF8_CHAR_MAP: [char; 8] = [' ', '.', '-', ':', ';', '!', '#', '@']; // https://www.a1k0n.net/2011/07/20/donut-math.html
-    // const UTF8_CHAR_MAP: [char; 8] = [' ', '#', '#', '#', ' ', '#', '#', ' ']; // https://www.a1k0n.net/2011/07/20/donut-math.html
-
-    // Convert from raw value (used for coloring) to what rule 110 expects.
-    const RAW_MAP: BitArray<[u8; 1], Lsb0> = bitarr![const u8, Lsb0; 0, 1, 1, 1, 0, 1, 1, 0];
-
-    let mut buffer: RuleBuf = BitArray::ZERO;
-    *buffer.last_mut().unwrap() = true; // Initialize with an interesting value.
-
+    let mut state = State::Demo;
     loop {
-        let mut prev_left = false; // Left boundary is 0.
-        let mut prev_center = buffer[0]; // Calculate column 0 first.
-    
-        for i in 0..BUFSIZ {
-            let mut prev_right = buffer.get(i + 1).as_deref().copied().unwrap_or(false);  // Right boundary is 0.
-            let idx = 4 * prev_left as u8 + 2 * prev_center as u8 + prev_right as u8;
-
-            // Write each column in the previous row first.
-            let shade = UTF8_CHAR_MAP[idx as usize];
-            write_char(ser, &mut tx_prod, shade);
-
-            // Prepare the current row to be written on next iteration of
-            // outer loop.
-            buffer.set(i as usize, RAW_MAP[idx as usize]);
-
-            prev_left = prev_center;
-            prev_center = prev_right;
-        }
-
-        // Next row.
-        write_char(ser, &mut tx_prod, '\n');
-
-        COUNT.store(0, SeqCst);
-
-        // Wait ~ 1/5th of a second
-        while COUNT.load(SeqCst) < 144 {
-
+        match state {
+            State::Demo => {
+                do_demo(ser, gpio, &mut tx_prod);
+                state = State::Read;
+            },
+            State::Read => {
+                for c in "ctrl-c hit".chars() {
+                    write_char(ser, &mut tx_prod, c);
+                }
+                write_char(ser, &mut tx_prod, '\n');
+                state = State::Demo;
+            }
         }
     }
 }
