@@ -1,5 +1,6 @@
 [build]
 target="riscv32i-unknown-none-elf"
+rustdocflags = ["-D", "rustdoc::broken-intra-doc-links"]
 
 [target.riscv32i-unknown-none-elf]
 rustflags = [
