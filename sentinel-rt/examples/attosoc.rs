@@ -12,13 +12,16 @@ use bitvec::field::BitField;
 use panic_halt as _;
 use riscv_rt::entry;
 use riscv::register::{mie, mstatus};
+use core::char::from_digit;
 use core::mem::MaybeUninit;
 use core::ptr::{write_volatile, read_volatile, addr_of_mut};
 use core::cell::Cell;
+use core::str;
 use critical_section::{self, Mutex, CriticalSection};
 use heapless::spsc::{Queue, Producer, Consumer};
 use portable_atomic::{AtomicBool, AtomicU8, Ordering::SeqCst};
 use bitvec::prelude::*;
+use atoi::FromRadix10;
 
 
 static RX: Mutex<Cell<Option<u8>>> = Mutex::new(Cell::new(None));
@@ -178,31 +181,67 @@ fn write_char<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, ut
     }
 }
 
+fn write_line<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, line: &str) {
+    for c in line.chars() {
+        write_char(ser, tx_prod, c);
+    }
+}
 
-fn do_demo<const N: usize>(ser: SerialBase, gpio: GpioBase, tx_prod: &mut Producer<u8, N>) {
+struct ReadNumError {}
+
+fn read_num<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>) -> Result<u8, ReadNumError> {
+    let mut buf = [0; 3];
+    let mut cnt = 0;
+
+    while cnt < 3 {
+        critical_section::with(|cs| {
+            match RX.borrow(cs).get() {
+                Some(b) =>  {
+                    buf[cnt] = b;
+                    write_char(ser, tx_prod, b as char);
+                    
+                    cnt += 1;
+    
+                    RX.borrow(cs).set(None);
+                },
+                None => {
+                    /* Drop non-ASCII digits. */
+                },
+            }
+        });
+    }
+
+    let (num, valid) = u8::from_radix_10(&buf);
+
+    if valid > 0 {
+        return Ok(num)
+    } else {
+        return Err(ReadNumError {})
+    }
+}
+
+
+fn do_demo<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, rule: u8) {
     const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2591}', '\u{2591}', '\u{2592}',
         '\u{2592}', '\u{2593}', '\u{2588}', '\u{2588}'];
     // Alternate character maps:
     // const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2588}', '\u{2588}', '\u{2588}',
     //     ' ', '\u{2588}', '\u{2588}', ' '];
-    // const UTF8_CHAR_MAP: [char; 8] = [' ', '.', '-', ':', ';', '!', '#', '@']; // https://www.a1k0n.net/2011/07/20/donut-math.html
-    // const UTF8_CHAR_MAP: [char; 8] = [' ', '#', '#', '#', ' ', '#', '#', ' ']; // https://www.a1k0n.net/2011/07/20/donut-math.html
+    // const UTF8_CHAR_MAP: [u8; 8] = [b' ', b'.', b'-', b':', b';', b'!', b'#', b'@']; // https://www.a1k0n.net/2011/07/20/donut-math.html
+    // const UTF8_CHAR_MAP: [u8; 8] = [b' ', b'#', b'#', b'#', b' ', b'#', b'#', b' ']; // https://www.a1k0n.net/2011/07/20/donut-math.html
 
     // Convert from raw value (used for coloring) to what rule 110 expects.
-    const RAW_MAP: BitArray<[u8; 1], Lsb0> = bitarr![const u8, Lsb0; 0, 1, 1, 1, 0, 1, 1, 0];
-
-    critical_section::with(|cs| {
-        write_leds(cs, gpio, RAW_MAP.load_le());
-    });
+    let raw_map: BitArray<[u8; 1], Lsb0> = BitArray::from([rule; 1]);
 
     let mut buffer: RuleBuf = BitArray::ZERO;
     *buffer.last_mut().unwrap() = true; // Initialize with an interesting value.
+    // *buffer.get_mut(40).unwrap() = true;
 
     // Print initial row. Ignore actual adjacent cell values. Mildly cheating
     // a bit!
     for i in 0..BUFSIZ {
         if buffer[i] {
-            write_char(ser, tx_prod, '\u{2588}');
+            write_char(ser, tx_prod, UTF8_CHAR_MAP.get(6).copied().unwrap() as char);
         } else {
             write_char(ser, tx_prod, ' ');
         }
@@ -220,11 +259,11 @@ fn do_demo<const N: usize>(ser: SerialBase, gpio: GpioBase, tx_prod: &mut Produc
 
             // Write each column in the previous row first.
             let shade = UTF8_CHAR_MAP[idx as usize];
-            write_char(ser, tx_prod, shade);
+            write_char(ser, tx_prod, shade as char);
 
             // Prepare the current row to be written on next iteration of
             // outer loop.
-            buffer.set(i as usize, RAW_MAP[idx as usize]);
+            buffer.set(i as usize, raw_map[idx as usize]);
 
             prev_left = prev_center;
             prev_center = prev_right;
@@ -258,6 +297,19 @@ fn do_demo<const N: usize>(ser: SerialBase, gpio: GpioBase, tx_prod: &mut Produc
             return;
         }
     }
+}
+
+fn set_rule<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, gpio: GpioBase) -> u8 {
+    write_line(ser, tx_prod, "ctrl-c hit\nrule (default 110)? ");
+
+    let rule = read_num(ser, tx_prod).unwrap_or(110);
+
+    critical_section::with(|cs| {
+        write_leds(cs, gpio, rule);
+    });
+    write_char(ser, tx_prod, '\n');
+
+    rule
 }
 
 const BUFSIZ: usize = 80;
@@ -296,19 +348,10 @@ fn main() -> ! {
 
     // App begins here.
     let mut state = State::Demo;
+    let mut rule = 110;
+
     loop {
-        match state {
-            State::Demo => {
-                do_demo(ser, gpio, &mut tx_prod);
-                state = State::Read;
-            },
-            State::Read => {
-                for c in "ctrl-c hit".chars() {
-                    write_char(ser, &mut tx_prod, c);
-                }
-                write_char(ser, &mut tx_prod, '\n');
-                state = State::Demo;
-            }
-        }
+        do_demo(ser, &mut tx_prod, rule);
+        rule = set_rule(ser, &mut tx_prod, gpio);
     }
 }
