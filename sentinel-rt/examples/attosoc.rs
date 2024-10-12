@@ -2,27 +2,29 @@
 
 [Rule 110](https://en.wikipedia.org/wiki/Rule_110) demo using the UART as an
 output medium.
-    
+
 */
 
 #![no_std]
 #![no_main]
 
-use bitvec::field::BitField;
-use panic_halt as _;
-use riscv_rt::entry;
-use riscv::register::{mie, mstatus};
+use atoi::FromRadix10;
+use bitvec::prelude::*;
+use core::cell::Cell;
 use core::char::from_digit;
 use core::mem::MaybeUninit;
-use core::ptr::{write_volatile, read_volatile, addr_of_mut};
-use core::cell::Cell;
+use core::ptr::{addr_of_mut, read_volatile, write_volatile};
 use core::str;
-use critical_section::{self, Mutex, CriticalSection};
-use heapless::spsc::{Queue, Producer, Consumer};
+use critical_section::{self, CriticalSection, Mutex};
+use heapless::spsc::{Consumer, Producer, Queue};
+use panic_halt as _;
 use portable_atomic::{AtomicBool, AtomicU8, Ordering::SeqCst};
-use bitvec::prelude::*;
-use atoi::FromRadix10;
+use riscv::register::{mie, mstatus};
+use riscv_rt::entry;
 
+// Compile-time options
+const BUFSIZ: usize = 80;
+const INIT_POS: usize = BUFSIZ - 1; // BUFSIZ / 2 or 0 are also good!
 
 static RX: Mutex<Cell<Option<u8>>> = Mutex::new(Cell::new(None));
 static TX_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
@@ -70,16 +72,22 @@ pub mod io_addrs {
         // If IRQ is pending after reset, we are using WBSerial, and thus a
         // wishbone peripheral bus.
         if mip::read().mext() {
-            return (GpioBase(0x02000000), TimerBase(0x40000000),
-                    SerialBase(0x80000000));
+            return (
+                GpioBase(0x02000000),
+                TimerBase(0x40000000),
+                SerialBase(0x80000000),
+            );
         } else {
-            return (GpioBase(0x02000000), TimerBase(0x02800000),
-                    SerialBase(0x03000000));
+            return (
+                GpioBase(0x02000000),
+                TimerBase(0x02800000),
+                SerialBase(0x03000000),
+            );
         }
     }
 }
 
-pub use io_addrs::{GpioBase, TimerBase, SerialBase};
+pub use io_addrs::{GpioBase, SerialBase, TimerBase};
 
 static mut GPIO_BASE: MaybeUninit<GpioBase> = MaybeUninit::uninit();
 static mut TIMER_BASE: MaybeUninit<TimerBase> = MaybeUninit::uninit();
@@ -128,9 +136,7 @@ fn MachineExternal() {
     let ser_int = read_serial_int(cs, ser);
     if (ser_int & 0x01) != 0 {
         let rx = read_serial_rx(cs, ser);
-        critical_section::with(|cs| {
-            RX.borrow(cs).set(Some(rx));
-        });
+        RX.borrow(cs).set(Some(rx));
     }
 
     if (ser_int & 0x02) != 0 {
@@ -147,9 +153,7 @@ fn MachineExternal() {
                 Some(tx) => {
                     write_serial_tx(cs, ser, tx);
                 }
-                None => {
-                    TX_IN_PROGRESS.store(false, SeqCst) 
-                },
+                None => TX_IN_PROGRESS.store(false, SeqCst),
             }
         }
     }
@@ -168,7 +172,7 @@ fn write_char<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, ut
     for b in utf8_char.encode_utf8(&mut buf).as_bytes() {
         let mut queue_full = true;
         while queue_full {
-            queue_full  = critical_section::with(|cs| {
+            queue_full = critical_section::with(|cs| {
                 if TX_IN_PROGRESS.load(SeqCst) {
                     tx_prod.enqueue(*b).is_err()
                 } else {
@@ -189,24 +193,25 @@ fn write_line<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, li
 
 struct ReadNumError {}
 
-fn read_num<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>) -> Result<u8, ReadNumError> {
+fn read_num<const N: usize>(
+    ser: SerialBase,
+    tx_prod: &mut Producer<u8, N>,
+) -> Result<u8, ReadNumError> {
     let mut buf = [0; 3];
     let mut cnt = 0;
 
     while cnt < 3 {
         critical_section::with(|cs| {
             match RX.borrow(cs).get() {
-                Some(b) =>  {
+                Some(b) => {
                     buf[cnt] = b;
                     write_char(ser, tx_prod, b as char);
-                    
+
                     cnt += 1;
-    
+
                     RX.borrow(cs).set(None);
-                },
-                None => {
-                    /* Drop non-ASCII digits. */
-                },
+                }
+                None => { /* Drop non-ASCII digits. */ }
             }
         });
     }
@@ -214,36 +219,47 @@ fn read_num<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>) -> R
     let (num, valid) = u8::from_radix_10(&buf);
 
     if valid > 0 {
-        return Ok(num)
+        return Ok(num);
     } else {
-        return Err(ReadNumError {})
+        return Err(ReadNumError {});
     }
 }
 
+type RuleBuf = BitArr!(for BUFSIZ, in u8, Msb0);
 
-fn do_demo<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, rule: u8) {
-    const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2591}', '\u{2591}', '\u{2592}',
-        '\u{2592}', '\u{2593}', '\u{2588}', '\u{2588}'];
-    // Alternate character maps:
-    // const UTF8_CHAR_MAP: [char; 8] = [' ', '\u{2588}', '\u{2588}', '\u{2588}',
-    //     ' ', '\u{2588}', '\u{2588}', ' '];
-    // const UTF8_CHAR_MAP: [u8; 8] = [b' ', b'.', b'-', b':', b';', b'!', b'#', b'@']; // https://www.a1k0n.net/2011/07/20/donut-math.html
-    // const UTF8_CHAR_MAP: [u8; 8] = [b' ', b'#', b'#', b'#', b' ', b'#', b'#', b' ']; // https://www.a1k0n.net/2011/07/20/donut-math.html
+fn do_demo<const N: usize>(
+    ser: SerialBase,
+    tx_prod: &mut Producer<u8, N>,
+    gpio: GpioBase,
+    rule: u8,
+) {
+    const BOX_DRAW_CHAR_MAP: [char; 8] = [
+        ' ', '\u{2591}', '\u{2591}', '\u{2592}', '\u{2592}', '\u{2593}', '\u{2588}', '\u{2588}',
+    ];
+    const DONUT_CHAR_MAP: [char; 8] = [' ', '.', '-', ':', ';', '!', '#', '@']; // https://www.a1k0n.net/2011/07/20/donut-math.html
+
+    // Alternate unshaded drawing chars
+    const BOX_DRAW_CHAR_BASIC: char = '\u{2588}';
+    const DONUT_CHAR_BASIC: char = '#'; // https://www.a1k0n.net/2011/07/20/donut-math.html
+    const EMPTY_CHAR_BASIC: char = ' ';
+    const CHAR_MAPS: [&[char; 8]; 2] = [&BOX_DRAW_CHAR_MAP, &DONUT_CHAR_MAP];
 
     // Convert from raw value (used for coloring) to what rule 110 expects.
     let raw_map: BitArray<[u8; 1], Lsb0> = BitArray::from([rule; 1]);
+    let mut char_map_idx = 0;
+    let mut curr_char_map = Some(CHAR_MAPS[char_map_idx]);
 
     let mut buffer: RuleBuf = BitArray::ZERO;
-    *buffer.last_mut().unwrap() = true; // Initialize with an interesting value.
-    // *buffer.get_mut(40).unwrap() = true;
+    *buffer.get_mut(INIT_POS).unwrap() = true; // Initialize with an interesting value.
 
     // Print initial row. Ignore actual adjacent cell values. Mildly cheating
     // a bit!
     for i in 0..BUFSIZ {
         if buffer[i] {
-            write_char(ser, tx_prod, UTF8_CHAR_MAP.get(6).copied().unwrap() as char);
+            // We always reset to BOX_DRAW_CHAR_MAP.
+            write_char(ser, tx_prod, BOX_DRAW_CHAR_BASIC);
         } else {
-            write_char(ser, tx_prod, ' ');
+            write_char(ser, tx_prod, EMPTY_CHAR_BASIC);
         }
     }
 
@@ -252,14 +268,28 @@ fn do_demo<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, rule:
     loop {
         let mut prev_left = false; // Left boundary is 0.
         let mut prev_center = buffer[0]; // Calculate column 0 first.
-    
+
         for i in 0..BUFSIZ {
-            let prev_right = buffer.get(i + 1).as_deref().copied().unwrap_or(false);  // Right boundary is 0.
+            let prev_right = buffer.get(i + 1).as_deref().copied().unwrap_or(false); // Right boundary is 0.
             let idx = 4 * prev_left as u8 + 2 * prev_center as u8 + prev_right as u8;
 
             // Write each column in the previous row first.
-            let shade = UTF8_CHAR_MAP[idx as usize];
-            write_char(ser, tx_prod, shade as char);
+
+            let shade = curr_char_map.map_or_else(
+                || {
+                    if raw_map[idx as usize] {
+                        if char_map_idx % 2 == 0 {
+                            BOX_DRAW_CHAR_BASIC
+                        } else {
+                            DONUT_CHAR_BASIC
+                        }
+                    } else {
+                        EMPTY_CHAR_BASIC
+                    }
+                },
+                |cm| cm[idx as usize],
+            );
+            write_char(ser, tx_prod, shade);
 
             // Prepare the current row to be written on next iteration of
             // outer loop.
@@ -274,23 +304,34 @@ fn do_demo<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, rule:
 
         COUNT.store(0, SeqCst);
 
+        // SAFETY: Not accessed in an interrupt context.
+        let cs = unsafe { CriticalSection::new() };
+        let mut debounce_chk_passed = (read_inp_port(cs, gpio) & 0x01) != 0;
+
         // Wait ~ 1/5th of a second
         while COUNT.load(SeqCst) < 144 {
-
+            if debounce_chk_passed
+                && read_inp_port(cs, gpio) & (read_inp_port(cs, gpio) & 0x01) == 0
+            {
+                debounce_chk_passed = false;
+            }
         }
 
-        let ctrl_c = critical_section::with(|cs| {
-            match RX.borrow(cs).get() {
-                Some(t) if t == 0x03 => {
-                    RX.borrow(cs).set(None);
-                    true
-                }
-                Some(_) => {
-                    RX.borrow(cs).set(None);
-                    false
-                }
-                _ => false
+        if debounce_chk_passed {
+            char_map_idx = (char_map_idx + 1) % 4;
+            curr_char_map = CHAR_MAPS.get(char_map_idx).map(|v| &**v);
+        }
+
+        let ctrl_c = critical_section::with(|cs| match RX.borrow(cs).get() {
+            Some(t) if t == 0x03 => {
+                RX.borrow(cs).set(None);
+                true
             }
+            Some(_) => {
+                RX.borrow(cs).set(None);
+                false
+            }
+            _ => false,
         });
 
         if ctrl_c {
@@ -304,21 +345,15 @@ fn set_rule<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, gpio
 
     let rule = read_num(ser, tx_prod).unwrap_or(110);
 
-    critical_section::with(|cs| {
-        write_leds(cs, gpio, rule);
-    });
+    // SAFETY: Not accessed in an interrupt context.
+    let cs = unsafe { CriticalSection::new() };
+    write_leds(cs, gpio, rule);
+
     write_char(ser, tx_prod, '\n');
 
     rule
 }
 
-const BUFSIZ: usize = 80;
-type RuleBuf = BitArr!(for BUFSIZ, in u8, Msb0);
-
-enum State {
-    Read,
-    Demo
-}
 
 #[entry]
 #[allow(missing_docs)]
@@ -347,11 +382,10 @@ fn main() -> ! {
     }
 
     // App begins here.
-    let mut state = State::Demo;
     let mut rule = 110;
 
     loop {
-        do_demo(ser, &mut tx_prod, rule);
+        do_demo(ser, &mut tx_prod, gpio, rule);
         rule = set_rule(ser, &mut tx_prod, gpio);
     }
 }
