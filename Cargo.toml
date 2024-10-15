@@ -7,9 +7,11 @@ missing_docs = "warn"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1}
+# { level="warn", doc-valid-idents = ["SoC", "AttoSoC", ".."] } unimplemented: https://github.com/rust-lang/cargo/issues/12917#issuecomment-1795069197
+doc_markdown = "allow"
 
-# Reserved so I remember that it exists...
 [workspace.lints.rustdoc]
+broken-intra-doc-links = "deny"
 
 [profile.release]
 lto = "fat"

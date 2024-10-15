@@ -11,7 +11,6 @@ output medium.
 use atoi::FromRadix10;
 use bitvec::prelude::*;
 use core::cell::Cell;
-use core::char::from_digit;
 use core::mem::MaybeUninit;
 use core::ptr::{addr_of_mut, read_volatile, write_volatile};
 use core::str;
@@ -40,6 +39,8 @@ pub mod io_addrs {
     /*! I/O address accessor helpers. */
     use riscv::register::mip;
 
+    /** Newtype for `u32` representation of base address of AttoSoC GPIO
+    port. */
     #[derive(Clone, Copy)]
     pub struct GpioBase(u32);
 
@@ -49,6 +50,7 @@ pub mod io_addrs {
         }
     }
 
+    /** Newtype for `u32` representation of base address of AttoSoC timer. */
     #[derive(Clone, Copy)]
     pub struct TimerBase(u32);
 
@@ -58,6 +60,7 @@ pub mod io_addrs {
         }
     }
 
+    /** Newtype for `u32` representation of base address of AttoSoC UART. */
     #[derive(Clone, Copy)]
     pub struct SerialBase(u32);
 
@@ -67,22 +70,29 @@ pub mod io_addrs {
         }
     }
 
-    // SAFETY: Must be called when interrupts are disabled.
+    /** Get I/O base addresses via a runtime check of pending UART interrupts.
+     
+    # Safety
+    
+    Must be called when interrupts are disabled, as one of the first things
+    in the program.
+    */
+    #[allow(clippy::must_use_candidate)]
     pub unsafe fn get_bases() -> (GpioBase, TimerBase, SerialBase) {
         // If IRQ is pending after reset, we are using WBSerial, and thus a
         // wishbone peripheral bus.
         if mip::read().mext() {
-            return (
-                GpioBase(0x02000000),
-                TimerBase(0x40000000),
-                SerialBase(0x80000000),
-            );
+            (
+                GpioBase(0x0200_0000),
+                TimerBase(0x4000_0000),
+                SerialBase(0x8000_0000),
+            )
         } else {
-            return (
-                GpioBase(0x02000000),
-                TimerBase(0x02800000),
-                SerialBase(0x03000000),
-            );
+            (
+                GpioBase(0x0200_0000),
+                TimerBase(0x0280_0000),
+                SerialBase(0x0300_0000),
+            )
         }
     }
 }
@@ -122,7 +132,7 @@ fn write_leds(_cs: CriticalSection, base: GpioBase, val: u8) {
 
 #[no_mangle]
 #[allow(non_snake_case)]
-fn MachineExternal() {
+extern "C" fn MachineExternal() {
     // SAFETY: Interrupts are disabled.
     let cs = unsafe { CriticalSection::new() };
     let timer = unsafe { TIMER_BASE.assume_init() };
@@ -202,16 +212,13 @@ fn read_num<const N: usize>(
 
     while cnt < 3 {
         critical_section::with(|cs| {
-            match RX.borrow(cs).get() {
-                Some(b) => {
-                    buf[cnt] = b;
-                    write_char(ser, tx_prod, b as char);
+            if let Some(b) = RX.borrow(cs).get() {
+                buf[cnt] = b;
+                write_char(ser, tx_prod, b as char);
 
-                    cnt += 1;
+                cnt += 1;
 
-                    RX.borrow(cs).set(None);
-                }
-                None => { /* Drop non-ASCII digits. */ }
+                RX.borrow(cs).set(None);
             }
         });
     }
@@ -219,9 +226,9 @@ fn read_num<const N: usize>(
     let (num, valid) = u8::from_radix_10(&buf);
 
     if valid > 0 {
-        return Ok(num);
+        Ok(num)
     } else {
-        return Err(ReadNumError {});
+        Err(ReadNumError {})
     }
 }
 
@@ -271,7 +278,7 @@ fn do_demo<const N: usize>(
 
         for i in 0..BUFSIZ {
             let prev_right = buffer.get(i + 1).as_deref().copied().unwrap_or(false); // Right boundary is 0.
-            let idx = 4 * prev_left as u8 + 2 * prev_center as u8 + prev_right as u8;
+            let idx = 4 * u8::from(prev_left) + 2 * u8::from(prev_center) + u8::from(prev_right);
 
             // Write each column in the previous row first.
 
@@ -293,7 +300,7 @@ fn do_demo<const N: usize>(
 
             // Prepare the current row to be written on next iteration of
             // outer loop.
-            buffer.set(i as usize, raw_map[idx as usize]);
+            buffer.set(i, raw_map[idx as usize]);
 
             prev_left = prev_center;
             prev_center = prev_right;
@@ -323,7 +330,7 @@ fn do_demo<const N: usize>(
         }
 
         let ctrl_c = critical_section::with(|cs| match RX.borrow(cs).get() {
-            Some(t) if t == 0x03 => {
+            Some(0x03) => {
                 RX.borrow(cs).set(None);
                 true
             }
