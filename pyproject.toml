@@ -35,15 +35,15 @@ extend_vcd_time = "41666666"  # extend by half a 12MHz period.
 [tool.ruff]
 src = [ "src", "tests" ]  # https://docs.astral.sh/ruff/faq/#how-does-ruff-determine-which-of-my-imports-are-first-party-third-party-etc
 line-length = 79  # flake8 compat
-# Also, accept the risks of preview mode to try the unstable E checks and pydoclint support.
-# These will also catch missing docstrings and other nits, which pydoclint doesn't.
+# External code- submodules or auto-generated.
 extend-exclude = [ 
-    # External code- submodules or auto-generated.
     "tests/formal/riscv-formal/**",
     "tests/upstream/riscv-tests/**" ,
     "tests/riscof/sail_cSim/**"
 ]
 
+# Also, accept the risks of preview mode to try the unstable E checks and pydoclint support.
+# These will also catch missing docstrings and other nits, which pydoclint doesn't.
 [tool.ruff.lint]
 preview = true
 extend-select = ["E1", "E2", "E3", "RUF100", "E5", "W", "D", "DOC"]
@@ -74,11 +74,37 @@ root = "tests/riscof/sentinel"
 reportIncompatibleMethodOverride = false
 reportMissingImports = false  # sys.path modified
 
+[tool.pdm.build]
+# src/sentinel/microcode.asm seems to be included already.
+includes = [
+    "src/sentinel",
+]
+# Exclude all files in submodules, and non-(raw)-binaries.
+excludes = [
+    "tests/*/*/.*",
+    "tests/*/*/*",
+    "tests/upstream/binaries/*.dump",
+    "tests/upstream/binaries/*.elf"
+]
+# README.md and LICENSE.md seem to be included already.
+source-includes = [
+    ".gitignore",
+    "CHANGELOG.md",
+    "cliff.toml",
+    "examples",
+    "sentinel-rt",
+    "Cargo.toml",
+    "tests",
+    "tests/upstream/binaries/*"
+]
+
 [tool.pdm.version]
 source = "scm"
 write_to = "sentinel/version.txt"
 
 [tool.pdm.dev-dependencies]
+# Though I expect users to provide sby, sby requires click and doesn't opt-in
+# to PEP 517. So provide it here.
 dev = [
     "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
     "bronzebeard>=0.2.1",
@@ -86,9 +112,7 @@ dev = [
     "doit>=0.36.0",
     "Verilog-VCD>=1.11",
     "logLUTs @ git+https://github.com/mattvenn/logLUTs@a7fa902a5f70c7d53a654d850f745e36821fbb78",
-    "click>=8.1.7",  # Though I expect users to provide sby, sby requires
-    # this module and doesn't opt-in to PEP 517. So provide
-    # it here.
+    "click>=8.1.7",
     "pytest-amaranth-sim>=0.1.0",
 ]
 examples = [
