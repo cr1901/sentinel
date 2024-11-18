@@ -9,13 +9,41 @@
 
 import sys
 import os
+import importlib.metadata
+import warnings
+from packaging.version import Version
 
 project = 'sentinel'
 copyright = '2024, William D. Jones'
 author = 'William D. Jones'
 release = '0.1.0'
 
-sys.path.append(os.path.abspath("../src"))
+# Don't hide DeprecationWarnings:
+# https://docs.python.org/3/library/warnings.html#overriding-the-default-filter
+warnings.simplefilter("default")
+
+try:
+    sent_ver = Version(importlib.metadata.version("sentinel"))
+    am_ver = Version(importlib.metadata.version("amaranth"))
+except importlib.metadata.PackageNotFoundError as e:
+    msg = "run \"pdm install --dev -G dev -G doc\" before building docs"
+    raise RuntimeError(msg) from e
+
+if am_ver.is_devrelease:
+    # If I get "(exception: '<' not supported between instances of 'dict' and
+    # 'dict')", it's because of this:
+    # https://github.com/sphinx-doc/sphinx/issues/11466
+    # We'll have to remove the docs manually for now...
+    am_ver = "latest"
+else:
+    am_ver = f"v{am_ver.public}"
+
+# https://github.com/amaranth-lang/amaranth/commit/e356ee2cac1f4b12339cd1a16f328510e6407b87
+version = str(sent_ver).replace(".editable", "")
+release = sent_ver.public
+author = 'William D. Jones'
+
+sys.path.append(os.path.abspath('../src'))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -33,7 +61,7 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
-                       'amaranth': ('https://amaranth-lang.org/docs/amaranth/latest/', None)}  # noqa: E501
+                       'amaranth': ('https://amaranth-lang.org/docs/amaranth/{am_ver}/', None)}  # noqa: E501
 autodoc_default_options = {"members": True,
                            "undoc-members": True}
 todo_include_todos = True
