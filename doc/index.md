@@ -12,10 +12,13 @@
 
 usage/installation
 usage/quickstart
-usage/reference
+Public API <usage/reference>
+development/overview
 development/internals
 development/microcode
 development/testing
+development/guidelines
+TODO List <todo>
 ```
 
 

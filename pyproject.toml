@@ -102,43 +102,6 @@ source-includes = [
 source = "scm"
 write_to = "sentinel/version.txt"
 
-[tool.pdm.dev-dependencies]
-# Though I expect users to provide sby, sby requires click and doesn't opt-in
-# to PEP 517. So provide it here.
-dev = [
-    "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
-    "bronzebeard>=0.2.1",
-    "pytest>=7.4.2",
-    "doit>=0.36.0",
-    "Verilog-VCD>=1.11",
-    "logLUTs @ git+https://github.com/mattvenn/logLUTs@a7fa902a5f70c7d53a654d850f745e36821fbb78",
-    "click>=8.1.7",
-    "pytest-amaranth-sim>=0.1.0",
-]
-examples = [
-    "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
-    "bronzebeard>=0.2.1",
-    "amaranth-boards @ git+https://github.com/amaranth-lang/amaranth-boards",
-    "tabulate>=0.9.0",
-    "pyelftools>=0.26",
-]
-riscof = [
-    "riscof>=1.25.3",
-]
-remote = [
-    "amaranth[remote-build]>=0.5.0",
-    "paramiko~=2.7"
-]
-lint = [
-    "ruff>=0.6.7",
-]
-doc = [
-    "sphinx>=7.2.6",
-    "sphinx-rtd-theme>=2.0.0",
-    "myst-parser>=2.0.0",
-    "sphinx-autobuild>=2024.2.4",
-]
-
 [tool.pdm.scripts]
 # Lint
 lint = { composite = [
@@ -228,3 +191,41 @@ interface = "csr"
 
 [tool.doit.tasks._program_rust_firmware]
 programmer = "ofl"
+
+[dependency-groups]
+doc = [
+    "sphinx>=7.2.6",
+    "sphinx-rtd-theme>=2.0.0",
+    "myst-parser>=2.0.0",
+    "sphinx-autobuild>=2024.2.4",
+    "sphinx-prompt>=1.9.0",
+]
+# Though I expect users to provide sby, sby requires click and doesn't opt-in
+# to PEP 517. So provide it here.
+dev = [
+    "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
+    "bronzebeard>=0.2.1",
+    "pytest>=7.4.2",
+    "doit>=0.36.0",
+    "Verilog-VCD>=1.11",
+    "logLUTs @ git+https://github.com/mattvenn/logLUTs@a7fa902a5f70c7d53a654d850f745e36821fbb78",
+    "click>=8.1.7",
+    "pytest-amaranth-sim>=0.1.0",
+]
+examples = [
+    "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
+    "bronzebeard>=0.2.1",
+    "amaranth-boards @ git+https://github.com/amaranth-lang/amaranth-boards",
+    "tabulate>=0.9.0",
+    "pyelftools>=0.26",
+]
+riscof = [
+    "riscof>=1.25.3",
+]
+remote = [
+    "amaranth[remote-build]>=0.5.0",
+    "paramiko~=2.7"
+]
+lint = [
+    "ruff>=0.6.7",
+]
