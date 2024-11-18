@@ -102,16 +102,58 @@ Users need to decide for themselves if Sentinel fits their needs.
 (terminology)=
 ## Terminology
 
-Mick and Brick introduces some jargon:
+Mick and Brick introduces some jargon that I use in Sentinel:
 
-```{todo}
-This list needs to be written.
+```{note}
+This list is probably incomplete.
 ```
+
+Macroinstruction
+: An unit of execution from the CPU's instruction set, composed of
+  microinstructions. In Sentinel's case, macroinstructions are RISC-V
+  instructions.
+
+Mapping (P)ROM
+: A (P)ROM which maps of the macroarchitecture opcode into microprogram
+  jump targets. It is the hardware version of a [jump table](https://en.wikipedia.org/wiki/Branch_table),
+  where the jump index is retrived from the macroinstruction opcode.
+
+  Each macroinstruction is a loop through the microprogram. The mapping
+  (P)ROM jumps from microcode common to all macroinstructions to microcode
+  specific to each (group of) macroinstruction(s).
+
+  In Sentinel, the Mapping "(P)ROM" is implemented in combinational logic.
+
+Microinstruction
+: A microprogram/microcode instruction. Macroinstructions are composed of
+  multiple microinstructions.
+
+Microprogram Counter
+: Register whose value is the address of the microcode instruction which
+  will execute on the _next_ clock cycle, _assuming the sequencer chooses
+  to use it_.
+
+Pipeline Register
+: In microcode, the pipeline register _specifically_ refers to a holding
+  register containing the bits of the currently-executing microinstruction.
+
+  In Sentinel, the pipeline register is part of the _synchronous_ read port
+  of the Block RAM holding the microprogram. The address input to the
+  microprogram Block RAM is the output of the sequencer; the data for 
+  the microinstruction at this address appears on the read port on the next
+  clock cycle.
+
+Sequencer
+: Component which supplies the address of the microinstruction which will be
+  output on the _next_ clock cycle. It chooses between various sources such as
+  the microprogram counter, an address constant in the microcode instruction,
+  a mapping PROM, or an implied constant, such as `0`.
+
 
 ## Microcode Fields
 
 ```{todo}
-This list needs to be written.
+This should probably be auto-generated from code.
 ```
 
 

@@ -61,13 +61,14 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
-                       'amaranth': ('https://amaranth-lang.org/docs/amaranth/{am_ver}/', None)}  # noqa: E501
+                       'amaranth': (f'https://amaranth-lang.org/docs/amaranth/{am_ver}/', None)}  # noqa: E501
 autodoc_default_options = {"members": True,
                            "undoc-members": True}
 todo_include_todos = True
 
 myst_footnote_transition = False
 myst_heading_anchors = 3
+myst_enable_extensions = ["deflist"]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

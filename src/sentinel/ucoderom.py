@@ -1,3 +1,5 @@
+"""Microcode ROM assembly and Component."""
+
 from io import IOBase
 from pathlib import Path
 from itertools import tee, zip_longest
@@ -5,7 +7,7 @@ from itertools import tee, zip_longest
 from amaranth import unsigned, Module
 from amaranth.lib.data import StructLayout
 from amaranth.lib.memory import Memory
-from amaranth.lib.wiring import Signature, In, Out, Component
+from amaranth.lib.wiring import In, Out, Component
 from amaranth.utils import ceil_log2
 from m5pre import M5Pre
 from m5meta import M5Meta
@@ -15,14 +17,46 @@ from .ucodefields import OpType, CondTest, JmpType, PcAction, ASrc, BSrc, \
     CSROp, CSRSel
 
 
-def ucoderom_signature(ucoderom):
-    return Signature({
-        "addr": Out(ceil_log2(ucoderom.depth)),
-        "fields": In(ucoderom.field_layout)
-    })
-
-
 class UCodeROM(Component):
+    """Microcode ROM assembly and Component.
+
+    :class:`UCodeROM` takes a microcode assembly file as input, parses
+    the assembly file, and dynamically creates a
+    :class:`~amaranth:amaranth.lib.wiring.Signature` which splits out all
+    microcode fields.
+
+    Parameters
+    ----------
+    main_file: Path, optional
+        Path to microcode file to assemble into ROM. If not supplied, use
+        :func:`main_microcode_file`.
+    field_defs: Path, optional
+        Path to write field definitions extracted from assembly file.
+    hex: Path, optional
+        Path to write contents of microcode ROM in hex output.
+    enum_map: dict, optional
+        Alternate :attr:`enum_map` to use to generate a
+        :class:`~amaranth:amaranth.lib.wiring.Signature`. By default, use an
+        :attr:`enum_map` corresponding to :func:`main_microcode_file`.
+
+    Attributes
+    ----------
+    enum_map: dict
+        Map of strings to :class:`~amaranth:amaranth.lib.enum.Enum`, which are
+        verified against the supplied microcode assembly file.
+
+        Each :class:`~amaranth:amaranth.lib.enum.Enum` class should have
+        values in ``UPPER_CASE`` corresponding to an equivalent
+        `m5meta <https://github.com/brouhaha/m5meta>`_ ``enum`` whose values
+        are `lower_case`.
+    addr : Out(ceil_log2(self.depth))
+        Address bus. Width is determined by microcode assembly file.
+    fields : In(StructLayout)
+        Microcode field data output.
+        :class:`~amaranth:amaranth.lib.data.StructLayout` is determined by
+        microcode assembly file.
+    """
+
     enum_map = {
         "alu_op": OpType,
         "cond_test": CondTest,
@@ -43,6 +77,15 @@ class UCodeROM(Component):
 
     @staticmethod
     def main_microcode_file():
+        """Return the default microcode file path.
+
+        The default microcode is supplied with Sentinel's source code.
+
+        Returns
+        -------
+        ~pathlib.Path
+            Absolute path to microcode file supplied with Sentinel.
+        """
         return (Path(__file__).parent / "microcode.asm").resolve()
 
     def __init__(self, *, main_file=None, field_defs=None, hex=None,
@@ -65,7 +108,7 @@ class UCodeROM(Component):
             "fields": In(self.field_layout)
         })
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
         m.submodules.ucode_mem = self.ucode_mem
 
@@ -81,6 +124,18 @@ class UCodeROM(Component):
     # Like M5Meta.assemble(), but pass3 is more flexible and tailored to my
     # needs.
     def assemble(self):
+        r"""Verify and assemble the associated microcode source file.
+
+        Internally calls `m5meta's <https://github.com/brouhaha/m5meta>`_
+        ``assemble`` function and verifies that the assembly file matches
+        ``enum_map``.
+
+        Raises
+        ------
+        ValueError
+            If the assembly file uses multiple address spaces or its ``enum``\s
+            cannot be mapped to ``enum_map``.
+        """
         if isinstance(self.main_file, IOBase):
             self.m5meta = M5Meta(self.main_file, obj_base_fn="anonymous")
             self.m5meta.src = M5Pre(self.main_file).read()
@@ -106,8 +161,8 @@ class UCodeROM(Component):
         # assert(space.name == "block_ram")
         space.generate_object()
 
-        self.create_mem_init(space)
-        self.create_field_layout(space)
+        self._create_mem_init(space)
+        self._create_field_layout(space)
 
         if self.hex:
             space.write_hex_file(self.hex)
@@ -116,10 +171,10 @@ class UCodeROM(Component):
             with open(self.field_defs, 'w') as f:
                 space.write_fdef(f)
 
-    def create_mem_init(self, space):
+    def _create_mem_init(self, space):
         self.width = space.width
         self.depth = space.size
-        self.ucode_contents = [0]*self.depth
+        self.ucode_contents = [0] * self.depth
 
         # Pre-filled with zeros. Fill in addresses that m5meta claims to
         # contain data by converting the address to an int (a dictionary
@@ -127,7 +182,7 @@ class UCodeROM(Component):
         for addr in sorted(space.data.keys()):
             self.ucode_contents[int(addr)] = space.data[addr]
 
-    def create_field_layout(self, space):
+    def _create_field_layout(self, space):
         layout = dict()
         padding_id = 0
 
@@ -139,7 +194,7 @@ class UCodeROM(Component):
             # bools in m5meta are internally enums, but we'll do just fine with
             # unsigned(1).
             if curr_f.enum and curr_f.enum != {"false": 0, "true": 1}:
-                layout[curr_n] = self.check_and_convert_dynamic_enum(curr_f)
+                layout[curr_n] = self._check_and_convert_dynamic_enum(curr_f)
             else:
                 layout[curr_n] = unsigned(curr_f.width)
 
@@ -149,7 +204,7 @@ class UCodeROM(Component):
 
         self.field_layout = StructLayout(layout)
 
-    def check_and_convert_dynamic_enum(self, field):
+    def _check_and_convert_dynamic_enum(self, field):
         try:
             se_class = self.enum_map[field.name]
         except KeyError as e:

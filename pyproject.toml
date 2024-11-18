@@ -66,6 +66,12 @@ reportPossiblyUnboundVariable = false
 reportOperatorIssue = false
 
 [[tool.pyright.executionEnvironments]]
+root = "src"
+reportAttributeAccessIssue = false
+reportOptionalMemberAccess = false
+reportGeneralTypeIssues = false
+
+[[tool.pyright.executionEnvironments]]
 root = "tests/formal"
 reportArgumentType = false
 

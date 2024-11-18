@@ -1,4 +1,7 @@
-# Microcode field classes (this file is required to avoid circular imports)
+"""Microcode field classes for main microcode file.
+
+This file is used to avoid circular imports.
+"""
 
 from amaranth.lib import enum
 
