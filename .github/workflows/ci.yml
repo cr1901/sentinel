@@ -11,6 +11,23 @@ name: CI
 # gzip -c cover.vcd | base64 | base64 -d | gunzip > cover-out.vcd
 
 jobs:
+    ci-prod:
+      name: Production CI Check
+      runs-on: ubuntu-latest
+      steps:
+          - uses: actions/checkout@v4
+          - uses: actions/setup-python@v5
+            with:
+              python-version: "3.11"
+          - name: Install Amaranth with builtin-yosys
+            run: pip install amaranth[builtin-yosys]
+          - name: Install Sentinel
+            run: pip install .
+          - name: Test Generate Verilog
+            run: python -m sentinel.gen -o sentinel.v
+          - name: Test Import
+            run: python -c 'from sentinel.top import Top'
+
     ci-basic:
         name: Basic CI Check
         strategy:

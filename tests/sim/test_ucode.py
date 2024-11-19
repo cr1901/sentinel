@@ -34,14 +34,14 @@ class Bar(enum.Enum):
 # assembly file can be tricky.
 def test_ucode_layout_gen():
     m = UCodeROM(main_file=StringIO(M5META_TEST_FILE),
-                 enum_map={"bar": Bar})
+                 field_map={"bar": Bar})
     # Use Fragment.get to ensure the Module is marked as used.
     Fragment.get(m, None)
 
 
 @pytest.mark.parametrize("mod,clks", [
                          (UCodeROM(main_file=StringIO(M5META_TEST_FILE),
-                                   enum_map={"bar": Bar}),
+                                   field_map={"bar": Bar}),
                           1.0 / 12e6)])
 @pytest.mark.parametrize("dummy", [1, 2])
 @pytest.mark.skip(reason="Not yet implemented.")
