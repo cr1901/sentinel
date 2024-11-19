@@ -46,7 +46,7 @@ address as inputs.
 ```{eval-rst}
 .. automodule:: sentinel.ucoderom
     :members:
-    :exclude-members: enum_map
+    :exclude-members: field_map
 ```
 
 ```{eval-rst}
@@ -106,4 +106,4 @@ using the components from the {py:mod}`~sentinel.align` module.
 ```
 
 Aside from aligning, the glue logic for latching addresses, read data, and
-write data is minimal and controlled directly by microcode signals.
+write data is minimal and controlled directly by microcode signals. -->

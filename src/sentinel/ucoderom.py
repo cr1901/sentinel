@@ -4,7 +4,7 @@ from io import IOBase
 from pathlib import Path
 from itertools import tee, zip_longest
 
-from amaranth import unsigned, Module
+from amaranth import Shape, unsigned, Module
 from amaranth.lib.data import StructLayout
 from amaranth.lib.memory import Memory
 from amaranth.lib.wiring import In, Out, Component
@@ -12,9 +12,10 @@ from amaranth.utils import ceil_log2
 from m5pre import M5Pre
 from m5meta import M5Meta
 
-from .ucodefields import OpType, CondTest, JmpType, PcAction, ASrc, BSrc, \
-    ALUIMod, ALUOMod, RegRSel, RegWSel, MemSel, MemExtend, ExceptCtl, \
-    CSROp, CSRSel
+from .ucodefields import Target, OpType, CondTest, JmpType, InvertTest, \
+    PcAction, LatchA, LatchB, ASrc, BSrc, ALUIMod, ALUOMod, RegRead, \
+    RegWrite, RegRSel, RegWSel, CSROp, CSRSel, MemReq, MemSel, MemExtend, \
+    LatchAdr, LatchData, WriteMem, ExceptCtl, InsnFetch
 
 
 class UCodeROM(Component):
@@ -25,6 +26,17 @@ class UCodeROM(Component):
     :class:`~amaranth:amaranth.lib.wiring.Signature` which splits out all
     microcode fields.
 
+    .. note::
+        I have not personally tried using alternate microcodes. Because
+        most of Sentinel uses :mod:`~sentinel.ucodefields` in some capacity, I
+        generally expect that alternate microcodes will simply be extensions
+        to the main microcode file.
+
+        This can be done, for instance, by copying and extending *both*
+        ``microcode.asm`` and the default :attr:`field_map`. I may optimize
+        the API for this extension use case after I get a better idea of how
+        to support different Sentinel microcodes/profiles.
+
     Parameters
     ----------
     main_file: Path, optional
@@ -34,52 +46,74 @@ class UCodeROM(Component):
         Path to write field definitions extracted from assembly file.
     hex: Path, optional
         Path to write contents of microcode ROM in hex output.
-    enum_map: dict, optional
-        Alternate :attr:`enum_map` to use to generate a
-        :class:`~amaranth:amaranth.lib.wiring.Signature`. By default, use an
-        :attr:`enum_map` corresponding to :func:`main_microcode_file`.
+    field_map: dict, optional
+        Alternate :attr:`field_map` to use to generate a
+        :class:`~amaranth:amaranth.lib.wiring.Signature`. By default, use a
+        :attr:`field_map` corresponding to :func:`main_microcode_file`.
 
     Attributes
     ----------
-    enum_map: dict
-        Map of strings to :class:`~amaranth:amaranth.lib.enum.Enum`, which are
-        verified against the supplied microcode assembly file.
+    field_map: dict
+        Map of strings to :class:`~amaranth.hdl.ShapeLike`, which are
+        verified against the ``fields`` supplied microcode assembly file.
 
         Each :class:`~amaranth:amaranth.lib.enum.Enum` class should have
         values in ``UPPER_CASE`` corresponding to an equivalent
         `m5meta <https://github.com/brouhaha/m5meta>`_ ``enum`` whose values
         are `lower_case`.
     addr : Out(ceil_log2(self.depth))
-        Address bus. Width is determined by microcode assembly file.
+        Address bus. Width is determined by microcode assembly file, which
+        also initializes the otherwise-private self.depth.
+
+        The default microcode file has an address space depth of 256
+        (1 byte).
     fields : In(StructLayout)
         Microcode field data output.
         :class:`~amaranth:amaranth.lib.data.StructLayout` is determined by
-        microcode assembly file.
+        microcode assembly file. A default :attr:`fields` layout will look
+        like this:
+
+        .. todo::
+            Doctest printing default microcode ``StructLayout`` goes here.
+
+        The default microcode file has a data width of 48 bits (6 bytes).
     """
 
-    enum_map = {
+    field_map = {
+        "target": Target,
         "alu_op": OpType,
         "cond_test": CondTest,
         "jmp_type": JmpType,
+        "invert_test": InvertTest,
         "pc_action": PcAction,
+        "latch_a": LatchA,
+        "latch_b": LatchB,
         "alu_i_mod": ALUIMod,
         "alu_o_mod": ALUOMod,
+        "reg_read": RegRead,
+        "reg_write": RegWrite,
         "a_src": ASrc,
         "b_src": BSrc,
         "reg_r_sel": RegRSel,
         "reg_w_sel": RegWSel,
         "csr_op": CSROp,
         "csr_sel": CSRSel,
+        "mem_req": MemReq,
         "mem_sel": MemSel,
         "mem_extend": MemExtend,
-        "except_ctl": ExceptCtl
+        "latch_adr": LatchAdr,
+        "latch_data": LatchData,
+        "write_mem": WriteMem,
+        "except_ctl": ExceptCtl,
+        "insn_fetch": InsnFetch
     }
 
     @staticmethod
     def main_microcode_file():
         """Return the default microcode file path.
 
-        The default microcode is supplied with Sentinel's source code.
+        The default microcode, titled ``microcode.asm``, is supplied with
+        Sentinel's source code/package in the same directory as this file.
 
         Returns
         -------
@@ -89,7 +123,7 @@ class UCodeROM(Component):
         return (Path(__file__).parent / "microcode.asm").resolve()
 
     def __init__(self, *, main_file=None, field_defs=None, hex=None,
-                 enum_map=None):
+                 field_map=None):
         if not main_file:
             self.main_file = UCodeROM.main_microcode_file()
         else:
@@ -97,8 +131,8 @@ class UCodeROM(Component):
         self.field_defs = field_defs
         self.hex = hex
 
-        if enum_map:
-            self.enum_map = enum_map
+        if field_map:
+            self.field_map = field_map
 
         self.assemble()
         self.ucode_mem = Memory(shape=self.width, depth=self.depth,
@@ -128,13 +162,13 @@ class UCodeROM(Component):
 
         Internally calls `m5meta's <https://github.com/brouhaha/m5meta>`_
         ``assemble`` function and verifies that the assembly file matches
-        ``enum_map``.
+        ``field_map``.
 
         Raises
         ------
         ValueError
-            If the assembly file uses multiple address spaces or its ``enum``\s
-            cannot be mapped to ``enum_map``.
+            If the assembly file uses multiple address spaces or its
+            ``enum``\ s cannot be mapped to :attr:`field_map`.
         """
         if isinstance(self.main_file, IOBase):
             self.m5meta = M5Meta(self.main_file, obj_base_fn="anonymous")
@@ -196,7 +230,8 @@ class UCodeROM(Component):
             if curr_f.enum and curr_f.enum != {"false": 0, "true": 1}:
                 layout[curr_n] = self._check_and_convert_dynamic_enum(curr_f)
             else:
-                layout[curr_n] = unsigned(curr_f.width)
+                layout[curr_n] = \
+                    self._check_and_convert_dynamic_shape(curr_f)
 
             if next_f and curr_f.origin + curr_f.width != next_f.origin:
                 layout[f"_padding_{padding_id}"] = \
@@ -204,11 +239,28 @@ class UCodeROM(Component):
 
         self.field_layout = StructLayout(layout)
 
+    def _check_and_convert_dynamic_shape(self, field):
+        try:
+            ss_class = self.field_map[field.name]
+        except KeyError as e:
+            raise ValueError(f"{e.args[0]} was not in field_map") from e
+
+        ss_width = Shape.cast(ss_class).width
+        f_width = field.width
+        if ss_width != f_width:
+            raise ValueError(f"{ss_class} in Amaranth source and field {field}"
+                             " in microcode source do not have compatible "
+                             "widths.\n"
+                             f"Amaranth source width is {ss_width}, microcode "
+                             f"source width is {f_width}.")
+
+        return ss_class
+
     def _check_and_convert_dynamic_enum(self, field):
         try:
-            se_class = self.enum_map[field.name]
+            se_class = self.field_map[field.name]
         except KeyError as e:
-            raise ValueError(f"{e.args[0]} was not in enum_map") from e
+            raise ValueError(f"{e.args[0]} was not in field_map") from e
 
         if not (all(se_class[k.upper()].value == field.enum[k]
                     for k in field.enum) and
@@ -219,5 +271,14 @@ class UCodeROM(Component):
                              "fields and values.\n"
                              "Amaranth is UPPER_CASE, microcode source is "
                              "lower_case.")
+
+        se_width = Shape.cast(se_class).width
+        f_width = field.width
+        if se_width != f_width:
+            raise ValueError(f"{se_class} in Amaranth source and field {field}"
+                             " in microcode source do not have compatible "
+                             "widths.\n"
+                             f"Amaranth source width is {se_width}, microcode "
+                             f"source width is {f_width}.")
 
         return se_class

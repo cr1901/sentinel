@@ -108,6 +108,19 @@ Mick and Brick introduces some jargon that I use in Sentinel:
 This list is probably incomplete.
 ```
 
+Condition Code Multiplexer
+: A multiplexer of various conditional tests. The output of this multiplexer,
+  selected by the microcode, becomes an test input to the Sequencer. The
+  conditional test result can often be inverted by microcode to double the
+  number of possible tests.
+  
+  Tests conditions used by Sentinel include:
+
+  * Is the ALU output zero/nonzero?
+  * Is a memory access complete/incomplete?
+  * Did an exception occur/not occur?
+  * Unconditionally true/false.
+
 Macroinstruction
 : An unit of execution from the CPU's instruction set, composed of
   microinstructions. In Sentinel's case, macroinstructions are RISC-V
@@ -145,17 +158,30 @@ Pipeline Register
 
 Sequencer
 : Component which supplies the address of the microinstruction which will be
-  output on the _next_ clock cycle. It chooses between various sources such as
-  the microprogram counter, an address constant in the microcode instruction,
-  a mapping PROM, or an implied constant, such as `0`.
+  output on the _next_ clock cycle. It chooses between various sources based
+  on a test condition provided by the Condition Code Multiplexer.
+  
+  Sources used by Sentinel, include:
+
+  * The microprogram counter.
+  * An address constant in the microcode instruction.
+  * A mapping PROM.
+  * An implied constant `0`.
 
 
 ## Microcode Fields
 
-```{todo}
-This should probably be auto-generated from code.
+```{eval-rst}
+.. automodule:: sentinel.ucodefields
+   :member-order: bysource
 ```
 
+<!-- (microcode-asm)=
+## Default Microcode File Contents
+
+```{eval-rst}
+.. literalinclude:: ../../src/sentinel/microcode.asm
+``` -->
 
 ## Footnotes
 

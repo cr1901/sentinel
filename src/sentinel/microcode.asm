@@ -3,6 +3,14 @@ space block_ram: width 48, size 256;
 space block_ram;
 origin 0;
 
+// Microcode fields in this space correspond to classes defined in
+// ucodefields.py. The ordering of microcode fields is taken from this file.
+// Width and enum field names are validated against the Amaranth source after
+// assembly.
+//
+// Comments are included for convenience, and efforts are made to ensure
+// they don't contradict comments in ucodefields.py. In case of conflict,
+// ucodefields.py comments take priority.
 fields block_ram: {
   // Target field for direct jmp_type. The micropc jumps to here next
   // cycle if the test succeeds.

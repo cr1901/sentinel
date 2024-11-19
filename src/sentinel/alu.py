@@ -160,6 +160,23 @@ AluCtrlSignature = Signature({
 
 
 class ALU(Component):
+    """Basic Arithmetic Logic Unit.
+
+    The ALU Performs "A OP B", where "OP" is chosen by :attr:`ctrl`.
+
+    Attributes
+    ----------
+    a: In(width)
+        ALU A input.
+    b: In(width)
+        ALU B input.
+    o: Out(width)
+        ALU output. Valid 1 clock cycle after inputs.
+    ctrl: In(AluCtrlSignature)
+        Choose the ALU op to perform this cycle, possibly modifying the output.
+        Also check if the ALU op on the previous cycle was ``0``.
+    """
+
     # Assumes: op is held steady for duration of op.
     def __init__(self, width: int):
         self.width = width
@@ -183,7 +200,7 @@ class ALU(Component):
         self.srl = ShiftLogicalRight(width)
         self.sar = ShiftArithmeticRight(width)
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
         m.submodules.add = self.add
         m.submodules.sub = self.sub
