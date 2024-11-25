@@ -74,6 +74,25 @@ pdm add sentinel@git+https://github.com/cr1901/sentinel@next
 
 to bring in the development branch.
 
+```{warning}
+When advantageous, the `next` branch tracks upstream git packages without
+pinning to a branch or commit (that's what `pdm.lock` is for). These include:
+
+* [`amaranth`]
+* [`amaranth-boards`]
+* [`amaranth-soc`]
+* [`amaranth-stdio`]
+
+Additionally, some Amaranth packages/dependencies are still in flux and are not
+don't have a stable release to track on PyPI. Until they do, the `main` branch
+may _also_ depend on git dependencies without pinning.
+
+However, if installing/using either branch breaks due to immediate dependencies
+changing, I will make a release on `main`, and commit on `next` to correct the
+breakage (and possibly add more tests to CI). See [here](https://iscinumpy.dev/post/bound-version-constraints/#tldr)
+for rationale.
+```
+
 ## Development Environment
 
 Sentinel's source code is _also_ managed by PDM. To get started, check out a
@@ -113,3 +132,8 @@ directions [here](https://rustup.rs/) and then run
 Rust [can coexist](https://rust-lang.github.io/rustup/concepts/toolchains.html).
 
 Next, head over to the {ref}`overview` page for how to hack on Sentinel :).
+
+[`amaranth`]: https://github.com/amaranth-lang/amaranth
+[`amaranth-boards`]: https://github.com/amaranth-lang/amaranth-boards
+[`amaranth-soc`]: https://github.com/amaranth-lang/amaranth-soc
+[`amaranth-stdio`]: https://github.com/amaranth-lang/amaranth-stdio
