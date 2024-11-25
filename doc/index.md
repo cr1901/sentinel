@@ -16,8 +16,10 @@ Public API <usage/reference>
 development/overview
 development/internals
 development/microcode
+development/support-code
 development/testing
 development/guidelines
+CHANGELOG <changes>
 TODO List <todo>
 ```
 

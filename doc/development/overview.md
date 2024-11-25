@@ -21,7 +21,6 @@ PDM and DoIt complement each other:
 I leverage both PDM and DoIt for increased flexibility to run tests, benchmarks,
 and generate examples.
 
-(pdm-scripts)=
 ## PDM Scripts
 
 Scripts defined in `[tool.pdm.scripts]` are the main
@@ -73,15 +72,18 @@ scripts must pass as part of CI:
 * `gen`, `demo`, `demo-rust`: Check that code/demo generation works.
 * `test-quick`, `rvformal-all`, and `riscof-all`: Run tests.
 
-
+```{todo}
+Although [ReadTheDocs](https://sentinel-cpu.readthedocs.io/en/latest/) handles
+building docs at present, CI release should be gated on building docs
+successfully.
+```
 
 If necessary, the above PDM scripts invoke `doit`, which reads the `dodo.py`
 file to find out how to do the actual work.[^1]
 
-(doit-tasks)=
 ## DoIt Tasks
 
-`doit` tasks are "low-level" tasks wrapped by the PDM scripts {ref}`above <pdm-scripts>`.
+`doit` tasks are "low-level" tasks wrapped by the PDM scripts [above](#pdm-scripts)
 _They should be treated as a private and subject to change._ Howevever, I provide
 a `doit` PDM script to call `doit` directly if necessary. For instance, to
 list available `doit` tasks (_including [private tasks](https://pydoit.org/tasks.html#private-hidden-tasks)_),
@@ -114,6 +116,19 @@ plot_luts                build "pdm demo" bitstream (if out of date), plot LUT u
 run_riscof               run RISCOF tests against Sentinel/Sail, and report results, removes previous run's artifacts
 run_sby                  run symbiyosys flow on Sentinel, "doit list --all run_sby" for choices
 ucode                    assemble microcode and copy non-bin artifacts to root
+```
+
+I've documented the `doit` tasks (but not subtasks) as a courtesy, and to make sure
+developers/users don't get stuck. That said, **prefer running `pdm` as a
+wrapper to `doit` rather than running `doit` directly.** 
+
+```{note}
+I make heavy use of [DoIt subtasks](https://pydoit.org/tasks.html#sub-tasks).
+These are understandably excluded from default help output. Run
+`pdm doit list --all [task]` to see all sub-tasks for a higher-level task.
+
+For instance, the `run_sby:reg_ch0` subtask runs the [Register Check](https://github.com/YosysHQ/riscv-formal/blob/main/docs/procedure.md#register-checks)
+for `riscv-formal`.
 ```
 
 ```{todo}
