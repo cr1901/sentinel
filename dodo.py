@@ -1,6 +1,6 @@
 """Task driver for Sentinel.
 
-DoIt tasks are typically called from PDM. The DoIt tasks and may call PDM
+DoIt tasks are typically called from PDM. The DoIt tasks may call PDM
 scripts recursively to implement a super-powered PDM "composite" type.
 """
 
@@ -17,6 +17,7 @@ from functools import partial
 from doit import task_params
 # https://groups.google.com/g/python-doit/c/GFtEuBp82xc/m/j7jFkvAGH1QJ
 from doit.action import CmdAction
+from doit.task import clean_targets
 from doit.tools import run_once, create_folder, result_dep, title_with_actions
 from doit.reporter import ConsoleReporter
 
@@ -170,6 +171,30 @@ def task_ucode():
         }],
         "targets": [Path(".") / hex_.name, Path(".") / fdef.name],
         "file_dep": [ucode],
+    }
+
+
+# YoWASP
+def write_yowasp_env_toolchain(fn):  # noqa: D103
+    envs = {
+        "AMARANTH_USE_YOSYS": "builtin",
+        "YOSYS": "yowasp-yosys",
+        "NEXTPNR_ICE40": "yowasp-nextpnr-ice40",
+        "ICEPACK": "yowasp-icepack"
+    }
+
+    with open(fn, "w") as fp:
+        for k, v in envs.items():
+            fp.write(f"{k}={v}\n")
+
+
+def task_prepare_yowasp():
+    """prepare Sentinel source for YoWASP tools"""
+    return {
+        "actions": [(write_yowasp_env_toolchain, (".env.toolchain",))],
+        "uptodate": [run_once],
+        "clean": [clean_targets],
+        "targets": [".env.toolchain"],
     }
 
 

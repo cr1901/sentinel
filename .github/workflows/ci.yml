@@ -11,6 +11,43 @@ name: CI
 # gzip -c cover.vcd | base64 | base64 -d | gunzip > cover-out.vcd
 
 jobs:
+    ci-quickstart:
+      name: Minimal Dependencies Check
+      runs-on: ubuntu-latest
+      steps:
+          - uses: actions/checkout@v4
+          - uses: actions/setup-python@v5
+            with:
+              python-version: "3.11"
+          - uses: pdm-project/setup-pdm@v4
+            with:
+              python-version: 3.11
+              cache: false
+          - uses: dtolnay/rust-toolchain@stable
+            with:
+              targets: riscv32i-unknown-none-elf
+          # Simulate installing Amaranth with builtin-yosys outside of PDM.
+          - name: Install Minimal Deps
+            run: |
+              pdm run python -m ensurepip
+              pdm run python -m pip install amaranth[builtin-yosys]
+              pdm install --prod
+          # Test code gen both within and outside a PDM script.
+          - name: Test Generate Verilog with Minimal Deps
+            run: |
+              pdm run python -m sentinel.gen -o sentinel-direct.v
+              pdm gen -o sentinel-pdm.v
+          - name: Test Import
+            run: pdm run python -c 'from sentinel.top import Top'
+          - name: Install PDM Demo Groups and Prepare YoWASP
+            run: |
+              pdm install -G examples -G yowasp
+              pdm use-yowasp
+          - name: Check Demo Bitstream Generation with Minimal Deps
+            run: |
+              pdm demo -i csr -p ice40_hx8k_b_evn
+              pdm demo-rust -i csr -p ice40_hx8k_b_evn
+
     ci-basic:
         name: Basic CI Check
         strategy:

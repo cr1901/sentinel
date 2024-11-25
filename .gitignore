@@ -36,6 +36,8 @@ __pycache__/
 # RVFormal disassembled counterexamples
 *.s
 
+# YoWASP setup
+.env.toolchain
 
 # Added by cargo
 

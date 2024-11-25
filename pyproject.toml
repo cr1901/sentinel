@@ -111,6 +111,8 @@ source = "scm"
 write_to = "sentinel/version.txt"
 
 [tool.pdm.scripts]
+_.env_file = ".env.toolchain"
+
 # Lint
 lint = { composite = [
     # Python
@@ -143,6 +145,11 @@ doc-auto = "sphinx-autobuild doc/ doc/_build/ --watch src/sentinel"
 # DoIt wrappers. Prefer using these over running DoIt directly.
 doit = { cmd = "doit", help="escape hatch to call doit directly" }
 ucode = { cmd = "doit ucode", help="generate supplementary microcode files" }
+
+# YoWASP
+use-yowasp = { cmd = "doit prepare_yowasp", help="prepare pdm and tools to use YoWASP binaries" }
+use-local.cmd = "doit clean prepare_yowasp"
+use-local.help = "revert \"use-yowasp\" changes; use local binaries"
 
 # LUTs
 bench-luts = { cmd = "doit bench_luts", help="add stats to LUTs.csv" }
@@ -226,6 +233,7 @@ examples = [
     "amaranth-boards @ git+https://github.com/amaranth-lang/amaranth-boards",
     "tabulate>=0.9.0",
     "pyelftools>=0.26",
+    "doit>=0.36.0",
 ]
 riscof = [
     "riscof>=1.25.3",
@@ -236,4 +244,9 @@ remote = [
 ]
 lint = [
     "ruff>=0.6.7",
+]
+yowasp = [
+    "amaranth[builtin-yosys]>=0.5.3",
+    "yowasp-yosys>=0.47.0.0.post805",
+    "yowasp-nextpnr-ice40>=0.7.0.0.post519",
 ]
