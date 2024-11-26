@@ -1,5 +1,7 @@
+# Development Guide
+
 (overview)=
-# Development Environment Overview
+## Overview
 
 Sentinel uses a combination of the [PDM](https://pdm-project.org/en/latest/)
 package/virtual environment manager and [DoIt](https://pydoit.org/) task runnner
@@ -21,7 +23,7 @@ PDM and DoIt complement each other:
 I leverage both PDM and DoIt for increased flexibility to run tests, benchmarks,
 and generate examples.
 
-## PDM Scripts
+### PDM Scripts
 
 Scripts defined in `[tool.pdm.scripts]` are the main
 entry points for users and developers. Type `pdm run --list` for a list of
@@ -81,7 +83,7 @@ successfully.
 If necessary, the above PDM scripts invoke `doit`, which reads the `dodo.py`
 file to find out how to do the actual work.[^1]
 
-## DoIt Tasks
+### DoIt Tasks
 
 `doit` tasks are "low-level" tasks wrapped by the PDM scripts [above](#pdm-scripts)
 _They should be treated as a private and subject to change._ Howevever, I provide
@@ -143,6 +145,28 @@ cutoff for marking private vs public?
 ```{todo}
 Use [`sphinxcontrib.programoutput`](https://sphinxcontrib-programoutput.readthedocs.io/en/latest/)
 to generate an up-to-date list of commands?
+```
+
+## Detailed Reference
+
+Using PDM and DoIt to orchestrate changes, hacking on Sentinel can be
+divided into roughly four areas:
+
+1. Internals
+2. Microcode
+3. Support Code
+4. Test Code
+
+These, plus development guidelines, all have their own sections:
+
+```{toctree}
+:maxdepth: 2
+
+Internal Structure <internals>
+Microcode Primer <microcode>
+support-code
+Maintaining Tests <testing>
+guidelines
 ```
 
 ## Footnotes

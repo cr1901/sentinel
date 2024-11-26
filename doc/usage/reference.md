@@ -1,4 +1,4 @@
-# Sentinel Reference
+# User Reference
 
 ## Generating Verilog From An Installed Package/As A Dependency
 If using Sentinel as an installed package, the
@@ -50,13 +50,13 @@ class MySoC(Elaboratable):
         ...
 ```
 
-See the `AttoSoC` `class` in `examples/attosoc.py`, and the corresponding
+See the {class}`~examples.attosoc.AttoSoC` `class`, and the corresponding
 [section](./quickstart.md#a-full-example-soc-in-amaranth) in the Quickstart,
 for a full working example.
 
 ## Implementation-Specific Features
 
-* On reset, Sentinel begins execution at address `0``. See the [CSR](../development/internals.md#csrs)
+* On reset, Sentinel begins execution at address `0`. See the [CSR](../development/internals.md#csrs)
   section for information on exception handling (including interrupts).
 * Wishbone Classic supports block xfers. _The Sentinel Wishbone bus uses a
   block xfer (does not deassert CYC/STB) to do a back-to-back memory write and

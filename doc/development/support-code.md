@@ -1,5 +1,7 @@
 # Support Code
 
+## `sentinel-rt`
+
 `sentinel-rt` is an _currently-empty_ Rust support crate. If necessary, it will
 contain support routines optimized for the Sentinel RISC-V _implementation_
 that LLVM or Rust wouldn't generally know about. I have three potential use
@@ -20,6 +22,22 @@ If I expand demos such that multiple linker scripts are required, the examples
 _directory_ will become an examples crate. Do not depend on
 `sentinel-rt/examples` being stable; the source root is _already_
 a [workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html)!
+```
+
+## Verilog Generator
+
+```{eval-rst}
+.. automodule:: sentinel.gen
+    :members:
+```
+
+## Examples
+
+### AttoSoC
+
+```{eval-rst}
+.. automodule:: examples.attosoc
+    :members:
 ```
 
 ## Footnotes

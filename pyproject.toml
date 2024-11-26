@@ -140,7 +140,7 @@ demo-rust = { composite = [
 # Docs
 doc = { cmd = "sphinx-build doc/ doc/_build/" }
 doc-linkck = "sphinx-build doc/ doc/_linkcheck/ -b linkcheck"
-doc-auto = "sphinx-autobuild doc/ doc/_build/ --watch src/sentinel"
+doc-auto = "sphinx-autobuild doc/ doc/_build/ --watch src/sentinel --watch examples"
 
 # DoIt wrappers. Prefer using these over running DoIt directly.
 doit = { cmd = "doit", help="escape hatch to call doit directly" }

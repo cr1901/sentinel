@@ -1,7 +1,9 @@
-# Sentinel Internals
+# Sentinel Internal Structure
 
 <!-- Click each block in the below image to go to documentation for (_roughly_) each
 {py:class}`~amaranth.lib.wiring.Component` of Sentinel. -->
+
+## Block Diagram
 
 Below is a simplified block diagram of Sentinel, showing how the main {py:class}`~amaranth.lib.wiring.Component`s
 connect to each other. Behavior of `Components` not represented in the block
@@ -195,7 +197,7 @@ Sentinel physically implements the following CSRs:
     {class}`sentinel.top.Top`. One simple implementation is to `OR` all
     external interrupt sources together, and query each peripheral when `MEIP`
     is pending to find which peripherals need attention. This is implemented
-    for the serial and timer peripherals in the `examples/attosoc.py` example.
+    for the serial and timer peripherals in {mod}`examples.attosoc`.
 
     ```{note}
     In the future, I may implement the high (platform-specific) 16-bits of

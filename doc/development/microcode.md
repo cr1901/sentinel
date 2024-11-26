@@ -2,10 +2,10 @@
 
 This section describes the rationale for using a microcode, as well as
 its weaknesses, some terminology, and finally, the various microcode fields of
-Sentinel.
+Sentinel. The default microcode file is also included to study!
 
 If you want a short version for the rationale, and just skip over to the
-{ref}`terminology <Terminology>`:
+[terminology](#terminology):
 
 Sentinel is a [horizontally-microcoded](https://en.wikipedia.org/wiki/Microcode#Horizontal_microcode)
 CPU design because I wanted to create a conforming `RV32I_Zicsr` CPU with M-Mode
@@ -99,7 +99,6 @@ Additionally, while not every application needs a super fast CPU, _there is
 plenty of room for Sentinel and other small RISC-V implementations to coexist!_
 Users need to decide for themselves if Sentinel fits their needs.
 
-(terminology)=
 ## Terminology
 
 Mick and Brick introduces some jargon that I use in Sentinel:
@@ -176,12 +175,11 @@ Sequencer
    :member-order: bysource
 ```
 
-<!-- (microcode-asm)=
-## Default Microcode File Contents
+## Default Microcode Annotated Source
 
 ```{eval-rst}
 .. literalinclude:: ../../src/sentinel/microcode.asm
-``` -->
+```
 
 ## Footnotes
 

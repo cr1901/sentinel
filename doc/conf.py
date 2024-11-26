@@ -65,6 +65,7 @@ intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
 autodoc_default_options = {"members": True,
                            "undoc-members": True}
 todo_include_todos = True
+napoleon_custom_sections = ["Registers"]
 
 myst_footnote_transition = False
 myst_heading_anchors = 3
@@ -75,3 +76,6 @@ myst_enable_extensions = ["deflist"]
 
 html_theme = "sphinx_rtd_theme"
 html_static_path = ['_static']
+html_theme_options = {
+    'navigation_depth': 5
+}

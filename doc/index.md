@@ -12,13 +12,8 @@
 
 usage/installation
 usage/quickstart
-Public API <usage/reference>
+usage/reference
 development/overview
-development/internals
-development/microcode
-development/support-code
-development/testing
-development/guidelines
 CHANGELOG <changes>
 TODO List <todo>
 ```

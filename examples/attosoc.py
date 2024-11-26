@@ -119,13 +119,13 @@ class WBLeds(Component):
     gpio
         Array of 8 GPIO pins. Each GPIO pin has the following signature:
 
-        ```
-        Signature({
-            "i": In(1),
-            "o": Out(1),
-            "oe": Out(1)
-        })
-        ```
+        .. code-block::
+
+            Signature({
+                "i": In(1),
+                "o": Out(1),
+                "oe": Out(1)
+            })
 
     Registers
     ---------
@@ -245,13 +245,13 @@ class CSRLeds(Component):
     gpio
         Array of 8 GPIO pins. Each GPIO pin has the following signature:
 
-        ```
-        Signature({
-            "i": In(1),
-            "o": Out(1),
-            "oe": Out(1)
-        })
-        ```
+        .. code-block::
+
+            Signature({
+                "i": In(1),
+                "o": Out(1),
+                "oe": Out(1)
+            })
 
     bridge : csr.Bridge
         CSR bridge holding the registers.
@@ -749,18 +749,11 @@ class CSRSerial(Component):
 
 
 class BusType(enum.Enum):
-    """Choose between Wishbone and CSR Peripheral Interfacing.
+    """Choose between Wishbone and CSR Peripheral Interfacing."""
 
-    Attributes
-    ----------
-    WB : int
-        Use Wishbone bus.
-
-    CSR: int
-        Use CSR bus.
-    """
-
+    #: int: Use Wishbone bus.
     WB = auto()
+    #: int: Use CSR bus.
     CSR = auto()
 
 

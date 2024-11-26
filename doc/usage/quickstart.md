@@ -24,17 +24,18 @@ integrate the Sentinel source file into an larger external HDL project
 
 ## A Full Example SoC In Amaranth
 
-The `examples/attosoc.py` source file shows one way to create a simple Sentinel
+The {mod}`examples.attosoc` module shows one way to create a simple Sentinel
 SoC with a UART, timer, and GPIO. _Examples should not be taken as a canonical
 way to create Amaranth SoCs._ They are subject to change as Amaranth matures
 (and are also a good way for me to experiment :)).
 
-The `AttoSoC` `class` constructs the SoC from various peripheral `class`es
-contained within `examples/attosoc.py`. Peripherals come with either a Wishbone bus
-{ref}`interface <amaranth:wiring-intro2>` or a CSR bus interface from
-[`amaranth-soc`](https://github.com/amaranth-lang/amaranth-soc) (bridged to
-Wishbone). The `demo` function provides an {mod}`python:argparse`
-command-line entry point for tweaking and actually {ref}`building <amaranth:intro-build>`
+The {class}`~examples.attosoc.AttoSoC` `class` constructs the SoC from various
+peripheral `class`es contained within {mod}`~examples.attosoc`. Peripherals
+come with either a Wishbone bus {ref}`interface <amaranth:wiring-intro2>` or
+a CSR bus interface from [`amaranth-soc`](https://github.com/amaranth-lang/amaranth-soc)
+(bridged to Wishbone). The {func}`~examples.attosoc.main` function provides
+an {mod}`python:argparse` command-line entry point, and
+{func}`~examples.attosoc.demo` actually {ref}`builds <amaranth:intro-build>`
 the SoC.
 
 Right now, the uses Amaranth to build a SoC bitstream for two
@@ -44,10 +45,9 @@ Right now, the uses Amaranth to build a SoC bitstream for two
 * [iCE40-HX8K Breakout Board](https://www.latticesemi.com/Products/DevelopmentBoardsAndKits/iCE40HX8KBreakoutBoard.aspx)
 
 The `pdm` [scripts](https://pdm-project.org/latest/usage/scripts/)
-`demo` and `demo-rust` are thin wrappers over the `demo` function in
-`examples/attosoc.py`. Extra arguments can be sent by using
-`pdm demo [more] [args] [here...]`; be careful of overriding args hardcoded to
-be sent by the `pdm` script!
+`demo` and `demo-rust` are thin wrappers over {func}`~examples.attosoc.main`
+Extra arguments can be sent by using `pdm demo [more] [args] [here...]`; be
+careful of overriding args hardcoded to be sent by the `pdm` script!
 
 ### Rust Demo
 
