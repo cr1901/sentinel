@@ -43,7 +43,12 @@ version = str(sent_ver).replace(".editable", "")
 release = sent_ver.public
 author = 'William D. Jones'
 
-sys.path.append(os.path.abspath('../src'))
+# Won't be picked up otherwise b/c RTD bypasses PDM and uses a different
+# working directory?
+on_rtd = os.environ.get("READTHEDOCS") == "True"
+if on_rtd:
+    sys.path.append(os.path.abspath('../src'))
+    sys.path.append(os.path.abspath('..'))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

@@ -14,6 +14,9 @@ build:
     # rust: "1.70"
     # golang: "1.20"
   jobs:
+    post_checkout:
+      # Reconstruct tags.
+      - git fetch --unshallow --tags
     post_create_environment:
       # Install PDM
       - pip install -U pdm
@@ -23,7 +26,7 @@ build:
       # * https://github.com/pdm-project/pdm/pull/2736/files#diff-03efc769b870804394632e45d7885272b44c16939517fb31c9d7c614d2ffae57
       # * and https://docs.readthedocs.io/en/stable/build-customization.html#install-dependencies-with-poetry
       # This replaces requirements.txt specified in: https://docs.readthedocs.io/en/stable/guides/reproducible-builds.html
-      - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH pdm install --dev -G doc
+      - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH pdm install -G doc -G examples
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
