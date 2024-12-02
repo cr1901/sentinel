@@ -108,6 +108,8 @@ fields block_ram: {
 // to reuse the conditional meant for shift ops.
 #define CONDTEST_ALU_CMP_FAILED cond_test => cmp_alu_o_zero
 #define CONDTEST_ALU_NONZERO invert_test => 1, cond_test => cmp_alu_o_zero
+#define JUMP_TO_ZERO cond_test => true, invert_test=> true, jmp_type => direct_zero
+#define STOP_MEMREQ_THEN_JUMP_TO_ZERO mem_req=>0, JUMP_TO_ZERO
 
 fetch:
 wait_for_ack: INSN_FETCH_EAGER_READ_RS1, invert_test => 1, cond_test => mem_valid, \
@@ -317,6 +319,15 @@ sb_1: READ_RS2, latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct
 sh_1: READ_RS2, latch_b => 1, b_src => imm, jmp_type => direct, target => sh;
 sw_1: READ_RS2, latch_b => 1, b_src => imm, jmp_type => direct, target => sw;
 
+bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub, \
+        jmp_type => direct, target => branch_epilog;
+
+beq: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
+     alu_op => add, invert_test => 1, cond_test => cmp_alu_o_zero, jmp_type => direct, \
+         target => not_taken;
+     except_ctl => latch_jal, jmp_type => direct, cond_test => exception, target => save_pc;
+     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
+
 origin 0x88;
 branch_ops:
 beq_1: latch_b => 1, b_src => gp, jmp_type => direct, target => beq;
@@ -354,37 +365,25 @@ jalr: b_src => imm, latch_b => 1;
 sb: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
     alu_op => add, latch_adr => 1;
     mem_sel => byte, latch_data => 1;
-// For stores/loads, we use a wishbone block cycle (don't deassert cyc in
-// between data access and insn fetch)
 sb_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
-              mem_sel => byte, write_mem => 1, jmp_type => direct_zero, target => sb_wait;
+              mem_sel => byte, write_mem => 1, jmp_type => direct, target => sb_wait;
+          STOP_MEMREQ_THEN_JUMP_TO_ZERO;
 
 sh: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
     alu_op => add, latch_adr => 1, except_ctl => latch_store_adr, mem_sel => hword, \
         jmp_type => direct, cond_test => exception, target => save_pc;
     mem_sel => hword, latch_data => 1, pc_action => inc;
-// For stores/loads, we use a wishbone block cycle (don't deassert cyc in
-// between data access and insn fetch)
 sh_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
-              mem_sel => hword, write_mem => 1, jmp_type => direct_zero, target => sh_wait;
+              mem_sel => hword, write_mem => 1, jmp_type => direct, target => sh_wait;
+          STOP_MEMREQ_THEN_JUMP_TO_ZERO;
 
 sw: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
     alu_op => add, latch_adr => 1, except_ctl => latch_store_adr, mem_sel => word, \
         jmp_type => direct, cond_test => exception, target => save_pc;
     mem_sel => word, latch_data => 1, pc_action => inc;
-// For stores/loads, we use a wishbone block cycle (don't deassert cyc in
-// between data access and insn fetch)
 sw_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
-              mem_sel => word, write_mem => 1, jmp_type => direct_zero, target => sw_wait;
-
-beq: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
-     alu_op => add, invert_test => 1, cond_test => cmp_alu_o_zero, jmp_type => direct, \
-         target => not_taken;
-     except_ctl => latch_jal, jmp_type => direct, cond_test => exception, target => save_pc;
-     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
-
-bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub, \
-        jmp_type => direct, target => branch_epilog;
+              mem_sel => word, write_mem => 1, jmp_type => direct, target => sw_wait;
+          STOP_MEMREQ_THEN_JUMP_TO_ZERO;
 
 origin 0xB0;
 jal: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1;
