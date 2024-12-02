@@ -136,6 +136,10 @@ examining the microcode (knowing that each microcode instruction always takes
 * At minimum, an instruction (`addi`, `or`, etc) takes 3 cycles to retire
   after the initial shared cycles. This means Sentinel instructions have a
   minimum latency of 6 cycles per instruction (CPI).
+  * I define "retirement" to mean "cycle in which we return to Fetch/Decode or
+    Exception Checking". This usually corresponds to "cycle after RD/PC was
+    written with results". In the case of stores, this means "one cycle
+    _after_ Sentinel released STB/CYC upon receiving ACK for the store".
 * Sentinel instructions have a maximum throughput of 4 CPI by overlapping the
   2 Fetch/Decode cycles of the _next_ instruction after the initial 3 shared
   cycles of the _current_ instruction when possible ("pipelining").
@@ -152,13 +156,14 @@ examining the microcode (knowing that each microcode instruction always takes
 * Branch-not-taken latency and throughput is 7 CPI. Branch-taken latency and
   throughput is 8 CPI.
 * JAL/JALR latency is 9 CPI, throughput is 7 CPI.
-* Store latency and throughput is 8 CPI minimum. 2 cycles minimum are spent
+* Store latency and throughput is 10 CPI minimum. 2 cycles minimum are spent
   waiting for Wishbone ACK.
-  * The core will not release STB/CYC between the store and fetch of the next
+  * The core _will_ release STB/CYC between the store and fetch of the next
     instruction.
 * Load latency is 10 CPI minimum, and throughput is 9 CPI. 2 cycles minimum
   are spent waiting for Wishbone ACK.
-  * The core _will_ release STB/CYC before fetch of the next instruction.
+  * The core _will_ release STB/CYC between the load and fetch of the next
+    instruction.
 * CSR instructions require an extra Decode cycle compared to all other
   instructions (to check for legality).
   * At minimum, a read of a read-only zero CSR register has a latency of 7 CPI,
