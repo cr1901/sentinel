@@ -173,6 +173,7 @@ examining the microcode (knowing that each microcode instruction always takes
   the exception condition is detected.
   * `mret` has a latency and throughput of 8 CPI. 
 
+(csrs)=
 ## CSRs
 
 Sentinel physically implements the following CSRs:
@@ -199,10 +200,15 @@ Sentinel physically implements the following CSRs:
     > platform-specific interrupt controller.
 
     The user must provide their own interrupt controller. See
-    {class}`sentinel.top.Top`. One simple implementation is to `OR` all
-    external interrupt sources together, and query each peripheral when `MEIP`
-    is pending to find which peripherals need attention. This is implemented
-    for the serial and timer peripherals in {mod}`examples.attosoc`.
+    {class}`sentinel.top.Top`.
+    
+    One simple implementation is to `OR` all external interrupt sources
+    together and feed it to the {attr}`IRQ line <sentinel.top.Top.irq>`. When
+    any of the `OR` inputs are asserted, this will be reflected in the `MEIP`
+    bit, indicating _at least one_ I/O peripheral needs attention. The Sentinel
+    program will then query each I/O peripheral to figure out _exactly which_
+    peripherals need attention. An example implementation can be found for the
+    serial and timer peripherals in {mod}`examples.attosoc` and [`sentinel-rt`](./support-code.md#sentinel-rt).
 
     ```{note}
     In the future, I may implement the high (platform-specific) 16-bits of

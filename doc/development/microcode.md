@@ -177,6 +177,16 @@ Sequencer
 
 ## Default Microcode Annotated Source
 
+Many jump addresses are hardcoded by the mapping PROM. Since there is only
+room for 256 instructions, the remaining required jumps go to wherever there
+is extra room. With that said:
+
+* I try to keep instructions with the similar functionality ("major opcode")
+  together.
+* I try to avoid backward jumps, except for jumping to the next
+  macroinstruction, but they are sometimes unavoidable (see `beq` and `bne`
+  labels).
+
 ```{eval-rst}
 .. literalinclude:: ../../src/sentinel/microcode.asm
 ```

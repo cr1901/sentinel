@@ -220,6 +220,9 @@ Additionally, make sure the following are installed:
   if I can get OCaml to behave long enough. I _used_ to be able to install it
   just fine :'D!).
 
+(dep-hints)=
+### Where To Find Dependencies
+
 If you are having trouble finding binaries via package manager, `boolector` and
 `SymbiYosys` are provided by [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build),
 and SiFive still provides downloads to usable GCC versions in an [archived repo](https://github.com/YosysHQ/oss-cad-suite-build).

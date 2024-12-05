@@ -1,7 +1,12 @@
 # User Reference
 
+The [Quickstart](./quickstart.md) is a good reference for how to use Sentinel
+from the source repo. These next two sections discuss usage outside of the
+source tree.
+
 ## Generating Verilog From An Installed Package/As A Dependency
-If using Sentinel as an installed package, the
+
+If using Sentinel as an installed package in another project, the
 [Quickstart](./quickstart.md#generate-a-verilog-core) still applies,
 except the command is now:
 
@@ -50,27 +55,14 @@ class MySoC(Elaboratable):
         ...
 ```
 
+Since the Sentinel top-level is only a CPU, not a full computer system,
+_the user must provide some sort of memory, and I/O to effectively run
+programs_. One common way to do this is to connect Sentinel's Wishbone bus to
+a Wishbone address decoder, behind which memory and I/O live.
+
 See the {class}`~examples.attosoc.AttoSoC` `class`, and the corresponding
 [section](./quickstart.md#a-full-example-soc-in-amaranth) in the Quickstart,
 for a full working example.
-
-## Implementation-Specific Features
-
-* On reset, Sentinel begins execution at address `0`. See the [CSR](../development/internals.md#csrs)
-  section for information on exception handling (including interrupts).
-* Wishbone Classic supports block xfers. _The Sentinel Wishbone bus uses a
-  block xfer (does not deassert CYC/STB) to do a back-to-back memory write and
-  instruction fetch._ Otherwise, the wishbone bus will deassert CYC/STB the cycle
-  after receipt of ACK.
-
-  ```{todo}
-  I may neeed to interface to IP that can't handle block cycles. My two easy
-  options are to:
-  
-  * Relax the block cycle requirement in the future via an option.
-  * Suggest a bridge that converts wishbone block cycles to classic cycles
-    via wait-states.
-  ```
 
 ## Public API
 

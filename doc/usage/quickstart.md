@@ -38,8 +38,8 @@ an {mod}`python:argparse` command-line entry point, and
 {func}`~examples.attosoc.demo` actually {ref}`builds <amaranth:intro-build>`
 the SoC.
 
-Right now, the uses Amaranth to build a SoC bitstream for two
-{doc}`platforms <amaranth:platform>`:
+Right now, {mod}`~examples.attosoc` uses Amaranth to build a SoC bitstream for
+two {doc}`platforms <amaranth:platform>`:
 
 * [Lattice iCEstick](https://www.latticesemi.com/icestick)
 * [iCE40-HX8K Breakout Board](https://www.latticesemi.com/Products/DevelopmentBoardsAndKits/iCE40HX8KBreakoutBoard.aspx)
@@ -51,8 +51,9 @@ careful of overriding args hardcoded to be sent by the `pdm` script!
 
 ### Rust Demo
 
-If you have a Rust compiler installed, you can create a demo that prints a
-[Rule 110](https://en.wikipedia.org/wiki/Rule_110) pattern to a serial console:
+If you have a Rust compiler {ref}`installed <dep-hints>`, you can create a
+demo that prints a [Rule 110](https://en.wikipedia.org/wiki/Rule_110) pattern
+to a serial console:
 
 ```
 pdm demo-rust [args ...]

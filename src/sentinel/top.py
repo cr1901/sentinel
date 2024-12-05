@@ -13,6 +13,162 @@ from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
 
 
 class Top(Component):
+    """The Sentinel CPU Top-Level.
+
+    The Sentinel CPU top-level provides an `interface <amaranth:wiring>`_ to
+    a `Wishbone Classic <https://cdn.opencores.org/downloads/wbspec_b4.pdf>`_
+    bus and Interrupt ReQuest (IRQ) signal. Optionally, one may generate extra
+    signals which are used for verifying core functionality using the
+    `RISC-V Formal Interface <https://github.com/YosysHQ/riscv-formal/blob/main/docs/rvfi.md>`_
+    (RVFI).
+
+    Sentinel uses a *single* clock domain, called ``sync``
+    `by convention <https://amaranth-lang.org/docs/amaranth/latest/guide.html#control-domains>`_.
+    On the first cycle after reset is de-asserted, Sentinel begins execution
+    at address ``0``.
+
+    The Wishbone bus provides your typical address, data, and control lines
+    for transferring data to and from the CPU. Sentinel only support Wishbone
+    Classic Single Xfers. Specifically, when ``CYC`` and ``STB`` are both
+    asserted ``1`` on a given clock cycle, the following holds:
+
+    * If ``WE`` is asserted, Sentinel wants to write data over its bus to
+      peripherals on its ``DAT_W`` lines. Any byte in ``DAT_W`` where ``SEL``
+      is *also* asserted is valid data. Sentinel will wait for ``ACK`` to be
+      asserted.
+    * If ``WE`` is *not* asserted, Sentinel wants to read data from a
+      peripheral over its ``DAT_R`` lines. Peripherals should ensure that any
+      byte in ``DAT_R`` where ``SEL`` is *also* asserted is valid data before
+      asserting ``ACK``.
+    * When ``ACK`` is sent to Sentinel on a given clock cycle, Sentinel will
+      deassert ``CYC`` and ``STB`` on the next cycle, for at least one cycle.
+
+    At present (12/3/2024), I could not find good opportunities in the
+    microcode program to try Block Xfers without potentially
+    `violating <https://github.com/fossi-foundation/wishbone/issues/26>`_ the
+    spec.
+
+    The IRQ line triggers Machine External Interrupts when asserted (``1``)-
+    i.e. it is level-triggered. The user must provide a mechanism for
+    any peripherals, devices, etc that can assert an IRQ to *also* deassert
+    their IRQ logic via software, hardware, or a combination. The Machine
+    Software and Machine Timer interrupt lines are not presently implemented.
+
+    .. todo::
+
+        Seeing that it's memory-mapped, there should probably be provisions for
+        a user-supplied Machine Timer.
+
+    Sentinel directly reads the IRQ line in two related, but distinct,
+    scenarios:
+
+    * An instruction wants to read the Machine Interrupt Pending (``MIP``)
+      register. In this case, Sentinel will directly latch the value of the IRQ
+      line into ``MIP``'s Machine External Interrupt Pending (``MEIP``) bit
+      on the next positive edge of the ``sync`` clock domain.
+    * The microcode is :class:`querying <sentinel.ucodefields.ExceptCtl>`
+      exceptions from
+      :attr:`the decoder <sentinel.ucodefields.ExceptCtl.LATCH_DECODER>`. In
+      this case, several :mod:`control Components <sentinel.control>` and
+      the ``MCAUSE`` register depend on the sampled value of the IRQ line
+      on the next positive edge of ``sync``.
+
+    To `ensure <https://www.eetimes.com/understanding-clock-domain-crossing-issues/>`_
+    that all internal components of Sentinel see the same value of the IRQ line
+    on a given clock cycle, a user must place their own :class:`synchronization
+    <amaranth:amaranth.lib.cdc.FFSynchronizer>` logic before the IRQ input if
+    interrupt sources can be triggerred asynchronously to ``sync``.
+
+    See the :ref:`CSRs <csrs>` section for more information on exception
+    handling (including interrupts).
+
+    Parameters
+    ----------
+    formal: bool
+        The Wishbone bus and IRQ line alone don't give enough information to
+        properly use the `RISC-V Formal Interface <https://github.com/YosysHQ/riscv-formal/blob/main/docs/rvfi.md>`_
+        to verify core properties. If ``True``, Sentinel will gain an extra
+        ``rvfi`` port :class:`~amaranth:amaranth.lib.wiring.Member` with
+        signals required to implement RVFI.
+
+        As RVFI is meant for verification, the ``rvfi``
+        :class:`~amaranth:amaranth.lib.wiring.Member` is not meant to be used
+        in a synthesized design. It is best to leave this option disabled
+        unless you are using :class:`Top` in conjunction with
+        :class:`FormalTop`.
+
+    Attributes
+    ----------
+    formal: bool
+        If ``True``, ``rvfi`` :class:`~amaranth:amaranth.lib.wiring.Member` is
+        present.
+
+    bus: Out(wishbone.Signature)
+        Wishbone Classic Bus.
+
+        Connect your memory and I/O to this bus.
+
+    irq: In(1)
+        Interrupt Request Line.
+
+        External peripherals signal they need attention when this line is high.
+
+    rvfi: Out(Signature)
+        Internal connections required for implementing the
+        `RISC-V Formal Interface <_RVFI>`_
+
+        The signature is of the form
+
+        .. code-block::
+
+            Out(Signature({
+                    "exception": Out(1),
+                    "decode": Out(self.decode.rvfi.signature)
+            })
+
+        where:
+
+        * ``exception``: Asserted if an exception occurred this cycle.
+        * ``decode``: Forwarded RVFI signals from
+          :class:`sentinel.decode.Decode`.
+
+        .. todo::
+
+            Right now, the formal harness tends to directly "reach" into
+            :class:`Top`
+            and :class:`Components <amaranth:amaranth.lib.wiring.Component>`
+            to read the appropriate signals.
+
+            I would prefer encapsulation via an explicity ``rvfi`` port
+            :class:`~amaranth:amaranth.lib.wiring.Member`, but this process
+            `has been slow <https://github.com/cr1901/sentinel/commit/1304842fb5f9be6c25c4c85d44863e849a45e481>`_.
+            I will wait to document until this interface :class:`~amaranth:amaranth.lib.wiring.Member`
+            is more stable.
+
+    alu: sentinel.alu.ALU
+        ..
+            Arithmetic Logic Unit
+            :class:`~amaranth:amaranth.lib.wiring.Component`
+
+    addr_align: sentinel.align.AddressAlign
+        ..
+            Address Alignment :class:`~amaranth:amaranth.lib.wiring.Component`
+
+    a_src: sentinel.alu.ASrcMux
+
+    b_src: sentinel.alu.BSrcMux
+
+    control: sentinel.control.Control
+
+    datapath: sentinel.datapath.DataPath
+
+    decode: sentinel.decode.Decode
+
+    exception_router: sentinel.exception.ExceptionRouter
+
+    wdata_align: sentinel.align.WriteDataAlign
+    """  # noqa: E501, RUF100
+
     def __init__(self, *, formal=False):
         self.formal = formal
 
@@ -42,7 +198,7 @@ class Top(Component):
 
         super().__init__(sig)
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         m.submodules.alu = self.alu
