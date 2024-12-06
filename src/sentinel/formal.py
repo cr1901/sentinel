@@ -9,6 +9,8 @@ from .ucodefields import CSROp
 
 
 class FormalTop(Component):
+    """Sentinel CPU RVFI Harness."""
+
     CHECK_INT_ADDR = 1
     CSR_DECODE_VALIDITY_ADDR = 0x24
     EXCEPTION_HANDLER_ADDR = 240

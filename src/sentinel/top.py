@@ -49,10 +49,11 @@ class Top(Component):
     spec.
 
     The IRQ line triggers Machine External Interrupts when asserted (``1``)-
-    i.e. it is level-triggered. The user must provide a mechanism for
-    any peripherals, devices, etc that can assert an IRQ to *also* deassert
-    their IRQ logic via software, hardware, or a combination. The Machine
-    Software and Machine Timer interrupt lines are not presently implemented.
+    i.e. it is level-triggered. For any peripherals, devices, etc that can
+    assert an IRQ, the user must provide software, hardware, or a combination
+    to *also* deassert their IRQ logic upon acknowledgement from the CPU. The
+    Machine Software and Machine Timer interrupt lines are not presently
+    implemented.
 
     .. todo::
 
@@ -86,7 +87,7 @@ class Top(Component):
     ----------
     formal: bool
         The Wishbone bus and IRQ line alone don't give enough information to
-        properly use the `RISC-V Formal Interface <https://github.com/YosysHQ/riscv-formal/blob/main/docs/rvfi.md>`_
+        properly use the `RISC-V Formal Interface <https://github.com/YosysHQ/riscv-formal/blob/main/docs/rvfi.md>`__
         to verify core properties. If ``True``, Sentinel will gain an extra
         ``rvfi`` port :class:`~amaranth:amaranth.lib.wiring.Member` with
         signals required to implement RVFI.

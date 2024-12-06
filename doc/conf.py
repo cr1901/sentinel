@@ -25,6 +25,7 @@ warnings.simplefilter("default")
 try:
     sent_ver = Version(importlib.metadata.version("sentinel"))
     am_ver = Version(importlib.metadata.version("amaranth"))
+    # riscof_ver = Version(importlib.metadata.version("riscof"))
 except importlib.metadata.PackageNotFoundError as e:
     msg = "run \"pdm install --dev -G dev -G doc\" before building docs"
     raise RuntimeError(msg) from e
@@ -66,7 +67,9 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
-                       'amaranth': (f'https://amaranth-lang.org/docs/amaranth/{am_ver}/', None)}  # noqa: E501
+                       'amaranth': (f'https://amaranth-lang.org/docs/amaranth/{am_ver}/', None),  # noqa: E501
+                       # 'riscof': (f'https://riscof.readthedocs.io/en/{riscof_ver}/', None)}  # noqa: E501
+                       'riscof': ('https://riscof.readthedocs.io/en/stable/', None)}  # noqa: E501
 autodoc_default_options = {"members": True,
                            "undoc-members": True}
 todo_include_todos = True
