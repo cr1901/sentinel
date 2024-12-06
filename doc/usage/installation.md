@@ -38,7 +38,7 @@ Windows/Linux/etc versions of `yosys` and other tools, for several reasons:
   nor `riscv64-unknown-elf-gcc` WASM binaries yet (AFAIK).
 
 _However_, for Verilog and Demo generation (e.g. everything inside the
-[Quick Start](./quickstart.md)_, I support using `builtin-yosys`/YoWASP or
+[Quick Start](./quickstart.md), I support using `builtin-yosys`/YoWASP or
 local tools. By default, local tools are used. You can install Amaranth with
 the `builtin-yosys` feature and YoWASP by running:
 
@@ -223,8 +223,8 @@ Additionally, make sure the following are installed:
 (dep-hints)=
 ### Where To Find Dependencies
 
-If you are having trouble finding binaries via package manager, `boolector` and
-`SymbiYosys` are provided by [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build),
+If you are having trouble finding binaries via package manager, `yosys`, `nextpnr-ice40`,
+`boolector` and `SymbiYosys` are provided by [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build),
 and SiFive still provides downloads to usable GCC versions in an [archived repo](https://github.com/YosysHQ/oss-cad-suite-build).
 
 Rather than using your distro's package manager, I suggest installing Rust using the
