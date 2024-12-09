@@ -194,7 +194,8 @@ Sentinel physically implements the following CSRs:
     * There is no machine timer (a 64-bit counter is a bit too much to
       ask for right now :(...).
 * `mip`
-  * Only the `MEIP` bit is implemented. The RISC-V Privileged Spec says:
+  * Only the `MEIP` bit is implemented. The `MSIP` and `MTIP` bits always read
+    as zero. The RISC-V Privileged Spec says:
 
     > `MEIP` is read-only in `mip`, and is set and cleared by a
     > platform-specific interrupt controller.

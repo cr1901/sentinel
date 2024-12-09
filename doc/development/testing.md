@@ -91,7 +91,7 @@ plugin.
 Diferences between `sim` and `upstream` tests include:
 
 * `sim` tests are handcrafted assembly strings using [bronzebeard](https://github.com/theandrew168/bronzebeard).
-* `upstream` tests are raw binary _files_ assembled from the [riscv-tests] repo binaries. 
+* `upstream` tests are raw binary _files_ assembled from the [riscv-tests] repo binaries.
 * In the `upstream` tests, a fixture waits for each binary to either time
   out, or write a value to a specific address. The test fails if the test times
   out (65536 clocks), or the value written is not expected.
@@ -122,7 +122,7 @@ hold across time (clock cycles) from an initial state, using a technique called
 [Bounded Model Checking][BMC] (BMC).
 
 In short, BMC tests that `assert`ions hold by _intelligently_ trying every
-combination of inputs over every clock cycle. It's [not known](https://en.wikipedia.org/wiki/P_versus_NP_problem)
+combination of inputs during every clock cycle. It's [not known](https://en.wikipedia.org/wiki/P_versus_NP_problem)
 whether BMC/[SAT solving](https://en.wikipedia.org/wiki/Boolean_satisfiability_problem)
 is always faster than a worst-case brute-force search, but in practice there's
 a speedup for real world problems. Testing Sentinel with RISC-V Formal is no
@@ -209,8 +209,8 @@ tasks that succeeded without the inputs having meaningully changed (`doit` by
 default checks file hashes, not timestamps). I unfortunately don't quite
 remember the context, nor whether I fixed this issue or not. But just in case,
 you can run `rvformal-force test-name` to force-run a test and ignore
-dependency info. Alternatively, `doit forget run_sby` can reset the dependency
-logic for _all_ checks.
+dependency info. Alternatively, `pdm doit forget run_sby` can reset the
+dependency logic for _all_ checks.
 
 ### How This Repo Invokes RISC-V Formal
 
@@ -222,7 +222,7 @@ under `tests/formal`. These include:
   [`genchecks.py`](https://github.com/YosysHQ/riscv-formal/blob/7793823fe3c281205093b1c5ac7a3aa772f5e223/checks/genchecks.py),
   which actually generates the tests.
 * `wrapper.sv`- RISC-V Formal wrapper that wraps the generated Verilog of
-  {class}`sentinel.top.Top`.
+  {class}`sentinel.formal.FormalTop`.
 * `disasm.py`- Create a disassembly from a [VCD file](https://en.wikipedia.org/wiki/Value_change_dump)
   of a failing test. Not actually used by RISC-V Formal itself, but every
   other core has it :). Mine is slightly modified to play nice with `doit`'s
@@ -349,6 +349,13 @@ occassionally be out of date.
 * `csr_ill_30a_ch0`
 * `csr_ill_31a_ch0`
 
+### Sentinel Formal Top-Level Module
+
+```{eval-rst}
+.. automodule:: sentinel.formal
+    :members:
+```
+
 ## RISCOF
 
 RISCOF, the RISC-V Compatibility Framework, is the test suite that
@@ -368,6 +375,7 @@ much:
 > The RISC-V Architectural Tests are not a substitute for rigorous design
 > verification.
 
+(riscof-tests)=
 _However_, RISCOF tests are tested against the software version of the RISC-V
 specification itself, the [SAIL-RISCV](https://github.com/riscv/sail-riscv)
 [Golden Model](https://lists.riscv.org/g/tech-golden-model). AFAICT, the
@@ -397,7 +405,6 @@ In short, I include RISCOF tests to show that "Sentinel passes the tests that
 RISC-V International expects an implementation to pass". If they fail, they
 can also help me find bugs in my code as well as others :).
 
-
 ### Run RISCOF Flow
 
 ```{todo}
@@ -406,35 +413,126 @@ installing an OCaml toolchain on Windows at the time. In addition, I recall
 a few *nix-isms in the RISCOF Python package. I will fix this in the future.
 ```
 
-```
-pdm riscof-all
-```
-
-or
+Running RISCOF is orchestrated by the [`dodo.py`](https://pydoit.org) at the
+root of this repo. To check out the RISCOF submodule and run the flow, run:
 
 ```
-pdm riscof-override /path/to/test_list.yaml
+pdm run riscof-all
 ```
 
-<!-- See `README.md` in `tests/riscof` and [Testing for more information. -->
+The above will:
 
+* Check out the RISCOF submodule for you.
+* Decompress the SAIL emulator, if necessary.
+* Generate a `riscof_work` directory full of config files and tests for you
+  using `riscof testfile`, subject to DoIt's dependency management.
+* Delete a number of output subdirectories (`dut` and `ref`) under
+  `riscof_work; `riscof` expects these to be empty before running a test.
+  This will _not_ fail if the various `dut` and `ref` directories don't exist.
+* Finally, run RISCOF flow using `riscof run`.
 
+The results of `riscof run` will be available under `riscof_work/report.html`,
+and the various `dut` and `ref` subdirectories provided for each test under
+`rv32i_m` (ELF files, disassemblies, etc).
 
+One of the files generated in `riscof_work` will be a `test_list.yaml`.
+Occassionally, it may be useful to truncate the `test_list.yaml` to run a
+subset of generated tests. Since RISCOF currently (as of 11/11/2023)
+[doesn't make](https://github.com/riscv-software-src/riscof/issues/100#issuecomment-1806772615)
+running individual tests easy, use the following:
 
-RISCOF requires [several inputs](https://riscof.readthedocs.io/en/latest/inputs.html#inputs),
-including
+```
+pdm run riscof-override /path/to/new/test_list.yaml
+```
 
-The SAIL-RISCV 
+_Note that if the "delete a number of subdirectories" step needs to run, all
+`dut` and `ref` subdirectories possibly containing interesting results will
+be deleted!_ In addition, checking whether `test_list.yaml` is up-to-date is
+hash based; two separate `test_list.yaml` files with the same exact contents
+will be considered the same file to `riscof-override`.
 
+### How This Repo Integrates RISCOF
 
+RISCOF requires {ref}`several inputs <riscof:inputs>` to run. Although you must
+have an existing SAIL binary, RISCOF takes care of {ref}`installing <riscof:plugin_models>`
+a SAIL plugin and `config.ini` for you. Like in [SERV](https://github.com/olofk/serv/tree/main/verif),
+the SAIL (_and Sentinel_) plugins have been modified to expect `riscv64-unknown-elf-gcc`,
+even for 32-bit, but otherwise need not be modified further. Additionally,
+`config.ini` is set up properly and should also be a pretty static file.
+
+The required [`sail-riscv`][] and [`riscv-arch-test`](https://github.com/riscv-non-isa/riscv-arch-test)
+repos are provided as submodules for convenience. It's not clear to me that
+RISCOF depends on any particular version of these repos. I haven't tried it
+yet, but it should be safe to update these submodules independently of the
+rest of RISCOF.
+
+Updating submodules notwithstanding, it seems to me outside of a
+full upgrade of RISCOF (not exposed by `pdm` scripts or `doit`), RISCOF input
+files are mostly static. Test development focuses on modifying files in the
+`sentinel` directory. I've mostly left RISCOF alone after getting it working;
+as I upgrade RISCOF and submodules, I'll update these docs based on my
+experiences.
+
+The `sentinel` directory implements the {ref}`DUT plugin <riscof:plugins>` for
+Sentinel. The files contained within are explained in {ref}`riscof:plugin_directory`.
+Similar the the `upstream` tests, the Sentinel {class}`plugin <riscof:riscof.pluginTemplate.pluginTemplate>`
+wraps the Amaranth {class}`~amaranth:amaranth.sim.Simulator`. In fact, several
+pieces of code (which form the basis of `pytest` fixtures) are imported from
+the top-level `test` directory into the plugin! The main _functional_
+differences from `upstream` tests are:
+
+* A different set of {ref}`binaries <riscof-tests>` are used for the plugin.
+* Instead of searching for a value written to a specific address, the plugin
+  dumps its memory state to a file after a write to a specific address. RISCOF
+  itself uses these files to compare Sentinel's behavior to the SAIL model. 
+
+All this setup is summarized in {ref}`riscof:arch-tests`, with the following
+caveat:
+
+* Step 2 of {ref}`Section 7.1 <riscof:arch-tests>` of the RISCOF docs seems
+  incorrect; `riscof` will set up the `sail_cSim` plugin for you as part of
+  `riscof setup --dutname=sentinel` (although this step should not be necessary
+  to run normally, and is currently not provided even in `dodo.py`).
 
 ### Rebuilding the SAIL Golden Model
 
 Building the SAIL RISC-V Model is **tough**. It requires an [OCaml](https://ocaml.org/)
 toolchain, and even after getting an environment set up, the C code that OCaml
 generates takes 30+ minutes to compile with [LTO](https://en.wikipedia.org/wiki/Interprocedural_optimization).
-I didn't want to go through this again, so I include a precompiled Linux
-binary at `riscof/bin/riscv_sim_RV32.gz`. `pdm riscof-all`,
-`pdm riscof-override` and `doit` know how to `gunzip` the binary on demand.
+I didn't want to go through this again, so I include a precompiled gzipped Linux
+binary at `riscof/bin/riscv_sim_RV32.gz`. `pdm riscof-all`, `pdm riscof-override`,
+and `doit` know how to `gunzip` the binary on demand.
 
-If for some reason you need to rebuild SAIL-RISCV, I include RISCOF dependencies being *nix only and  also means that
+The SAIL RISC-V emulators are written in a mix of C, [OCaml](https://ocaml.org/)
+and the [`sail`](https://github.com/rems-project/sail) DSL. From a packaging
+standpoint, the SAIL RISC-V emulators are OCaml packages whose dependencies
+are described using the [`opam`](https://opam.ocaml.org/) package manager
+and [`opam` files](https://opam.ocaml.org/doc/Manual.html#opam). On
+Ubuntu 20.04, installing the prerequisites for the emulators looks something
+like this:
+
+```
+sudo apt-get install opam  build-essential libgmp-dev z3 pkg-config zlib1g-dev
+opam init -y --disable-sandboxing
+opam switch create create ocaml-base-compiler.4.08.1
+opam install sail -y
+```
+
+Then, to actually _rebuild_ the SAIL RISC-V emulators in a _hopefully_ turnkey
+fashion, run `pdm doit _build_sail`. As with other `doit` tasks, this should
+not be relied upon for normal development. Note that the actual build requires
+`make`; `opam` only handles installing dependencies, and delegates to `make`
+for building.
+
+```{todo}
+It'd be nice to remove the immediate dependency on `make`. Since we don't want
+to _install_ the emulators in the system, it should be in principle possible to
+`cd sail-riscv`, do `opam install . --deps-only`, and then build SAIL manually.
+However, I [couldn't get that to work](https://stackoverflow.com/questions/50942323/opam-install-error-no-solution-found)...
+```
+
+As of 11/6/2023, the {ref}`build instructions <riscof:quickstart>`
+provided by RISCOF documentation for the [SAIL RISC-V emulators](https://github.com/riscv/sail-riscv) are
+[out-of-date](https://github.com/riscv-software-src/riscof/issues/88); I
+didn't successfully compile the emulator until I did
+`opam switch create ocaml-base-compiler.4.08.1`.
