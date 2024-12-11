@@ -87,3 +87,5 @@ html_static_path = ['_static']
 html_theme_options = {
     'navigation_depth': 5
 }
+
+html_logo = "Transparent.png"
