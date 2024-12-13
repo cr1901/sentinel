@@ -56,8 +56,10 @@ pycodestyle.max-line-length = 79  # flake8 compat
 "dodo.py" = ["D400", "D403", "DOC201", "DOC402"]
 # Tolerate missing strings for tests- they are not a public API.
 "tests/**/*.py" = ["D10"]
-"tests/riscof/sentinel/riscof_sentinel.py" = ["E402"]  # sys.path modified
+# sys.path modified, nothing we can do about this right now.
+"tests/riscof/sentinel/riscof_sentinel.py" = ["E402"]
 
+# Lots of false-positives due to Pyright not knowing about Amaranth.
 [[tool.pyright.executionEnvironments]]
 root = "examples/attosoc.py"
 reportInvalidTypeForm = false
