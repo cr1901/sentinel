@@ -94,7 +94,7 @@ class RegFile(Component):
         # 0xdeadbeef is a fake init value to ensure that microcode reset
         # properly initializes r0. If somehow we ever get to ASIC stage,
         # this will be removed.
-        self.m_data = MemoryData(shape=32, depth=32*2, init=[0xdeadbeef])
+        self.m_data = MemoryData(shape=32, depth=32 * 2, init=[0xdeadbeef])
         self.mem = Memory(self.m_data)
 
         # Formal needs to create several more read ports transparent

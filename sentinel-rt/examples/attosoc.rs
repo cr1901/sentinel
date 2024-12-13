@@ -12,7 +12,7 @@ use atoi::FromRadix10;
 use bitvec::prelude::*;
 use core::cell::Cell;
 use core::mem::MaybeUninit;
-use core::ptr::{addr_of_mut, read_volatile, write_volatile};
+use core::ptr::{read_volatile, write_volatile};
 use core::str;
 use critical_section::{self, CriticalSection, Mutex};
 use heapless::spsc::{Consumer, Producer, Queue};
@@ -71,9 +71,9 @@ pub mod io_addrs {
     }
 
     /** Get I/O base addresses via a runtime check of pending UART interrupts.
-     
+
     # Safety
-    
+
     Must be called when interrupts are disabled, as one of the first things
     in the program.
     */
@@ -154,7 +154,10 @@ extern "C" fn MachineExternal() {
             // SAFETY: No other thread ever touches this. We cannot reach this
             // line before main finishes initializing this var. Thus, this
             // is the only &mut released to safe code.
-            let cons = unsafe { TX_CONS.assume_init_mut() };
+            let cons = unsafe {
+                let tx_cons = &raw mut TX_CONS;
+                (*tx_cons).assume_init_mut()
+            };
             cons.dequeue()
         };
 
@@ -361,17 +364,22 @@ fn set_rule<const N: usize>(ser: SerialBase, tx_prod: &mut Producer<u8, N>, gpio
     rule
 }
 
-
 #[entry]
 #[allow(missing_docs)]
 fn main() -> ! {
     // SAFETY: Interrupts are disabled.
     let queue: &'static mut Queue<u8, 64> = {
         static mut Q: Queue<u8, 64> = Queue::new();
-        unsafe { &mut *addr_of_mut!(Q) }
+        unsafe {
+            let q = &raw mut Q;
+            &mut *q
+        }
     };
     let (mut tx_prod, consumer) = queue.split();
-    unsafe { TX_CONS.write(consumer) };
+    unsafe {
+        let tx_cons = &raw mut TX_CONS;
+        (*tx_cons).write(consumer)
+    };
 
     let gpio: GpioBase;
     let timer: TimerBase;
@@ -380,9 +388,13 @@ fn main() -> ! {
     // SAFETY: Interrupts are disabled.
     unsafe {
         (gpio, timer, ser) = io_addrs::get_bases();
-        GPIO_BASE.write(gpio);
-        TIMER_BASE.write(timer);
-        SERIAL_BASE.write(ser);
+        let gpio_base = &raw mut GPIO_BASE;
+        let timer_base = &raw mut TIMER_BASE;
+        let serial_base = &raw mut SERIAL_BASE;
+        
+        (*gpio_base).write(gpio);
+        (*timer_base).write(timer);
+        (*serial_base).write(ser);
 
         mstatus::set_mie();
         mie::set_mext();

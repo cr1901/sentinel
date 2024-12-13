@@ -1,10 +1,10 @@
 """Components to align external data going in/out of the Sentinel Core."""
 
-from amaranth import Elaboratable, Signal, Module, C, Cat
+from amaranth import Signal, Module
 from amaranth.lib.wiring import Component, Signature, In, Out
 
-from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
-    MemExtend, CSRSel
+from .ucodefields import MemSel, \
+    MemExtend
 
 
 class AddressAlign(Component):

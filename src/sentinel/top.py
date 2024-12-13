@@ -1,4 +1,4 @@
-from amaranth import Signal, Module, Cat, C
+from amaranth import Signal, Module
 from amaranth.lib.wiring import Component, Signature, Out, In, connect, flipped
 from amaranth_soc import wishbone
 
@@ -8,8 +8,7 @@ from .control import Control
 from .datapath import DataPath, DataPathSrcMux  # noqa: F401
 from .decode import Decode
 from .exception import ExceptionRouter
-from .ucodefields import ASrc, BSrc, RegRSel, RegWSel, MemSel, \
-    MemExtend, CSRSel
+from .ucodefields import RegRSel, RegWSel, CSRSel
 
 
 class Top(Component):

@@ -1,5 +1,4 @@
-from amaranth import Signal, Module, Cat, Value, C, unsigned, ValueCastable
-from amaranth.lib import enum
+from amaranth import Signal, Module, Cat, C, unsigned
 from amaranth.lib.data import Struct, StructLayout
 from amaranth.lib.wiring import Component, Signature, In, Out
 

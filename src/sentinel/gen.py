@@ -37,7 +37,7 @@ def generate(args=None):
                 m = FormalTop()
             else:
                 m = Top()
-            v = verilog.convert(m, name=n or "sentinel")  # noqa: E501
+            v = verilog.convert(m, name=n or "sentinel")
             fp.write(v)
 
     if isinstance(args, argparse.Namespace):
@@ -57,7 +57,7 @@ def generate(args=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sentinel Verilog generator")  # noqa: E501
+    parser = argparse.ArgumentParser(description="Sentinel Verilog generator")
 
     generate_args(parser)
     args = parser.parse_args()
