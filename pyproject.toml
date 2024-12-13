@@ -227,7 +227,6 @@ dev = [
     "logLUTs @ git+https://github.com/mattvenn/logLUTs@a7fa902a5f70c7d53a654d850f745e36821fbb78",
     "click>=8.1.7",
     "pytest-amaranth-sim>=0.1.0",
-    "sphinx>=7.2.6",
 ]
 examples = [
     "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
