@@ -103,13 +103,15 @@ jobs:
                 pdm install -G doc
                 pdm run doc
                 pdm run doc-test
+            - name: Check links
+              if: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
+              continue-on-error: true
+              run: |
+                pdm install -G doc
+                pdm run doc-linkck
             - name: Run Pytest/Doc Tests
               run: |
                 pdm test-quick
-            - name: Check links
-              continue-on-error: true
-              run: |
-                pdm run doc-linkck
             - name: Test Generate Verilog
               # LD_PRELOAD, which GHA seems to set by default, interferes with 
               # oss-cad-suite setup by mixing incompatible libcs, so unset it
