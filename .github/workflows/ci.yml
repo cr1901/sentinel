@@ -90,15 +90,26 @@ jobs:
             - name: Set OSS CAD Suite path
               run: echo >> $GITHUB_PATH `echo ~/cache/oss-cad-suite-linux-x64/*/bin`
             - name: Install PDM dependencies
-              run: pdm install -G lint -G examples -G dev
+              run: pdm install -G examples -G dev
             - name: Lint
               if: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
               run: |
+                pdm -G lint
                 pdm run lint
+            - name: Build docs
+              # ReadTheDocs handles docs, this is more of a lint than anything.
+              if: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
+              run: |
+                pdm install -G doc
+                pdm run doc
             - name: Run Pytest/Doc Tests
               run: |
                 pdm test-quick
                 pdm run doc-test
+            - name: Check links
+              continue-on-error: true
+              run: |
+                pdm run doc-linkck
             - name: Test Generate Verilog
               # LD_PRELOAD, which GHA seems to set by default, interferes with 
               # oss-cad-suite setup by mixing incompatible libcs, so unset it

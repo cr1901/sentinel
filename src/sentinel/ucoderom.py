@@ -80,7 +80,7 @@ class UCodeROM(Component):
             print(sentinel.ucoderom.UCodeROM().fields.shape())
 
         .. testoutput::
-            :options: +:options: -ELLIPSIS, +NORMALIZE_WHITESPACE
+            :options: +NORMALIZE_WHITESPACE
 
             StructLayout({'target': unsigned(8),
                           'jmp_type': <enum 'JmpType'>,
