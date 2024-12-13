@@ -116,7 +116,7 @@ class Top(Component):
 
     rvfi: Out(Signature)
         Internal connections required for implementing the
-        `RISC-V Formal Interface <_RVFI>`_
+        `RISC-V Formal Interface <https://github.com/YosysHQ/riscv-formal/blob/main/docs/rvfi.md>`__
 
         The signature is of the form
 

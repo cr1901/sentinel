@@ -1,13 +1,37 @@
 # Quick Start
 
-```{todo}
-Right now, this section is a rehash of README.md with extra context.
-Maybe that's enough?
-```
-
 From a checkout of Sentinel's source, you have a few options to try out
 Sentinel risk free! _The below commands assume you and are running commands at
-the source code root._
+the source code root, and that you've [installed](installation.md#prerequisites)
+`pdm`, `yosys`, and possibly `nextpnr-ice40`_:
+
+```
+pipx install pdm
+git clone https://github.com/cr1901/sentinel.git
+cd sentinel
+pdm install -G examples
+```
+
+If you don't have an external `yosys` or `nextpnr-ice40`, and don't wish to
+install them, you can use the [YoWASP flow](installation.md#yosys-and-foss-toolchains)
+for this section instead:
+
+```
+pipx install pdm
+git clone https://github.com/cr1901/sentinel.git
+cd sentinel
+pdm install -G examples -G yowasp
+pdm run use-yowasp
+```
+
+```{note}
+An alternate take on the Quick Start using YoWASP (which will probably
+be seen by more people) is detailed in the "Quick Quick Start" section of the
+`README.md` at the [repo root](https://github.com/cr1901/sentinel). The
+`README.md` demonstrates creating and destroying a [separate virtual environment](https://pdm-project.org/en/latest/usage/venv/)
+for using the YoWASP flow. Both sets of commands should have the same results;
+I omit `venv` handling here to keep the docs simpler.
+```
 
 ## Generate A Verilog Core
 

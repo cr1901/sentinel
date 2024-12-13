@@ -50,7 +50,7 @@ lighthouse into the logo :).
 
 The absolute fastest way to get started is to check out the source code,
 install `pdm`, use `pdm` to create a virtual environment with appropriate
-tools, and generate an `.env.tochain` file that `pdm` uses to set some
+tools, and generate an `.env.toolchain` file that `pdm` uses to set some
 environment variables for Amaranth:
 
 ```

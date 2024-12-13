@@ -1,6 +1,8 @@
 # Development Guidelines
 
-```{todo} This whole section needs to be written. The general gist is:
+```{todo}
+This whole section needs to be written/refined. As of 12/12/2024, even I don't
+consistently follow my own guidelines. The general gist is:
 
 * `Signature` objects are not publicly exposed (except _maybe_ the top-level
   signature in `Top`). Bindings for `Signature` objects are allowed, but

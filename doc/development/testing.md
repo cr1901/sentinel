@@ -2,9 +2,9 @@
 
 ```{todo}
 As is [custom](./overview.md#doit-tasks), although public and documented, the
-DoIt tasks should be considered unstable; `pdm run` should be preferred. Any
-advice to use `doit` directly on this page is because "I haven't made the
-ergonomics better yet".
+DoIt tasks should be considered unstable; `pdm run [any-script-besides-doit]`
+should be preferred. Any advice to use `doit` directly on this page is because
+"I haven't made the ergonomics better yet".
 ```
 
 Sentinel tests are divided into four categories, under the `test` directory
@@ -65,6 +65,13 @@ See {ref}`here <dep-hints>` for hints on how to get `sby`, `riscv64-unknown-elf-
 versions are not supported for testing at this time._
 
 ## Sim And Upstream
+
+```{note}
+Nominally, I'd want doc tests to _also_ be controlled by `pytest`, using
+[`pytest-sphinx`](https://github.com/twmr/pytest-sphinx). However, I
+[can't get it to work](https://github.com/twmr/pytest-sphinx/issues/65)
+consistently. In the interim, use `pdm doc-test` instead.
+```
 
 `sim` and `upstream` tests can be run using the same commands:
 
@@ -154,9 +161,9 @@ RISC-V Formal is something like this:
   provides a `Makefile` for invoking `sby`.
   
   `sby` is a driver program that automates common verification tasks based
-  on `cfg` files. _It is very doable to go without `sby` for your own
-  verification flow_. However, RISC-V Formal uses `sby`, and there's no real
-  advantage for me to bypass it using `doit`.
+  on `cfg` files. _It is [very doable](https://github.com/cr1901/spi_tb?tab=readme-ov-file#manual-yosys-smtbmc-flow)
+  to go without `sby` for your own verification flow_. However, RISC-V Formal
+  uses `sby`, and there's no real advantage for me to bypass it using `doit`.
 * `sby` calls [`yosys`] to convert the all the Verilog code emitted/copied by
   `genchecks.py` into a description of your circuit in a standardized
   [format](https://smt-lib.org/papers/smt-lib-reference-v2.0-r10.12.21.pdf)

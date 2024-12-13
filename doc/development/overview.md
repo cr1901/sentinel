@@ -16,7 +16,7 @@ PDM and DoIt complement each other:
   manage dependency/up-to-date information, and the command strings you can
   create are limited.
 * DoIt, on the other hand, allows one to run arbitrary commands of arbitrary
-  complexit, _and_ manage dependency up-to-date information via a
+  complexity, _and_ manage dependency up-to-date information via a
   [`dodo.py` file](https://pydoit.org/tasks.html#intro) and [database files](https://pydoit.org/globals.html).
   However, DoIt by itself knows nothing about package management.
 
@@ -85,7 +85,7 @@ file to find out how to do the actual work.[^1]
 
 ### DoIt Tasks
 
-`doit` tasks are "low-level" tasks wrapped by the PDM scripts [above](#pdm-scripts)
+`doit` tasks are "low-level" tasks wrapped by the PDM scripts [above](#pdm-scripts).
 _They should be treated as a private and subject to change._ Howevever, I provide
 a `doit` PDM script to call `doit` directly if necessary. For instance, to
 list available `doit` tasks (_including [private tasks](https://pydoit.org/tasks.html#private-hidden-tasks)_),

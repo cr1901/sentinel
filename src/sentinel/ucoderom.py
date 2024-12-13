@@ -69,12 +69,45 @@ class UCodeROM(Component):
         (1 byte).
     fields : In(StructLayout)
         Microcode field data output.
-        :class:`~amaranth:amaranth.lib.data.StructLayout` is determined by
+        :class:`~amaranth:amaranth.lib.data.StructLayout` is determined by the
         microcode assembly file. A default :attr:`fields` layout will look
         like this:
 
-        .. todo::
-            Doctest printing default microcode ``StructLayout`` goes here.
+        .. testcode::
+            :hide:
+
+            import sentinel.ucoderom
+            print(sentinel.ucoderom.UCodeROM().fields.shape())
+
+        .. testoutput::
+            :options: +:options: -ELLIPSIS, +NORMALIZE_WHITESPACE
+
+            StructLayout({'target': unsigned(8),
+                          'jmp_type': <enum 'JmpType'>,
+                          'cond_test': <enum 'CondTest'>,
+                          'invert_test': unsigned(1),
+                          'pc_action': <enum 'PcAction'>,
+                          'latch_a': unsigned(1),
+                          'latch_b': unsigned(1),
+                          'a_src': <enum 'ASrc'>,
+                          'b_src': <enum 'BSrc'>,
+                          'alu_op': <enum 'OpType'>,
+                          'alu_i_mod': <enum 'ALUIMod'>,
+                          'alu_o_mod': <enum 'ALUOMod'>,
+                          'reg_read': unsigned(1),
+                          'reg_write': unsigned(1),
+                          'reg_r_sel': <enum 'RegRSel'>,
+                          'reg_w_sel': <enum 'RegWSel'>,
+                          'csr_op': <enum 'CSROp'>,
+                          'csr_sel': <enum 'CSRSel'>,
+                          'mem_req': unsigned(1),
+                          'mem_sel': <enum 'MemSel'>,
+                          'mem_extend': <enum 'MemExtend'>,
+                          'latch_adr': unsigned(1),
+                          'latch_data': unsigned(1),
+                          'write_mem': unsigned(1),
+                          'insn_fetch': unsigned(1),
+                          'except_ctl': <enum 'ExceptCtl'>})
 
         The default microcode file has a data width of 48 bits (6 bytes).
     """

@@ -9,7 +9,7 @@ If you want a short version for the rationale, and just skip over to the
 
 Sentinel is a [horizontally-microcoded](https://en.wikipedia.org/wiki/Microcode#Horizontal_microcode)
 CPU design because I wanted to create a conforming `RV32I_Zicsr` CPU with M-Mode
-that fits into ~1000 `ICESTORM_LCs` on an iCE40 FPGA. It wasn't- _and still isn't_- clear
+that fits into ~1000 `ICESTORM_LCs`[^1] on an iCE40 FPGA. It wasn't- _and still isn't_- clear
 to me that I could hit these goals without using some of the FPGA Block RAM
 for a microcode instead of LUTs for a hardwired control unit.
 
@@ -53,7 +53,7 @@ in seconds. In most cases, designing a hardwired control unit on an FPGA will
 have acceptable iteration time and flexibility thanks to describing circuits in
 code. A hardwired implementation also makes it easier to implement speed
 optimizations like tight pipelining, which are difficult to reason about in
-microcode[^1]. Thanks to changes in design process, there is _probably_ no
+microcode[^2]. Thanks to changes in design process, there is _probably_ no
 reason to do a performance-oriented microcode RISC-V implementation.
 
 When optimizing for size, you still should probably hardwire your RISC-V core.
@@ -68,7 +68,7 @@ I could probably design a _minimal_ hardwired Sentinel that doesn't have _that_
 much more circuitry than the current microcoded version. However, I set a goal
 of a complete RISC-V implementation including M-Mode in ~1000 LCs. It wasn't
 clear to me- and still isn't- that a non-microcode RISC-V implementation could 
-fit in 1000 LCs without making concessions that I didn't want to[^2], such as:
+fit in 1000 LCs without making concessions that I didn't want to[^3], such as:
 
 * Limit datapath width.
 * Remove IRQs and M-Mode.
@@ -76,11 +76,11 @@ fit in 1000 LCs without making concessions that I didn't want to[^2], such as:
 
 Even if I did a hardwired control unit, I knew that I was going to be multicycle
 and not tightly pipelined. My own experience is that a basic RISC pipeline 32-bit
-CPU takes at least 2000 ICE40 LCs minimum[^3] thanks to pipeline control logic.
+CPU takes at least 2000 ICE40 LCs minimum[^4] thanks to pipeline control logic.
 At that point, for any design meeting my requirements, I figured the speed of a
 microcoded and a hardwired RISC-V without pipeline control would be similar.
 
-Around the same time in late 2020[^4] was when I found out about Mick and Brick.
+Around the same time in late 2020[^5] was when I found out about Mick and Brick.
 I found the book fascinating (and still do), so I was already looking for an excuse
 to write a microcode for fun. Additionally, I realized could put a microcode to
 good use by leveraging FPGA [block RAM](https://nandland.com/lesson-15-what-is-a-block-ram-bram/)
@@ -107,10 +107,11 @@ Mick and Brick introduces some jargon that I use in Sentinel:
 This list is probably incomplete.
 ```
 
+(cc-mux)=
 Condition Code Multiplexer
 : A multiplexer of various conditional tests. The output of this multiplexer,
-  selected by the microcode, becomes an test input to the Sequencer. The
-  conditional test result can often be inverted by microcode to double the
+  selected by the microcode, becomes an test input to the {ref}`Sequencer <sequencer>`.
+  The conditional test result can often be inverted by microcode to double the
   number of possible tests.
   
   Tests conditions used by Sentinel include:
@@ -155,10 +156,11 @@ Pipeline Register
   the microinstruction at this address appears on the read port on the next
   clock cycle.
 
+(sequencer)=
 Sequencer
 : Component which supplies the address of the microinstruction which will be
   output on the _next_ clock cycle. It chooses between various sources based
-  on a test condition provided by the Condition Code Multiplexer.
+  on a test condition provided by the {ref}`Condition Code Multiplexer <cc-mux>`.
   
   Sources used by Sentinel, include:
 
@@ -192,21 +194,24 @@ is extra room. With that said:
 ```
 
 ## Footnotes
+[^1]: Not the same as a LUT4, but AIUI, in pathologically bad PnR cases, the
+      number of `ICESTORM_LC`s used will be equal to the _sum_ of number of
+      LUT4s and number of FFs!
 
-[^1]: Well, at least for me it's difficult to reason about! I've mulled over
+[^2]: Well, at least for me it's difficult to reason about! I've mulled over
       trying a microcoded 2 or 3 stage pipelined CPU before to see how bad
       the control flow of a microcode program would get. It might be possible
       to implement using `n`-way jumps and checking the pipeline state every
       microinstruction.
 
-[^2]: I already _do_ make a concession in Sentinel's implementation by not
+[^3]: I already _do_ make a concession in Sentinel's implementation by not
       implementing the Machine Timer. I justify it because the Machine Timer
       is Memory-Mapped I/O and not part of the CPU itself. A 64-bit counter
       is just too much to ask for with everything else going on in 1000 LCs.
 
-[^3]: VexRiscv, a pipelined RISC-V, got LC usage down to 1130 by e.g. [not handling](https://github.com/SpinalHDL/VexRiscv/blob/7f2bccbef256b3ad40fb8dc8ba08a266f9c6256b/src/main/scala/vexriscv/plugin/CsrPlugin.scala#L297-L317)
+[^4]: VexRiscv, a pipelined RISC-V, got LC usage down to 1130 by e.g. [not handling](https://github.com/SpinalHDL/VexRiscv/blob/7f2bccbef256b3ad40fb8dc8ba08a266f9c6256b/src/main/scala/vexriscv/plugin/CsrPlugin.scala#L297-L317)
       illegal instructions and having no interrupts. So that's cool :D.
 
-[^4]: I did not work on Sentinel between fall 2020 and fall 2023. A number of
+[^5]: I did not work on Sentinel between fall 2020 and fall 2023. A number of
       things went right in fall 2023 such that I felt prepared to finish and
       maintain Sentinel.

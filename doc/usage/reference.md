@@ -41,7 +41,8 @@ Verilog code.
 I expect most users to only need to `import` from `sentinel.top` to create
 their SoC:
 
-```python
+```{testcode}
+from amaranth import Elaboratable
 from sentinel.top import Top
 
 class MySoC(Elaboratable):
