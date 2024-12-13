@@ -18,5 +18,11 @@ once_cell = { version = "1.19.0", default-features = false }
 panic-halt = "0.2.0"
 portable-atomic = { version = "1.6.0", features = ["unsafe-assume-single-core"] }
 
+# Required for `cargo fix`.
+[lib]
+name = "sentinel_rt"
+test = false
+bench = false
+
 [lints]
 workspace = true
