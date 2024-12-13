@@ -116,11 +116,17 @@ _.env_file = ".env.toolchain"
 # Lint
 lint = { composite = [
     # Python
-    "ruff check",
+    "ruff check {args}",
     # Rust- _clippy includes "cargo check": https://stackoverflow.com/a/57477060
     "cargo clippy --release --examples",
     "cargo doc --release --examples"
 ], help = "lint Python and Rust sources" }
+lint-fix = { composite = [
+    # Python
+    "ruff check --fix -e",
+    # Rust
+    "cargo clippy --fix --release --examples --allow-dirty"
+], help = "fix automatically-fixable lints" }
 
 # Most Tests
 test = { cmd = "pytest", help="run all pytest tests" }
