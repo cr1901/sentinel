@@ -5,7 +5,7 @@
 groups = ["default", "dev", "doc", "examples", "lint", "remote", "riscof", "yowasp"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:4fa2b0ef9af06d8fb669cf6c984ea30b6f78e7caf889224df7148a47ad1fdbf8"
+content_hash = "sha256:0709a89b9e98f874ddf11e074eb639538230edcf77d30ac74c1a214cdba6ea2c"
 
 [[metadata.targets]]
 requires_python = ">=3.11"
@@ -23,7 +23,7 @@ files = [
 
 [[package]]
 name = "amaranth"
-version = "0.5.3"
+version = "0.5.4"
 requires_python = "~=3.8"
 summary = "Amaranth hardware definition language"
 groups = ["default", "dev", "examples", "remote", "yowasp"]
@@ -34,8 +34,8 @@ dependencies = [
     "pyvcd<0.5,>=0.2.2",
 ]
 files = [
-    {file = "amaranth-0.5.3-py3-none-any.whl", hash = "sha256:6a3cfda5951b7503858f8b2167106c794edc8d5c2989c010eaef949d329e6548"},
-    {file = "amaranth-0.5.3.tar.gz", hash = "sha256:29de98fc917f7d67d989a615e3538e617eca442ae97ed36fcf078d57352cdfaf"},
+    {file = "amaranth-0.5.4-py3-none-any.whl", hash = "sha256:ce7473b4220acc78474474fd132177ca545fb144d4e69e1c7dbfc2ed7d32bcf3"},
+    {file = "amaranth-0.5.4.tar.gz", hash = "sha256:a0ea7ffe358ab00d5524b53c43277d279723437be146c8250e26f6b349b8a4fd"},
 ]
 
 [[package]]
@@ -78,34 +78,34 @@ files = [
 
 [[package]]
 name = "amaranth"
-version = "0.5.3"
+version = "0.5.4"
 extras = ["builtin-yosys"]
 requires_python = "~=3.8"
 summary = "Amaranth hardware definition language"
 groups = ["yowasp"]
 dependencies = [
     "amaranth-yosys>=0.40",
-    "amaranth==0.5.3",
+    "amaranth==0.5.4",
 ]
 files = [
-    {file = "amaranth-0.5.3-py3-none-any.whl", hash = "sha256:6a3cfda5951b7503858f8b2167106c794edc8d5c2989c010eaef949d329e6548"},
-    {file = "amaranth-0.5.3.tar.gz", hash = "sha256:29de98fc917f7d67d989a615e3538e617eca442ae97ed36fcf078d57352cdfaf"},
+    {file = "amaranth-0.5.4-py3-none-any.whl", hash = "sha256:ce7473b4220acc78474474fd132177ca545fb144d4e69e1c7dbfc2ed7d32bcf3"},
+    {file = "amaranth-0.5.4.tar.gz", hash = "sha256:a0ea7ffe358ab00d5524b53c43277d279723437be146c8250e26f6b349b8a4fd"},
 ]
 
 [[package]]
 name = "amaranth"
-version = "0.5.3"
+version = "0.5.4"
 extras = ["remote-build"]
 requires_python = "~=3.8"
 summary = "Amaranth hardware definition language"
 groups = ["remote"]
 dependencies = [
-    "amaranth==0.5.3",
+    "amaranth==0.5.4",
     "paramiko~=2.7",
 ]
 files = [
-    {file = "amaranth-0.5.3-py3-none-any.whl", hash = "sha256:6a3cfda5951b7503858f8b2167106c794edc8d5c2989c010eaef949d329e6548"},
-    {file = "amaranth-0.5.3.tar.gz", hash = "sha256:29de98fc917f7d67d989a615e3538e617eca442ae97ed36fcf078d57352cdfaf"},
+    {file = "amaranth-0.5.4-py3-none-any.whl", hash = "sha256:ce7473b4220acc78474474fd132177ca545fb144d4e69e1c7dbfc2ed7d32bcf3"},
+    {file = "amaranth-0.5.4.tar.gz", hash = "sha256:a0ea7ffe358ab00d5524b53c43277d279723437be146c8250e26f6b349b8a4fd"},
 ]
 
 [[package]]

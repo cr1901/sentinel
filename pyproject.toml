@@ -7,7 +7,7 @@ authors = [
 dependencies = [
     "m5meta>=1.0.4",
     "m5pre>=1.0.3",
-    "amaranth>=0.5.3",
+    "amaranth>=0.5.4",
     "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
 ]
 requires-python = ">=3.11"
@@ -248,14 +248,14 @@ riscof = [
     "riscof>=1.25.3",
 ]
 remote = [
-    "amaranth[remote-build]>=0.5.3",
+    "amaranth[remote-build]>=0.5.4",
     "paramiko~=2.7"
 ]
 lint = [
     "ruff>=0.6.7",
 ]
 yowasp = [
-    "amaranth[builtin-yosys]>=0.5.3",
+    "amaranth[builtin-yosys]>=0.5.4",
     "yowasp-yosys>=0.47.0.0.post805",
     "yowasp-nextpnr-ice40>=0.7.0.0.post519",
 ]
