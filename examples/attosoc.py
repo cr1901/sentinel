@@ -1018,31 +1018,6 @@ def demo(args):
                 def elaborate(self, plat):
                     m = Module()
 
-                    reset_srcs = Signal()
-                    clk_g = Signal()
-                    btn = plat.request("button")
-                    clk = plat.request(plat.default_clk)
-
-                    m.submodules.reset_sync = ResetSynchronizer(reset_srcs)
-                    m.submodules.bufg = Instance("BUFG",
-                        i_I=clk.i,
-                        o_O=clk_g
-                    )
-
-                    m.domains.sync = ClockDomain()
-                    m.domains.por = ClockDomain(reset_less=True)
-
-                    por_cnt = Signal(8, init=255)
-
-                    with m.If(por_cnt != 0):
-                        m.d.por += por_cnt.eq(por_cnt - 1)
-
-                    m.d.comb += [
-                        ClockSignal("por").eq(clk_g),
-                        ClockSignal("sync").eq(ClockSignal("por")),
-                        reset_srcs.eq((por_cnt != 0) | btn.i)
-                    ]
-
                     div_8 = Signal(range(26))
                     soc_ce = Signal(1)
 
