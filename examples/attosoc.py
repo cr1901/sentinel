@@ -6,14 +6,14 @@ from functools import reduce
 import itertools
 from random import randint
 from pathlib import Path, PurePosixPath
-import importlib
 import shutil
 import enum
 from enum import auto
 
 from bronzebeard.asm import assemble
 from elftools.elf.elffile import ELFFile
-from amaranth import Module, Signal, Cat, C
+from amaranth import ClockDomain, ClockSignal, EnableInserter, Instance, \
+    Module, Signal, Cat, C
 from amaranth_soc import wishbone
 from amaranth_soc import csr
 from amaranth_soc.csr.wishbone import WishboneCSRBridge
@@ -21,8 +21,10 @@ from amaranth_soc.memory import MemoryMap
 from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
     Signature, flipped
 from amaranth.lib.memory import Memory
-from amaranth.build import ResourceError, Resource, Pins
-from amaranth_boards import icestick, ice40_hx8k_b_evn
+from amaranth.lib.cdc import ResetSynchronizer
+from amaranth.build import ResourceError, Resource, Pins, Attrs
+from amaranth.vendor import LatticeICE40Platform
+from amaranth_boards import icestick, ice40_hx8k_b_evn, arty_a7
 from tabulate import tabulate
 
 from sentinel.top import Top
@@ -1008,23 +1010,100 @@ def demo(args):
                 Resource("gpio", 0, Pins("3", dir="io", conn=("pmod", 0))),
                 Resource("gpio", 1, Pins("4", dir="io", conn=("pmod", 0)))
             ])
+        case "arty_a7":
+            class ClockRstCtrlWrapper(Elaboratable):
+                def __init__(self, *, soc):
+                    self.soc = soc
 
-    plan = plat.build(asoc, name="rand" if args.r else "top", do_build=False,
-                      debug_verilog=True,
-                      # Optimize for area, not speed.
-                      # https://libera.irclog.whitequark.org/yosys/2023-11-20#1700497858-1700497760;  # noqa: E501
-                      script_after_read="\n".join([
-                          "scratchpad -set abc9.D 83333",
-                          "scratchpad -copy abc9.script.flow3 abc9.script"
-                      ]),
-                      # This also works wonders for optimizing for size.
-                      synth_opts="-dff")
+                def elaborate(self, plat):
+                    m = Module()
+
+                    reset_srcs = Signal()
+                    clk_g = Signal()
+                    btn = plat.request("button")
+                    clk = plat.request(plat.default_clk)
+
+                    m.submodules.reset_sync = ResetSynchronizer(reset_srcs)
+                    m.submodules.bufg = Instance("BUFG",
+                        i_I=clk.i,
+                        o_O=clk_g
+                    )
+
+                    m.domains.sync = ClockDomain()
+                    m.domains.por = ClockDomain(reset_less=True)
+
+                    por_cnt = Signal(8, init=255)
+
+                    with m.If(por_cnt != 0):
+                        m.d.por += por_cnt.eq(por_cnt - 1)
+
+                    m.d.comb += [
+                        ClockSignal("por").eq(clk_g),
+                        ClockSignal("sync").eq(ClockSignal("por")),
+                        reset_srcs.eq((por_cnt != 0) | btn.i)
+                    ]
+
+                    div_8 = Signal(range(26))
+                    soc_ce = Signal(1)
+
+                    m.d.sync += div_8.eq(div_8 + 1)
+                    with m.If(div_8 == 25):
+                        m.d.sync += div_8.eq(0)
+
+                    # (100/8 + 100/9 + 100/8)/3 is around 12 MHz.
+                    m.d.comb += soc_ce.eq((div_8 == 8) | (div_8 == 17) |
+                                          (div_8 == 25))
+                    m.submodules.soc = EnableInserter(soc_ce)(self.soc)
+
+                    return m
+
+            asoc = ClockRstCtrlWrapper(soc=asoc)
+
+            plat = arty_a7.ArtyA7_35Platform()
+            plat.add_resources([
+                Resource("gpio", 0, Pins("1", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 1, Pins("2", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 2, Pins("3", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 3, Pins("4", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 4, Pins("7", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 5, Pins("8", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 6, Pins("9", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 7, Pins("10", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33"))
+            ])
+
+    if isinstance(plat, LatticeICE40Platform):
+        plan = plat.build(asoc, name="rand" if args.r else "top",
+                          do_build=False,
+                          debug_verilog=True,
+                          # Optimize for area, not speed.
+                          # https://libera.irclog.whitequark.org/yosys/2023-11-20#1700497858-1700497760;  # noqa: E501
+                          script_after_read="\n".join([
+                            "scratchpad -set abc9.D 83333",
+                            "scratchpad -copy abc9.script.flow3 abc9.script"
+                          ]),
+                          # This also works wonders for optimizing for size.
+                          synth_opts="-dff")
+        prod_names = ("top.bin", "top.asc")
+    else:
+        plan = plat.build(asoc, name="rand" if args.r else "top",
+                          do_build=False,
+                          debug_verilog=True)
+        prod_names = ("top.bit", "top.bin")
 
     if args.s:
+        import paramiko
+
         if not args.b:
             args.b = PurePosixPath("/tmp/build-remote")
 
-        paramiko = importlib.import_module("paramiko")
         cfg_path = Path("~/.ssh/config").expanduser()
         config = paramiko.config.SSHConfig.from_path(cfg_path)
         host_cfg = config.lookup(args.s)
@@ -1041,7 +1120,7 @@ def demo(args):
         local_path = (Path(".") / Path(args.b).stem)
         local_path.mkdir(exist_ok=True)
         if not args.n:
-            for prod in ("top.bin", "top.asc"):
+            for prod in prod_names:
                 with products.extract(prod) as fn:
                     shutil.copy2(fn, local_path / prod)
     else:
@@ -1071,7 +1150,7 @@ def main():
                         "/tmp/build-remote if remote, and also extract "
                         "products locally)")
     parser.add_argument("-p", help="build platform",
-                        choices=("icestick", "ice40_hx8k_b_evn"),
+                        choices=("icestick", "ice40_hx8k_b_evn", "arty_a7"),
                         default="icestick")
     parser.add_argument("-i", help="peripheral interconnect type",
                         choices=("wishbone", "csr"),
