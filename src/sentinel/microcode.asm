@@ -119,10 +119,13 @@ check_int:    jmp_type => map, a_src => gp, latch_a => 1, READ_RS2, \
                   except_ctl => latch_decoder, cond_test => exception, \
                   target => save_pc;
 origin 2;
-       // Make sure x0 is initialized with 0.
+       // Make sure x0 is initialized with 0. PC might not be valid, depending
+       // on which microcycle a reset or clock enable (if applicable) was
+       // asserted/deasserted. So reset PC to zero also.
 reset: latch_a => 1, latch_b => 1, b_src => one, a_src => zero;
        alu_op => and;
-       jmp_type => direct, reg_write => 1, reg_w_sel => zero, target => fetch;
+       jmp_type => direct, reg_write => 1, reg_w_sel => zero, \
+            pc_action => load_alu_o, target => fetch;
 
 origin 8;
 lb_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \

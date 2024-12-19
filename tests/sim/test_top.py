@@ -1,11 +1,14 @@
 from dataclasses import dataclass
+import enum
 from typing import Union
-from amaranth import Signal
+from amaranth import C, Elaboratable, EnableInserter, Module, ResetInserter, Signal
+from amaranth.lib.wiring import Component, connect, flipped
 import pytest
 
 from sentinel.top import Top
 
 from conftest import RV32Regs, CSRRegs
+from sentinel.ucodefields import PcAction
 from tests.conftest import MemoryArgs
 
 
@@ -525,3 +528,116 @@ def test_loop(sim, mod, mk_io_tb, restart_timeout, memory_process, ucode_panic,
 
     sim.run(testbenches=[io_tb], processes=[ucode_panic, memory_process,
                                             timeout_process])
+
+
+class FlowModifiedTop(Component):
+    def __init__(self):
+        self.rst = Signal()
+        self.en = Signal()
+        self.top = Top()
+
+        super().__init__(self.top.signature)
+
+    @property
+    def control(self):
+        return self.top.control
+
+    def elaborate(self, plat):
+        m = Module()
+
+        m.submodules.top = ResetInserter(self.rst)(EnableInserter(self.en)(self.top))
+
+        connect(m, flipped(self), self.top)
+
+        return m
+
+
+class TriggerResetStrategy(enum.Enum):
+    RESET = enum.auto()
+    RESET_EN = enum.auto()
+
+
+@pytest.fixture
+def trigger_reset_tb(mod, request):
+    m = mod
+    strat = request.param
+
+    async def control_tb(ctx):
+        def pcaction_next():
+            mem = m.control.ucoderom.ucode_mem.data
+            addr = ctx.get(m.control.ucoderom.addr)
+            val = m.control.ucoderom.field_layout.from_bits(ctx.get(mem[addr]))
+            return val.pc_action
+
+        ctx.set(m.en, 1)
+        *_, addr = await ctx.tick().sample(m.bus.adr).until(
+                 m.bus.cyc & m.bus.stb & m.top.control.insn_fetch)
+
+        ctx.set(m.bus.ack, 1)
+        await ctx.tick()
+        ctx.set(m.bus.ack, 0)
+
+        # Wait until we get to the relevant ucycle...
+        while pcaction_next() == PcAction.HOLD:
+            await ctx.tick()
+
+        # Assert reset on so that something besides PcAction.HOLD will appear
+        # on the read port output one cycle after reset.
+        match strat:
+            case TriggerResetStrategy.RESET:
+                ctx.set(m.rst, 1)
+                await ctx.tick().repeat(1)
+                ctx.set(m.rst, 0)
+            case TriggerResetStrategy.RESET_EN:
+                # Alternate test case.
+                # Deassert EN and assert reset so that something besides
+                # PcAction.HOLD will appear on the read port output one cycle
+                # after reset. Note this case will pass if initial stimulus is
+                # "ctx.set(m.en, 1)".
+                await ctx.tick()
+                ctx.set(m.en, 0)
+
+                # Reset the design
+                await ctx.tick()
+                ctx.set(m.rst, 1)
+
+                # Wait a bit, then release reset
+                # TODO: This wait (>= 1) doesn't appear to matter for failure
+                # or success, but keep it for future parameterization?
+                for _ in range(1):
+                    await ctx.tick()
+                ctx.set(m.rst, 0)
+
+                # Assert EN
+                # TODO: This wait doesn't appear to matter for failure or
+                # success, but keep it for future parameterization?
+                for _ in range(0):
+                    await ctx.tick()
+                ctx.set(m.en, 1)
+
+        *_, addr = await ctx.tick().sample(m.bus.adr).until(
+                 m.bus.cyc & m.bus.stb & m.top.control.insn_fetch)
+        # We just reset, so the first insn we fetch better be at addr 0x0!
+        assert addr == 0x0
+
+    return control_tb
+
+
+# test_pc_survives_reset
+@pytest.mark.parametrize("memory",
+                         [pytest.param(MemoryArgs(init=PRIMES), id="inc_pc",)],
+                         indirect=["memory"])
+@pytest.mark.parametrize("mod,trigger_reset_tb",
+                         [
+                            pytest.param(FlowModifiedTop(),
+                                         TriggerResetStrategy.RESET,
+                                         id="reset"),
+                            pytest.param(FlowModifiedTop(),
+                                       TriggerResetStrategy.RESET_EN,
+                                       id="reset_en"),
+                         ],
+                         indirect=["trigger_reset_tb"])
+def test_pc_survives_reset(sim, trigger_reset_tb, memory_process,
+                           ucode_panic):
+    sim.run(testbenches=[trigger_reset_tb],
+            processes=[ucode_panic, memory_process])
