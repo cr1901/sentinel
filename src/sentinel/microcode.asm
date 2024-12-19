@@ -111,6 +111,15 @@ fields block_ram: {
 #define JUMP_TO_ZERO cond_test => true, invert_test=> true, jmp_type => direct_zero
 #define STOP_MEMREQ_THEN_JUMP_TO_ZERO mem_req=>0, JUMP_TO_ZERO
 
+// CSR Register addresses in private RAM
+#define MSTATUS 0
+#define MIE 0x4
+#define MTVEC 0x5
+#define MSCRATCH 0x8
+#define MEPC 0x9
+#define MCAUSE 0xA
+#define MIP 0xC
+
 fetch:
 wait_for_ack: INSN_FETCH_EAGER_READ_RS1, invert_test => 1, cond_test => mem_valid, \
                   jmp_type => direct, target => wait_for_ack;
@@ -122,10 +131,24 @@ origin 2;
        // Make sure x0 is initialized with 0. PC might not be valid, depending
        // on which microcycle a reset or clock enable (if applicable) was
        // asserted/deasserted. So reset PC to zero also.
+       // Additionally, MCAUSE CSR is nominally a copy of a latch, but it also
+       // should be 0 (for our implementation) after reset.
+       //
+       // Stale microcode exists on microcode ROM read port for one cycle after
+       // non-power-on-resets, since read port lags by one cycle except for
+       // after POR. The effects of stale microcode appear on the second cycle
+       // after reset. This has the following consequences which we exploit:
+       // * Spec mandates MSTATUS.MIE is zero after reset. The ALU output is
+       // initialized to 0 upon reset, so stale microcode on read port will
+       // never write a non-zero value to registers.
+       // * One full cycle after reset was deasserted, we make can no assumptions
+       // about ALU contents. So we must explicitly reinitialize the ALU to 0.
 reset: latch_a => 1, latch_b => 1, b_src => one, a_src => zero;
        alu_op => and;
-       jmp_type => direct, reg_write => 1, reg_w_sel => zero, \
-            pc_action => load_alu_o, target => fetch;
+       alu_op => and, reg_write => 1, reg_w_sel => zero;
+       jmp_type => direct_zero, pc_action => load_alu_o, csr_op => write_csr, \
+            csr_sel => trg_csr, invert_test => 1, cond_test => true, \
+            target => MCAUSE;
 
 origin 8;
 lb_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
@@ -462,14 +485,6 @@ sra:
              READ_RS1, jmp_type => direct, target => shift_zero;
 
 // Interrupt handler.
-#define MSTATUS 0
-#define MIE 0x4
-#define MTVEC 0x5
-#define MSCRATCH 0x8
-#define MEPC 0x9
-#define MCAUSE 0xA
-#define MIP 0xC
-
 origin 0xf0;
 save_pc: except_ctl => enter_int, csr_op => read_csr, csr_sel => trg_csr, \
             a_src => zero, b_src => pc, latch_a => 1, latch_b => 1, target => MTVEC;
