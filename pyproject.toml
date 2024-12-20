@@ -224,8 +224,6 @@ doc = [
     "sphinx-autobuild>=2024.2.4",
     "sphinx-prompt>=1.9.0",
 ]
-# Though I expect users to provide sby, sby requires click and doesn't opt-in
-# to PEP 517. So provide it here.
 dev = [
     "amaranth-soc @ git+https://github.com/amaranth-lang/amaranth-soc",
     "bronzebeard>=0.2.1",
@@ -233,7 +231,6 @@ dev = [
     "doit>=0.36.0",
     "Verilog-VCD>=1.11",
     "logLUTs @ git+https://github.com/mattvenn/logLUTs@a7fa902a5f70c7d53a654d850f745e36821fbb78",
-    "click>=8.1.7",
     "pytest-amaranth-sim>=0.1.0",
 ]
 examples = [

@@ -52,7 +52,7 @@ git submodule update --init --recursive
 
 While I split the dependencies in the table [above](#testing-sentinel), I
 assume for testing you'll be focusing on all categories. To that end, make sure
-`pytest`, `doit`, `click`, `Verilog_VCD`, `riscof` (_Linux only_), `sby`,
+`pytest`, `doit`, `Verilog_VCD`, `riscof` (_Linux only_), `sby`,
 `riscv64-unknown-elf-gcc`, `boolector`, and `yosys` are installed. The first
 five can be installed using the following:
 

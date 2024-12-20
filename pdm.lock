@@ -5,7 +5,7 @@
 groups = ["default", "dev", "doc", "examples", "lint", "remote", "riscof", "yowasp"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:0709a89b9e98f874ddf11e074eb639538230edcf77d30ac74c1a214cdba6ea2c"
+content_hash = "sha256:3f7d9b8735a3fce963eb540d25cee5a707b2767ab516e128ba9b92a851bb16b1"
 
 [[metadata.targets]]
 requires_python = ">=3.11"
@@ -330,7 +330,7 @@ name = "click"
 version = "8.1.7"
 requires_python = ">=3.7"
 summary = "Composable command line interface toolkit"
-groups = ["dev", "doc", "riscof", "yowasp"]
+groups = ["doc", "riscof", "yowasp"]
 dependencies = [
     "colorama; platform_system == \"Windows\"",
     "importlib-metadata; python_version < \"3.8\"",
