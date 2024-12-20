@@ -1011,29 +1011,6 @@ def demo(args):
                 Resource("gpio", 1, Pins("4", dir="io", conn=("pmod", 0)))
             ])
         case "arty_a7":
-            class ClockRstCtrlWrapper(Elaboratable):
-                def __init__(self, *, soc):
-                    self.soc = soc
-
-                def elaborate(self, plat):
-                    m = Module()
-
-                    div_8 = Signal(range(26))
-                    soc_ce = Signal(1)
-
-                    m.d.sync += div_8.eq(div_8 + 1)
-                    with m.If(div_8 == 25):
-                        m.d.sync += div_8.eq(0)
-
-                    # (100/8 + 100/9 + 100/8)/3 is around 12 MHz.
-                    m.d.comb += soc_ce.eq((div_8 == 8) | (div_8 == 17) |
-                                          (div_8 == 25))
-                    m.submodules.soc = EnableInserter(soc_ce)(self.soc)
-
-                    return m
-
-            asoc = ClockRstCtrlWrapper(soc=asoc)
-
             plat = arty_a7.ArtyA7_35Platform()
             plat.add_resources([
                 Resource("gpio", 0, Pins("1", dir="io", conn=("pmod", 0)),
@@ -1053,6 +1030,22 @@ def demo(args):
                 Resource("gpio", 7, Pins("10", dir="io", conn=("pmod", 0)),
                          Attrs(IOSTANDARD="LVCMOS33"))
             ])
+
+            m = Module()
+
+            div_8 = Signal(range(26))
+            soc_ce = Signal(1)
+
+            m.d.sync += div_8.eq(div_8 + 1)
+            with m.If(div_8 == 25):
+                m.d.sync += div_8.eq(0)
+
+            # (100/8 + 100/9 + 100/8)/3 is around 12 MHz.
+            m.d.comb += soc_ce.eq((div_8 == 8) | (div_8 == 17) |
+                                  (div_8 == 25))
+            m.submodules.soc = EnableInserter(soc_ce)(asoc)
+
+            asoc = m
 
     name = "rand" if args.r else "top"
     if isinstance(plat, LatticeICE40Platform):
