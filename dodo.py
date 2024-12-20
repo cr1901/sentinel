@@ -7,6 +7,7 @@ scripts recursively to implement a super-powered PDM "composite" type.
 from pathlib import Path
 import subprocess
 from shutil import copy2, move, rmtree
+import sys
 import os
 import re
 import gzip
@@ -127,7 +128,7 @@ def task_luts():  # noqa: D103
 
     yield {
         "basename": "bench_luts",
-        "actions": [f"python -m logluts --yosys-log {yosys_log} "
+        "actions": [f"{sys.executable} -m logluts --yosys-log {yosys_log} "
                     f"--nextpnr-log {nextpnr_log} --git . --target ice40 "
                     f"--add-commit --csvfile {luts_csv}"
                     ],
@@ -141,7 +142,7 @@ def task_luts():  # noqa: D103
 
     yield {
         "basename": "plot_luts",
-        "actions": [f"python -m logluts --yosys-log {yosys_log} "
+        "actions": [f"{sys.executable} -m logluts --yosys-log {yosys_log} "
                     f"--nextpnr-log {nextpnr_log} --git . --target ice40 "
                     f"--plot --csvfile {luts_csv}"
                     ],
@@ -161,7 +162,7 @@ def task_ucode():
     fdef = ucode.with_suffix(".asm_block_ram.fdef")
 
     return {
-        "actions": ["python -m m5meta {ucodefile}",
+        "actions": ["{sys.executable} -m m5meta {ucodefile}",
                     (move_, (hex_, Path(".") / hex_.name)),
                     (move_, (fdef, Path(".") / fdef.name))
                     ],
@@ -460,7 +461,7 @@ def task__formal_gen_files():
         "actions": [(copy_, [disasm_py, sentinel_dir / disasm_py.name]),
                     (copy_, [checks_cfg, sentinel_dir / checks_cfg.name]),
                     (copy_, [wrapper_sv, sentinel_dir / wrapper_sv.name]),
-                    CmdAction("python3 ../../checks/genchecks.py",
+                    CmdAction(f"{sys.executable} ../../checks/genchecks.py",
                               cwd=sentinel_dir)],
         "file_dep": [disasm_py, checks_cfg, wrapper_sv, genchecks]
     }
@@ -478,7 +479,7 @@ def maybe_disasm_move_vcd(sentinel_dir, root, sby_file):  # noqa: D103
         out_path = root / stem_id
 
         copy2(tn, out_path.with_suffix(".vcd"))
-        ret = subprocess.run(["python3", "disasm.py", rel_tn,
+        ret = subprocess.run([sys.executable, "disasm.py", rel_tn,
                               stem_id], stdout=subprocess.PIPE,
                              cwd=sentinel_dir)
         ret.check_returncode()
