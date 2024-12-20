@@ -136,10 +136,9 @@ examining the microcode (knowing that each microcode instruction always takes
 * At minimum, an instruction (`addi`, `or`, etc) takes 3 cycles to retire
   after the initial shared cycles. This means Sentinel instructions have a
   minimum latency of 6 cycles per instruction (CPI).
-  * I define "retirement" to mean "cycle in which we return to Fetch/Decode or
-    Exception Checking". This usually corresponds to "cycle after RD/PC was
-    written with results". In the case of stores, this means "one cycle
-    _after_ Sentinel released STB/CYC upon receiving ACK for the store".
+  * I define "retirement" to mean "cycle in which we return to the Fetch/Decode
+    or Exception Checking part of the microcode program". This usually
+    corresponds to "cycle after RD/PC was written with results".
 * Sentinel instructions have a maximum throughput of 4 CPI by overlapping the
   2 Fetch/Decode cycles of the _next_ instruction after the initial 3 shared
   cycles of the _current_ instruction when possible ("pipelining").
