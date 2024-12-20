@@ -1054,8 +1054,9 @@ def demo(args):
                          Attrs(IOSTANDARD="LVCMOS33"))
             ])
 
+    name = "rand" if args.r else "top"
     if isinstance(plat, LatticeICE40Platform):
-        plan = plat.build(asoc, name="rand" if args.r else "top",
+        plan = plat.build(asoc, name=name,
                           do_build=False,
                           debug_verilog=True,
                           # Optimize for area, not speed.
@@ -1066,12 +1067,14 @@ def demo(args):
                           ]),
                           # This also works wonders for optimizing for size.
                           synth_opts="-dff")
-        prod_names = ("top.bin", "top.asc")
+        prod_suffs = (".bin", ".asc")
     else:
-        plan = plat.build(asoc, name="rand" if args.r else "top",
+        plan = plat.build(asoc, name=name,
                           do_build=False,
                           debug_verilog=True)
-        prod_names = ("top.bit", "top.bin")
+        prod_suffs = (".bit", ".bin")
+
+    prod_names = [str(Path(name).with_suffix(s)) for s in prod_suffs]
 
     if args.s:
         import paramiko
@@ -1092,7 +1095,7 @@ def demo(args):
                                            root=str(args.b),
                                            run_script=not args.n)
 
-        local_path = (Path(".") / Path(args.b).stem)
+        local_path = (Path(".") / PurePosixPath(args.b).stem)
         local_path.mkdir(exist_ok=True)
         if not args.n:
             for prod in prod_names:
@@ -1130,17 +1133,11 @@ def main():
     parser.add_argument("-i", help="peripheral interconnect type",
                         choices=("wishbone", "csr"),
                         default="wishbone")
-    group = parser.add_mutually_exclusive_group()
-    # Remote firmware override/random file generation is not supported;
-    # Amaranth does not have provisions for supporting adding your own build
-    # products remotely, and I don't feel like adding it using paramiko.
-    # -x is supported remotely (after extracting from remote) to keep the CLI
-    # simple.
-    group.add_argument("-s", help="remote (SSH) build host from ~/.ssh/config, "  # noqa: E501
+    parser.add_argument("-s", help="remote (SSH) build host from ~/.ssh/config, "  # noqa: E501
                        "keys loaded from ~/.ssh/id_*", metavar="HOST")
-    group.add_argument("-g", help="firmware override",
+    parser.add_argument("-g", help="firmware override",
                        default=None)
-    group.add_argument("-r", help="use random numbers to fill firmware "
+    parser.add_argument("-r", help="use random numbers to fill firmware "
                                   "(use with -x and -n)", action="store_true")
     parser.add_argument("-x", help="generate a hex file of firmware in build "
                                    "dir (use with {ice,ecp}bram)",
