@@ -94,6 +94,9 @@ class WBMemory(Component):
             r_port.en.eq(self.bus.stb & self.bus.cyc & ~self.bus.we),
         ]
 
+        # FIXME: Should probably be "& self.bus.ack"; we rely on address
+        # being non-changing right now during cycle (and do two writes to the
+        # same address).
         with m.If(self.bus.stb & self.bus.cyc & self.bus.we):
             m.d.comb += w_port.en.eq(self.bus.sel)
 

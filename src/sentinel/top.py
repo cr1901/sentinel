@@ -1,4 +1,4 @@
-from amaranth import Signal, Module
+from amaranth import ResetSignal, Signal, Module
 from amaranth.lib.wiring import Component, Signature, Out, In, connect, flipped
 from amaranth_soc import wishbone
 
@@ -215,6 +215,7 @@ class Top(Component):
         # The lone sync logic in Top. They don't fit nicely elsewhere.
         data_adr = Signal.like(self.alu.o)
         write_data = Signal.like(self.bus.dat_w)
+        mem_reset_guard = Signal(init=1)
 
         with m.If(self.control.latch_adr):
             m.d.sync += data_adr.eq(self.alu.o)
@@ -222,14 +223,18 @@ class Top(Component):
         with m.If(self.control.latch_data):
             m.d.sync += write_data.eq(self.wdata_align.wb_dat_w)
 
+        m.d.sync += mem_reset_guard.eq(0)
+
         # Bus conns
         read_data = Signal.like(self.bus.dat_r)
         mem_ack = Signal()
         irq = Signal()
 
         m.d.comb += [
-            self.bus.cyc.eq(self.control.mem_req),
-            self.bus.stb.eq(self.control.mem_req),
+            # Stale microcode entry that asserts mem_req might survive reset
+            # and then attempt to read/write address 0!
+            self.bus.cyc.eq(self.control.mem_req & ~mem_reset_guard),
+            self.bus.stb.eq(self.control.mem_req & ~mem_reset_guard),
             self.bus.we.eq(self.control.write_mem),
             self.bus.dat_w.eq(write_data),
             self.bus.adr.eq(self.addr_align.wb_adr),

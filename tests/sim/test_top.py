@@ -623,7 +623,6 @@ def trigger_reset_tb(mod, request):
     return control_tb
 
 
-# test_pc_survives_reset
 @pytest.mark.parametrize("memory",
                          [pytest.param(MemoryArgs(init=PRIMES), id="inc_pc",)],
                          indirect=["memory"])
@@ -640,4 +639,63 @@ def trigger_reset_tb(mod, request):
 def test_pc_survives_reset(sim, trigger_reset_tb, memory_process,
                            ucode_panic):
     sim.run(testbenches=[trigger_reset_tb],
+            processes=[ucode_panic, memory_process])
+
+
+SELF_MODIFY_AFTER_RESET = """
+    li s1, 0x01
+    li s2, 0x04
+    sw s1, 0(s2)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+"""
+
+
+# TODO: Make a memory process more similar to WBMemory in AttoSoC, which
+# accepts writes as long as CYC, STB, and WB are asserted on a given cycle
+# (and only ACK is affected by RST). This way, we can test whether
+# "li s1, 0x01" is overwritten.
+def self_modify_tb(mod):
+    m = mod
+
+    async def control_tb(ctx):
+        ctx.set(m.en, 1)
+
+        for _ in range(2):
+            await ctx.tick().until(m.bus.cyc & m.bus.stb &
+                                   m.top.control.insn_fetch)
+
+        # FIXME: Fragile... we shouldn't depend on microcode addrs, but
+        # we need to know the clock cycle before a WB cycle starts and then
+        # preemptively assert reset.
+        await ctx.tick().until(m.control.ucoderom.addr == 0xAA)
+
+        # Do reset
+        ctx.set(m.rst, 1)
+        await ctx.tick()
+
+        # Once reset received, the cycle should be quashed.
+        ctx.set(m.rst, 0)
+        assert not ctx.get(m.bus.cyc) and not ctx.get(m.bus.stb)
+
+        await ctx.tick().sample(m.bus.adr).until(
+                    m.bus.cyc & m.bus.stb & m.top.control.insn_fetch)
+
+    return control_tb
+
+
+@pytest.mark.parametrize("mod,memory",
+                         [
+                            pytest.param(FlowModifiedTop(),
+                                MemoryArgs(init=SELF_MODIFY_AFTER_RESET))
+                         ],
+                         indirect=["memory"])
+def test_store_ignored_on_reset(sim, mod, memory_process,
+                           ucode_panic):
+    reset_tb = self_modify_tb(mod)
+    sim.run(testbenches=[reset_tb],
             processes=[ucode_panic, memory_process])
