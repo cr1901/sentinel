@@ -24,7 +24,8 @@ from amaranth.lib.memory import Memory
 from amaranth.lib.cdc import ResetSynchronizer
 from amaranth.build import ResourceError, Resource, Pins, Attrs
 from amaranth.vendor import LatticeICE40Platform
-from amaranth_boards import icebreaker, icestick, ice40_hx8k_b_evn, arty_a7
+from amaranth_boards import cmod_s7, icebreaker, icestick, ice40_hx8k_b_evn, \
+    arty_a7
 from tabulate import tabulate
 
 from sentinel.top import Top
@@ -988,6 +989,27 @@ def demo(args):
     asoc.rom = rom
 
     match args.p:
+        case "cmod_s7":
+            plat = cmod_s7.CmodS7_Platform()
+            plat.default_rst = "button"  # Cheating a bit :).
+            plat.add_resources([
+                Resource("gpio", 0, Pins("1", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 1, Pins("2", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 2, Pins("3", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 3, Pins("4", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 4, Pins("7", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 5, Pins("8", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 6, Pins("9", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33")),
+                Resource("gpio", 7, Pins("10", dir="io", conn=("pmod", 0)),
+                         Attrs(IOSTANDARD="LVCMOS33"))
+            ])
         case "icebreaker":
             plat = icebreaker.ICEBreakerPlatform()
             plat.default_rst = "button"  # Cheating a bit :).
@@ -1137,8 +1159,8 @@ def main():
                         "/tmp/build-remote if remote, and also extract "
                         "products locally)")
     parser.add_argument("-p", help="build platform",
-                        choices=("icebreaker", "icestick", "ice40_hx8k_b_evn",
-                                 "arty_a7"),
+                        choices=("cmod_s7", "icebreaker", "icestick",
+                                 "ice40_hx8k_b_evn", "arty_a7"),
                         default="icestick")
     parser.add_argument("-i", help="peripheral interconnect type",
                         choices=("wishbone", "csr"),

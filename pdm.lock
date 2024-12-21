@@ -40,10 +40,10 @@ files = [
 
 [[package]]
 name = "amaranth-boards"
-version = "0.1.dev252"
+version = "0.1.dev253"
 requires_python = "~=3.9"
 git = "https://github.com/amaranth-lang/amaranth-boards"
-revision = "23c66d68045831de0a372c8c237274d74c71ef4e"
+revision = "9d97c4816288c9c2cc304d9280c2c63178d50d2f"
 summary = "Board and connector definitions for Amaranth HDL"
 groups = ["examples"]
 dependencies = [
