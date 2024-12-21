@@ -13,7 +13,7 @@ from enum import auto
 from bronzebeard.asm import assemble
 from elftools.elf.elffile import ELFFile
 from amaranth import ClockDomain, ClockSignal, EnableInserter, Instance, \
-    Module, Signal, Cat, C
+    Module, ResetSignal, Signal, Cat, C
 from amaranth_soc import wishbone
 from amaranth_soc import csr
 from amaranth_soc.csr.wishbone import WishboneCSRBridge
@@ -24,7 +24,7 @@ from amaranth.lib.memory import Memory
 from amaranth.lib.cdc import ResetSynchronizer
 from amaranth.build import ResourceError, Resource, Pins, Attrs
 from amaranth.vendor import LatticeICE40Platform
-from amaranth_boards import icestick, ice40_hx8k_b_evn, arty_a7
+from amaranth_boards import icebreaker, icestick, ice40_hx8k_b_evn, arty_a7
 from tabulate import tabulate
 
 from sentinel.top import Top
@@ -988,6 +988,19 @@ def demo(args):
     asoc.rom = rom
 
     match args.p:
+        case "icebreaker":
+            plat = icebreaker.ICEBreakerPlatform()
+            plat.default_rst = "button"  # Cheating a bit :).
+            plat.add_resources([*plat.break_off_pmod,
+                Resource("gpio", 0, Pins("1", dir="io", conn=("pmod", 0))),
+                Resource("gpio", 1, Pins("2", dir="io", conn=("pmod", 0))),
+                Resource("gpio", 2, Pins("3", dir="io", conn=("pmod", 0))),
+                Resource("gpio", 3, Pins("4", dir="io", conn=("pmod", 0))),
+                Resource("gpio", 4, Pins("7", dir="io", conn=("pmod", 0))),
+                Resource("gpio", 5, Pins("8", dir="io", conn=("pmod", 0))),
+                Resource("gpio", 6, Pins("9", dir="io", conn=("pmod", 0))),
+                Resource("gpio", 7, Pins("10", dir="io", conn=("pmod", 0)))
+            ])
         case "ice40_hx8k_b_evn":
             plat = ice40_hx8k_b_evn.ICE40HX8KBEVNPlatform()
             plat.add_resources([
@@ -1124,7 +1137,8 @@ def main():
                         "/tmp/build-remote if remote, and also extract "
                         "products locally)")
     parser.add_argument("-p", help="build platform",
-                        choices=("icestick", "ice40_hx8k_b_evn", "arty_a7"),
+                        choices=("icebreaker", "icestick", "ice40_hx8k_b_evn",
+                                 "arty_a7"),
                         default="icestick")
     parser.add_argument("-i", help="peripheral interconnect type",
                         choices=("wishbone", "csr"),
