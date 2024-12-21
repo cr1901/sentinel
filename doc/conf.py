@@ -50,6 +50,11 @@ on_rtd = os.environ.get("READTHEDOCS") == "True"
 if on_rtd:
     sys.path.append(os.path.abspath('../src'))
     sys.path.append(os.path.abspath('..'))
+else:
+    # And yet locally, docs build just without this, but doc-linkck doesn't
+    # find examples module?! I got nothing...
+    sys.path.append(os.path.abspath('../src'))
+    sys.path.append(os.path.abspath('..'))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
