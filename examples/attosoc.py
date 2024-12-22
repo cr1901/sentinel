@@ -12,8 +12,7 @@ from enum import auto
 
 from bronzebeard.asm import assemble
 from elftools.elf.elffile import ELFFile
-from amaranth import ClockDomain, ClockSignal, EnableInserter, Instance, \
-    Module, ResetSignal, Signal, Cat, C
+from amaranth import EnableInserter, Module, Signal, Cat, C
 from amaranth_soc import wishbone
 from amaranth_soc import csr
 from amaranth_soc.csr.wishbone import WishboneCSRBridge
@@ -21,7 +20,6 @@ from amaranth_soc.memory import MemoryMap
 from amaranth.lib.wiring import In, Out, Component, Elaboratable, connect, \
     Signature, flipped
 from amaranth.lib.memory import Memory
-from amaranth.lib.cdc import ResetSynchronizer
 from amaranth.build import ResourceError, Resource, Pins, Attrs
 from amaranth.vendor import LatticeICE40Platform
 from amaranth_boards import cmod_s7, icebreaker, icestick, ice40_hx8k_b_evn, \

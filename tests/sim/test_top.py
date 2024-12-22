@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import enum
 from typing import Union
-from amaranth import C, Elaboratable, EnableInserter, Module, ResetInserter, Signal
+from amaranth import EnableInserter, Module, ResetInserter, Signal
 from amaranth.lib.wiring import Component, connect, flipped
 import pytest
 

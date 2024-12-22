@@ -1,4 +1,4 @@
-from amaranth import ResetSignal, Signal, Module
+from amaranth import Signal, Module
 from amaranth.lib.wiring import Component, Signature, Out, In, connect, flipped
 from amaranth_soc import wishbone
 
