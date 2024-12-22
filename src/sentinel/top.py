@@ -1,3 +1,5 @@
+"""Top-Level Module for Amaranth Components of Sentinel CPU."""
+
 from amaranth import Signal, Module
 from amaranth.lib.wiring import Component, Signature, Out, In, connect, flipped
 from amaranth_soc import wishbone

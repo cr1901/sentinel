@@ -26,10 +26,7 @@ a [workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html)!
 
 ## Verilog Generator
 
-```{eval-rst}
-.. automodule:: sentinel.gen
-    :members:
-```
+See {py:mod}`sentinel.gen`.
 
 ## Examples
 

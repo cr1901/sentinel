@@ -71,7 +71,7 @@ class ProgramCounter(Component):
     def __init__(self):
         super().__init__(PcSignature.flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         with m.Switch(self.ctrl.action):
@@ -104,7 +104,7 @@ class RegFile(Component):
 
         super().__init__()
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
         m.submodules.mem = self.mem
 
@@ -154,7 +154,7 @@ class CSRFile(Component):
     MCAUSE = 0xA
     MIP = 0xC
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         mstatus = Signal(MStatus, init={"mpp": 0b11})
@@ -271,7 +271,7 @@ class DataPathSrcMux(Component):
         }
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         with m.Switch(self.reg_r_sel):
@@ -314,7 +314,7 @@ class DataPath(Component):
         self.regfile = RegFile(formal=formal)
         self.csrfile = CSRFile()
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         m.submodules.pc_mod = self.pc_mod

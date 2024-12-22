@@ -1,3 +1,16 @@
+"""Verilog generation module/script for Sentinel.
+
+At present, only running this module directly from the command-line
+(as ``__main__``) is supported:
+
+::
+
+    python -m sentinel.gen --help
+
+Individual functions are documented for completeness and should not be treated
+as public (see :doc:`/development/guidelines`).
+"""
+
 import argparse
 import sys
 from contextlib import contextmanager

@@ -19,7 +19,7 @@ class ASrcMux(Component):
         }
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         with m.If(self.latch):
@@ -64,7 +64,7 @@ class BSrcMux(Component):
         self.rdata_align = ReadDataAlign()
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         m.submodules.rdata_align = self.rdata_align
@@ -105,7 +105,7 @@ class Unit(Elaboratable):
         self.o = Signal(width)
         self.op = op
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
         m.d.comb += self.o.eq(self.op(self.a, self.b))
         return m

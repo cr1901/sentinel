@@ -59,6 +59,20 @@ pycodestyle.max-line-length = 79  # flake8 compat
 # sys.path modified, nothing we can do about this right now.
 "tests/riscof/sentinel/riscof_sentinel.py" = ["E402"]
 
+[tool.pyright]
+# Not our code.
+# FIXME: Doesn't seem to stop Pylance from reporting issues on these files
+# when open in VSCode editor? Keep it
+exclude = [
+    # These three are defaults.
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "tests/formal/riscv-formal/**",
+    "tests/upstream/riscv-tests/**" ,
+    "tests/riscof/sail_cSim/**"
+]
+
 # Lots of false-positives due to Pyright not knowing about Amaranth.
 [[tool.pyright.executionEnvironments]]
 root = "examples/attosoc.py"
@@ -74,6 +88,7 @@ reportAttributeAccessIssue = false
 reportOptionalMemberAccess = false
 reportGeneralTypeIssues = false
 reportOperatorIssue = false
+reportInvalidTypeForm = false
 
 [[tool.pyright.executionEnvironments]]
 root = "tests/formal"

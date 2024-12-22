@@ -20,7 +20,7 @@ class AddressAlign(Component):
         }
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         # DataPath.dat_w constantly has traffic. We only want to latch
@@ -66,7 +66,7 @@ class ReadDataAlign(Component):
         }
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         selected_dat = Signal.like(self.wb_dat_r)
@@ -112,7 +112,7 @@ class WriteDataAlign(Component):
         }
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         # TODO: Misaligned accesses

@@ -68,6 +68,15 @@ for a full working example.
 ## Public API
 
 ```{eval-rst}
+.. automodule:: sentinel
+```
+
+```{eval-rst}
 .. automodule:: sentinel.top
+    :members:
+```
+
+```{eval-rst}
+.. automodule:: sentinel.gen
     :members:
 ```

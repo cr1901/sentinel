@@ -60,7 +60,7 @@ class CSRAttributes(Component):
         self._rom_init()
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         # FIXME: Use _CSR somehow to make self.addr slicing nicer?
@@ -111,7 +111,7 @@ class ImmediateGenerator(Component):
 
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         insn = Insn(self.insn)
@@ -150,7 +150,7 @@ class ExceptionControl(Component):
 
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         insn = Insn(self.insn)
@@ -181,7 +181,8 @@ class ExceptionControl(Component):
                             with m.If(insn.funct7 != 0):
                                 m.d.sync += self.exception.valid.eq(1)
                         with m.Else():
-                            with m.If((insn.funct7 != 0) & (insn.funct7 != 0b0100000)):
+                            with m.If((insn.funct7 != 0) &
+                                      (insn.funct7 != 0b0100000)):
                                 m.d.sync += self.exception.valid.eq(1)
                 with m.Case(OpcodeType.LUI):
                     pass
@@ -189,7 +190,8 @@ class ExceptionControl(Component):
                     pass
                 with m.Case(OpcodeType.OP):
                     with m.If((insn.funct3 == 0) | (insn.funct3 == 5)):
-                        with m.If((insn.funct7 != 0) & (insn.funct7 != 0b0100000)):  # noqa: E501
+                        with m.If((insn.funct7 != 0) &
+                                  (insn.funct7 != 0b0100000)):
                             m.d.sync += self.exception.valid.eq(1)
                     with m.Else():
                         with m.If(insn.funct7 != 0):
@@ -203,7 +205,8 @@ class ExceptionControl(Component):
                     with m.If((insn.funct3 == 2) | (insn.funct3 == 3)):
                         m.d.sync += self.exception.valid.eq(1)
                 with m.Case(OpcodeType.LOAD):
-                    with m.If((insn.funct3 == 3) | (insn.funct3 == 6) | (insn.funct3 == 7)):
+                    with m.If((insn.funct3 == 3) | (insn.funct3 == 6) |
+                              (insn.funct3 == 7)):
                         m.d.sync += self.exception.valid.eq(1)
                 with m.Case(OpcodeType.STORE):
                     with m.If(insn.funct3 >= 3):
@@ -314,7 +317,7 @@ class Decode(Component):
 
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         m.submodules.csr_attr = self.csr_attr

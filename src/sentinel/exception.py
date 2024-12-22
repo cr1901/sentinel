@@ -31,7 +31,7 @@ class ExceptionRouter(Component):
     src: In(SrcSignature)
     out: Out(OutSignature)
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         exception = Signal(1)

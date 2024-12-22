@@ -75,7 +75,7 @@ class FormalTop(Component):
         super().__init__(sig)
         self.cpu = Top(formal=True)
 
-    def elaborate(self, plat):
+    def elaborate(self, plat):  # noqa: D102
         m = Module()
 
         m.submodules.cpu = self.cpu

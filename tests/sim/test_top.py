@@ -545,7 +545,7 @@ class FlowModifiedTop(Component):
     def elaborate(self, plat):
         m = Module()
 
-        m.submodules.top = ResetInserter(self.rst)(EnableInserter(self.en)(self.top))
+        m.submodules.top = ResetInserter(self.rst)(EnableInserter(self.en)(self.top))  # noqa: E501
 
         connect(m, flipped(self), self.top)
 

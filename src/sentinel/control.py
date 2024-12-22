@@ -41,7 +41,7 @@ class MappingROM(Component):
 
         super().__init__(Signature(sig).flip())
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         insn = Insn(self.insn)
@@ -87,7 +87,8 @@ class MappingROM(Component):
                 with m.Case(OpcodeType.JALR):
                     m.d.sync += self.requested_op.eq(0x98)
                 with m.Case(OpcodeType.BRANCH):
-                    m.d.sync += self.requested_op.eq(Cat(insn.funct3, C(0x88 >> 3)))
+                    m.d.sync += self.requested_op.eq(Cat(insn.funct3,
+                                                         C(0x88 >> 3)))
                 with m.Case(OpcodeType.LOAD):
                     op_map = Cat(insn.funct3, C(0x08 >> 3))
                     m.d.sync += self.requested_op.eq(op_map)
@@ -217,7 +218,7 @@ class Control(Component):
             "csr": Out(CSRControlSignature)
         })
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         m.submodules.ucoderom = self.ucoderom
@@ -305,7 +306,7 @@ class Sequencer(Elaboratable):
         # next_adr.
         self.test = Signal()
 
-    def elaborate(self, platform):
+    def elaborate(self, platform):  # noqa: D102
         m = Module()
 
         m.d.sync += self.next_adr.eq(self.adr + 1)
