@@ -1,3 +1,5 @@
+"""Components for interfacing Sentinel to external verification tools."""
+
 from amaranth import Signal, Module, Mux
 from amaranth.lib.wiring import Component, Signature, Out, In, connect, \
     flipped
@@ -9,11 +11,199 @@ from .ucodefields import CSROp
 
 
 class FormalTop(Component):
-    """Sentinel CPU RVFI Harness."""
+    r"""Sentinel CPU RVFI Harness.
 
-    CHECK_INT_ADDR = 1
-    CSR_DECODE_VALIDITY_ADDR = 0x24
-    EXCEPTION_HANDLER_ADDR = 240
+    .. todo::
+        As mentioned :attr:`previously <sentinel.top.Top.rvfi>`,
+        :class:`FormalTop` does not connect to the rest of Sentinel via a
+        well-defined interface.
+
+        It relies directly on many :class:`sentinel.top.Top` internal signals
+        that I would rather be exposed via an
+        :doc:`Interface <amaranth:stdlib/wiring>`, but progress has been slow.
+        This includes hardcoding microcode addresses constants as class
+        attributes.
+
+        I'm deferring describing how this module works internally until I clean
+        it up. Fortunately, I don't think it's not exceptionally difficult to
+        follow in its current state. Cleanup mostly consists of:
+
+        * Fleshing out the aforementioned interface started in
+          :attr:`sentinel.top.Top.rvfi`.
+        * Refactoring the implicit state machine from the combination of
+          ``in_init``, ``committed_to_insn``, and ``just_committed_to_insn``
+          into an explicit one.
+
+    Attributes
+    ----------
+    bus: Out(wishbone.Signature)
+        A :ref:`forwarded <amaranth:wiring-forwarding>` copy of
+        :attr:`sentinel.top.Top.bus`.
+
+    irq: In(1)
+        A :ref:`forwarded <amaranth:wiring-forwarding>` copy of
+        :attr:`sentinel.top.Top.irq`.
+
+    rvfi: Out(Signature)
+        Signature :class:`~amaranth.lib.wiring.Member` implementing the
+        `RISC-V Formal Interface <https://github.com/YosysHQ/riscv-formal/blob/main/docs/rvfi.md>`__.
+
+        When exported to Verilog, Amaranth will generate its own names for
+        ports, and the won't necessarily match the RISC-V Formal Interface
+        names in the linked document. As of Amaranth 0.5.4, I use the following
+        Verilog macros to forward the exported :class:`FormalTop` port names to
+        RISC-V Formal IP ports:
+
+        .. code-block:: verilog
+
+            `define RVFI_AMARANTH_PORT(suff) .rvfi__``suff(rvfi_``suff)
+            `define RVFI_CSR_AMARANTH_PORTS(csr) \
+                .rvfi__csr__``csr``__rmask(rvfi_csr_``csr``_rmask),       \
+                .rvfi__csr__``csr``__wmask(rvfi_csr_``csr``_wmask),       \
+                .rvfi__csr__``csr``__rdata(rvfi_csr_``csr``_rdata),       \
+                .rvfi__csr__``csr``__wdata(rvfi_csr_``csr``_wdata)
+
+        Its :class:`~amaranth.lib.wiring.Signature` looks like the following:
+
+        .. testcode::
+            :hide:
+            :options: +NORMALIZE_WHITESPACE
+
+            import sentinel.formal
+            print(sentinel.formal.FormalTop().rvfi.signature)
+
+        .. testoutput::
+
+            Signature({
+                'valid': Out(1),
+                'order': Out(64),
+                'insn': Out(32),
+                'trap': Out(1),
+                'halt': Out(1),
+                'intr': Out(1),
+                'mode': Out(2),
+                'ixl': Out(2),
+                'rs1_addr': Out(5),
+                'rs2_addr': Out(5),
+                'rs1_rdata': Out(32),
+                'rs2_rdata': Out(32),
+                'rd_addr': Out(5),
+                'rd_wdata': Out(32),
+                'pc_rdata': Out(32),
+                'pc_wdata': Out(32),
+                'mem_addr': Out(32),
+                'mem_rmask': Out(4),
+                'mem_wmask': Out(4),
+                'mem_rdata': Out(32),
+                'mem_wdata': Out(32),
+                'csr': Out(Signature({
+                    'mscratch': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mcause': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mip': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mie': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mstatus': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mtvec': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mepc': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'misa': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mvendorid': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'marchid': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mimpid': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mhartid': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mconfigptr': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mstatush': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mcountinhibit': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mtval': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)})),
+                    'mcycle': Out(Signature({
+                        'rmask': Out(64),
+                        'wmask': Out(64),
+                        'rdata': Out(64),
+                        'wdata': Out(64)})),
+                    'minstret': Out(Signature({
+                        'rmask': Out(64),
+                        'wmask': Out(64),
+                        'rdata': Out(64),
+                        'wdata': Out(64)})),
+                    'mhpmcounter3': Out(Signature({
+                        'rmask': Out(64),
+                        'wmask': Out(64),
+                        'rdata': Out(64),
+                        'wdata': Out(64)})),
+                    'mhpmevent3': Out(Signature({
+                        'rmask': Out(32),
+                        'wmask': Out(32),
+                        'rdata': Out(32),
+                        'wdata': Out(32)}))}))})
+
+    """  # noqa: E501, RUF100
+
+    # FIXME: Harcoded microcode addresses. Do not rely on.
+    _CHECK_INT_ADDR = 1
+    _CSR_DECODE_VALIDITY_ADDR = 0x24
+    _EXCEPTION_HANDLER_ADDR = 240
 
     def __init__(self):
         rvfi_sig = {
@@ -104,7 +294,7 @@ class FormalTop(Component):
         m.d.comb += committed_to_insn.eq(self.cpu.control.insn_fetch &
                                          self.cpu.bus.ack &
                                          (self.cpu.control.ucoderom.addr ==
-                                          self.CHECK_INT_ADDR))
+                                          self._CHECK_INT_ADDR))
         m.d.sync += just_committed_to_insn.eq(committed_to_insn)
 
         # RVFI RD_DATAW helpers.
@@ -364,7 +554,7 @@ class FormalTop(Component):
 
         # sync, since uPC points one ahead of currently executing insn :).
         m.d.sync += doing_csr_decode.eq(self.cpu.control.ucoderom.addr ==
-                                        self.CSR_DECODE_VALIDITY_ADDR)
+                                        self._CSR_DECODE_VALIDITY_ADDR)
         with m.If(self.cpu.rvfi.decode.do_decode):
             m.d.sync += [
                 csr_addr_shadow.eq(self.cpu.rvfi.decode.funct12),

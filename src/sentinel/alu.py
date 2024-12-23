@@ -1,3 +1,5 @@
+"""Arithmetic Logic Unit (ALU) Components."""
+
 from .align import ReadDataAlign
 from .csr import MCause
 from .ucodefields import OpType, ALUIMod, ALUOMod, ASrc, BSrc, MemSel, \
@@ -8,6 +10,36 @@ from amaranth.lib.wiring import Component, Signature, In, Out
 
 
 class ASrcMux(Component):
+    """Latch one of many :attr:`ALU A input <sentinel.alu.ALU.a>` sources.
+
+    The ALU does not have registered inputs; the
+    :attr:`~sentinel.alu.ASrcMux.data` output is registered and feeds
+    immediately into the ALU A input.
+
+    Attributes
+    ----------
+    latch: In(1)
+        When asserted, latch the :attr:`selected <sentinel.alu.ASrcMux.sel>`
+        input into :attr:`~sentinel.alu.ASrcMux.data` on the next clock edge.
+    sel: In(ASrc)
+        Select input. See :class:`~sentinel.ucodefields.ASrc`.
+    gp: In(32)
+        Input source. Register from the
+        :class:`register file <sentinel.datapath.RegFile>`
+        whose value is currently on the read port (e.g. the read address was
+        supplied on the previous clock cycle).
+    imm: In(32)
+        Input source. :attr:`Decoded immediate <sentinel.decoder.Decode.imm>`
+        from current instruction.
+    alu: In(32)
+        Input source. :attr:`ALU output <sentinel.alu.ALU.o>`, fed back as an
+        input.
+    data: Out(32)
+        The output. When :attr:`~sentinel.alu.ASrcMux.latch` is asserted, the
+        data input selected by :attr:`~sentinel.alu.ASrcMux.sel` will appear
+        here on the next clock cycle.
+    """
+
     def __init__(self):
         sig = {
             "latch": Out(1),
@@ -43,6 +75,73 @@ class ASrcMux(Component):
 
 
 class BSrcMux(Component):
+    """Latch one of many :attr:`ALU B input <sentinel.alu.ALU.b>` sources.
+
+    The ALU does not have registered inputs; the
+    :attr:`~sentinel.alu.BSrcMux.data` output is registered and feeds
+    immediately into the ALU B input.
+
+    When requested, this module will automatically move/align the top 16-bits
+    of the 32-bit :attr:`read data bus input <BSrcMux.dat_r>` to the bottom
+    16-bits, or any of of 3 high bytes into the bottom 8-bits. The mux will
+    latch the aligned data when :attr:`selected <sentinel.alu.BSrcMux.sel>`
+    rather than the original input data.
+
+    Attributes
+    ----------
+    latch: In(1)
+        When asserted, latch the :attr:`selected <sentinel.alu.BSrcMux.sel>`
+        input into :attr:`~sentinel.alu.BSrcMux.data` on the next clock edge.
+    sel: In(BSrc)
+        Select input. See :class:`~sentinel.ucodefields.BSrc`.
+    mem_sel: In(MemSel)
+        Select width of :attr:`dat_r` to be output onto :attr:`data`.
+    mem_extend: In(MemExtend)
+        When :attr:`mem_sel` is less than word width, choose whether to sign
+        or zero-extend :attr:`dat_r` when it's output onto :attr:`data`.
+    data_adr: In(32)
+        Contents of the internal address register latched by
+        :class:`~sentinel.ucodefields.LatchAdr`. Used for deciding how to
+        align :attr:`dat_r`.
+    gp: In(32)
+        Input source. Register from the
+        :class:`register file <sentinel.datapath.RegFile>`
+        whose value is currently on the read port (e.g. the read address was
+        supplied on the previous clock cycle).
+    imm: In(32)
+        Input source. :attr:`Decoded immediate <sentinel.decoder.Decode.imm>`
+        from current instruction.
+    pc: In(30)
+        Input source. Current contents of the
+        :class:`Program Counter <sentinel.datapath.ProgramCounter>`.
+    dat_r: In(32)
+        Input source. Current contents of the *unregistered* ``dat_r``
+        in :attr:`Top's Wishbone Bus <sentinel.Top.top.bus>`. Only valid when
+        qualified by :attr:`~CondTest.MEM_VALID`.
+
+        As an input, ``dat_r`` is always 32-bit aligned. The mux contains
+        internal alignment circuitry when a read of 8 or 16-bits on a less than
+        32-bit alignment is requested. When
+        :attr:`selected <sentinel.alu.BSrcMux.sel>`, the mux will latched this
+        modified/aligned data into `~BSrcMux.data`.
+    csr_imm: In(5)
+        Input source. :attr:`Decoded src_a <sentinel.decoder.Decode.src_a>`
+        from the current instruction, which for CSR instructions is reused
+        for specifying 5-bit CSR immediates.
+    csr: In(32)
+        Input source. Register from the
+        :class:`CSR file <sentinel.datapath.CSRFile>`
+        whose value is currently on the read port (e.g. the read address was
+        supplied on the previous clock cycle).
+    mcause: In(MCause)
+        Input source. Current mcause as determined by
+        :class:`~sentinel.exception.ExceptionRouter`.
+    data: Out(32)
+        The output. When :attr:`~sentinel.alu.BSrcMux.latch` is asserted, the
+        data input selected by :attr:`~sentinel.alu.BSrcMux.sel` will appear
+        here on the next clock cycle.
+    """
+
     def __init__(self):
         sig = {
             "latch": Out(1),

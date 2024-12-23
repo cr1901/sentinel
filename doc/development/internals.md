@@ -263,3 +263,8 @@ _any_ access:
 * `menvcfgh`
 * `mseccfg`
 * `mseccfgh`
+
+```{eval-rst}
+.. automodule:: sentinel.csr
+    :members:
+```

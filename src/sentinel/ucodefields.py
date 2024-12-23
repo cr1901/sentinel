@@ -65,11 +65,11 @@ class CondTest(enum.Enum):
     #: When :data:`InvertTest` is asserted, set if if the contents of the
     #: memory bus are *not* valid.
     #:
-    #: The memory bus is valid when :attr:`~sentinel.top.Top.bus.ack` in
+    #: The memory bus is valid when ``sentinel.top.Top.bus.ack`` in
     #: :class:`~sentinel.top.Top` is asserted.
     MEM_VALID = 2
 
-    #: Unconditionally set/asserted. When :data:`InvertTest` is asserted,
+    #: int: Unconditionally set/asserted. When :data:`InvertTest` is asserted,
     #: the test unconditionally *fails*.
     TRUE = 3
 
@@ -80,44 +80,83 @@ InvertTest = unsigned(1)
 
 
 class PcAction(enum.Enum):
-    """Perform an action on the RISC-V Program Counter this cycle."""
+    """Perform an action on the RISC-V :class:`Program Counter <sentinel.datapath.ProgramCounter>` this cycle."""  # noqa: E501
 
     #: int: Do not change the Program Counter; hold the current value.
     HOLD = 0
     #: int: Increment the Program Counter by ``4``.
     INC = 1
     #: int: Set the Program Counter to the value currently on the
-    #: :class:`~sentinel.alu.ALU` :attr:`output <sentinel.alu.ALU.o>`.
+    #: :attr:`ALU output <sentinel.alu.ALU.o>`.
     LOAD_ALU_O = 2
 
 
-#: If set, latch the :attr:`A input <sentinel.alu.ALU.a>` to the
-#: :class:`~sentinel.alu.ALU` from the :class:`~sentinel.alu.ASrcMux`.
+#: If set, latch the :attr:`selected <sentinel.alu.ASrcMux.sel>`
+#: :class:`~sentinel.alu.ASrcMux` input to its output.
 LatchA = unsigned(1)
 
-#: If set, latch the :attr:`B input <sentinel.alu.ALU.b>` to the
-#: :class:`~sentinel.alu.ALU` from the :class:`~sentinel.alu.BSrcMux`.
+#: If set, latch the :attr:`selected <sentinel.alu.BSrcMux.sel>`
+#: :class:`~sentinel.alu.BSrcMux` input to its output.
 LatchB = unsigned(1)
 
 
 class ASrc(enum.Enum):
+    """Select the source for the :attr:`ALU A input <sentinel.alu.ALU.a>`.
+
+    The ALU A input is provided by the latched output of
+    :class:`~sentinel.alu.ASrcMux`; this field is qualified by
+    :data:`~sentinel.ucodefields.LatchA`.
+    """
+
+    #: int: Select general purpose register that was read from the reg file
+    #: last cycle.
     GP = 0
+    #: int: Select the decoded Immediate from the current instruction.
     IMM = 1
+    #: int: Feed back the :attr:`ALU output <sentinel.alu.ALU.o` into the
+    #: input. Intended to facilitate chaining ALU ops together.
     ALU_O = 2
+    #: int: Supply the literal constant ``C(0, 32)``.
     ZERO = 3
+    #: int: Supply the literal constant ``C(4, 32)``.
     FOUR = 4
+    #: int: Supply the literal constant ``C(-1, 32)``, i.e. "all ones".
     NEG_ONE = 5
+    #: int: Supply the literal constant ``C(31, 32)``.
     THIRTY_ONE = 6
 
 
 class BSrc(enum.Enum):
+    """Select the source for the :attr:`ALU B input <sentinel.alu.ALU.b>`.
+
+    The ALU B input is provided by the latched output of
+    :class:`~sentinel.alu.BSrcMux`; this field is qualified by
+    :data:`~sentinel.ucodefields.LatchB`.
+    """
+
+    #: int: Select General Purpose register that was read from the
+    #: :class:`reg file <sentinel.datapath.RegFile>` last cycle.
     GP = 0
+    #: int: Select the
+    #: :class:`Program Counter <sentinel.datapath.ProgramCounter>` register.
     PC = 1
+    #: int: Select the decoded Immediate from the current instruction.
     IMM = 2
+    #: int: Supply the literal constant ``C(1, 32)``.
     ONE = 3
+    #: int: Select the *unregistered* Wishbone read data bus value. The read
+    #: data bus is only valid when indicated by
+    #: :attr:`~CondTest.MEM_VALID`.
     DAT_R = 4
+    #: int: Some RISC-V CSR instructions have an Immediate field that differs
+    #: from :attr:`~BSrc.IMM`; select the CSR Immediate
+    #: field instead.
     CSR_IMM = 5
+    #: int: Select CSR register that was read from the
+    #: :class:`CSR reg file <sentinel.datapath.CSRFile>` last cycle.
     CSR = 6
+    #: int: Select the current value of the
+    #: :attr:`MCAUSE latch <sentinel.exception.ExceptionControl.out>`.
     MCAUSE_LATCH = 7
 
 
@@ -174,15 +213,29 @@ class MemExtend(enum.Enum):
     SIGN = 1
 
 
+#: If set, latch the :attr:`ALU output <sentinel.alu.ALU.o>` into an internal
+#: register representing the raw byte address for an upcoming Wishbone memory
+#: transaction. This internal register indirectly controls the Wishbone
+#: ``ADR_O`` and ``SEL_O`` lines via :class:`~sentinel.align.AddressAlign`.
+#: Used for both Wishbone reads and writes.
 LatchAdr = unsigned(1)
 
 
+#: If set, latch :attr:`write data <sentinel.align.WriteDataAlign.wb_dat_w>`
+#: into an internal register which directly drives the Wisbone signal
+#: ``DAT_O``. The data will be appropriately aligned for an upcoming Wishbone
+#: write, based upon the contents of the internal address register controlled
+#: by :data:`LatchAdr`. Used only for Wishbone writes.
 LatchData = unsigned(1)
 
 
+#: If set, set Wishbone ``WE_O`` to the asserted state, indicating a Wishbone
+#: write.
 WriteMem = unsigned(1)
 
 
+#: If set, indicate that the current Wishbone transaction is an instruction
+#: fetch. In the future, this will be used for a Wishbone tag of some sort.
 InsnFetch = unsigned(1)
 
 

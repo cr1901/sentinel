@@ -1,13 +1,33 @@
+"""Useful enums and structs for dealing with RISC-V CSRs.
+
+Attributes should match the addresses, fields, and offsets defined in the
+`RISC-V Privileged Specification <https://riscv.org/specifications/ratified/>`_.
+Therefore, I've only made basic remarks on registers fields and values
+in these docs. Consult the spec for detailed descriptions.
+
+Only the registers that are *not* read-only-0 or illegal are implemented
+for Sentinel. And even then, only the used fields are explicitly laid out.
+Most Unused :mod:`enum <amaranth:amaranth.lib.enum>` fields are defined, while
+unused :class:`Structs <amaranth:amaranth.lib.data.Struct>` fields are **not**
+implemented. See the :ref:`CSRs <csrs>` section for an idea of what is
+implemented.
+"""  # noqa: E501, RUF100
+
 from amaranth import unsigned
 from amaranth.lib.enum import Enum, IntEnum
 from amaranth.lib.data import Struct
 
-# Only the registers that are _not_ read-only-0 or illegal are implemented
-# for Sentinel. And even then, only the used fields are explicitly laid out.
-
 
 # Implemented in the order they are presented in Privileged Spec.
 class MachineAddr(IntEnum):
+    """Enumeration of all defined RISC-V Machine-Mode CSR addresses.
+
+    .. note::
+        Register names are UPPER_CASE versions of those defined in the spec.
+        Please consult the spec for detailed information, because I don't feel
+        like typing all the descriptions out :).
+    """
+
     MVENDORID = 0xF11
     MARCHID = 0xF12
     MIMPID = 0xF13
@@ -216,77 +236,144 @@ class MachineAddr(IntEnum):
 
 
 class AccessMode(Enum, shape=unsigned(2)):
+    """The top 2 bits of CSR address space."""
+
     _READ_WRITE_00 = 0b00
     _READ_WRITE_01 = 0b01
     _READ_WRITE_02 = 0b10
+    #: Read-only CSR addresses.
     READ_ONLY = 0b11
 
 
 class Quadrant(Enum, shape=unsigned(2)):
+    """Bits 8 and 9 of the CSR address space."""
+
+    #: Unpriviled Mode CSRs.
     UNPRIVILEGED = 0b00
+    #: Supervisor Mode CSRs.
     SUPERVISOR = 0b01
+    #: Hypervisor Mode CSRs.
     HYPERVISOR = 0b10
+    #: Machine Mode CSRs.
     MACHINE = 0b11
 
 
 class MStatus(Struct):
+    """Machine Status Register (``mstatus``)."""
+
     _padding0: unsigned(3)
+    #: Machine Interrupt Enable bit.
     mie: unsigned(1)
     _padding1: unsigned(3)
+    #: Machine Previous Interrupt Enable bit.
     mpie: unsigned(1)
     _padding2: unsigned(3)
+    #: Machine Previous Privilege bits. Constant ``C(3, 2)`` in Sentinel,
+    #: meaning Machine Mode.
     mpp: unsigned(2)
     _padding3: unsigned(19)
 
 
 class MTVec(Struct):
+    """Machine Trap Vector Address Register (``mtvec``)."""
+
     class Mode(Enum, shape=unsigned(2)):
+        """Low 2 bits of ``mtvec``."""
+
+        #: Jump to the address in :attr:`~MTVec.base`.
         DIRECT = 0
+        #: On asynchronous interruept, add an offset to the address in
+        #: :attr:`~MTVec.base` before jumping, dependendent on :class:`MCause`.
+        #: On synchornous exception, jump to the address in
+        #: :attr:`~MTVec.base`.
         VECTORED = 1  # Not implemented
 
+    #: Set how the exception/interrupt address is calculated.
     mode: Mode
+    #: Base address to jump to on exception.
     base: unsigned(30)
 
 
 class MIP(Struct):
+    """Machine Interrupt Pending Register (``mip``)."""
+
     _padding0: unsigned(3)
-    msip: unsigned(1)  # Not implemented
+    #: Machine Sofware Interrupt Pending bit. Not implemented.
+    msip: unsigned(1)
     _padding1: unsigned(3)
-    mtip: unsigned(1)  # Not implemented
+    #: Machine Timer Interrupt Pending bit. Not implemented.
+    mtip: unsigned(1)
     _padding2: unsigned(3)
+    #: Machine External Interrupt Pending bit.
     meip: unsigned(1)
     _padding3: unsigned(20)
 
 
 class MIE(Struct):
+    """Machine Interrupt-Enable Register (``mie``)."""
+
     _padding0: unsigned(3)
-    msie: unsigned(1)  # Not implemented
+    #: Machine Sofware Interrupt Enable bit. Not implemented.
+    msie: unsigned(1)
     _padding1: unsigned(3)
-    mtie: unsigned(1)  # Not implemented
+    #: Machine Timer Interrupt Enable bit. Not implemented.
+    mtie: unsigned(1)
     _padding2: unsigned(3)
+    #: Machine External Interrupt Enable bit.
     meie: unsigned(1)
     _padding3: unsigned(20)
 
 
 class MCause(Struct):
+    """Machine Trap Cause Register (``mtcause``)."""
+
     class Cause(Enum, shape=unsigned(31)):
+        """Cause of the current exception.
+
+        .. note::
+            For easy searching, the docstring for each enum variant (minus
+            the period) should match a string in the
+            `privileged spec <https://riscv.org/specifications/ratified/>`_.
+        """
+
+        #: Instruction address misaligned.
         INSN_MISALIGNED = 0
+        #: Instruction access fault.
         INSN_FAULT = 1
+        #: Illegal instruction.
         ILLEGAL_INSN = 2
+        #: Breakpoint.
         BREAKPOINT = 3
+        #: Load address misaligned.
         LOAD_MISALIGNED = 4
+        #: Load access fault.
         LOAD_FAULT = 5
+        #: Store/AMO address misaligned.
         STORE_MISALIGNED = 6
+        #: Store/AMO access fault.
         STORE_FAULT = 7
+        #: Environment call from U-mode.
         ECALL_UMODE = 8
+        #: Environment call from S-mode.
         ECALL_SMODE = 9
+        #: Environment call from M-mode.
         ECALL_MMODE = 11
+        #: Instruction page fault.
         INSN_PAGE_FAULT = 12
+        #: Load page fault.
         LOAD_PAGE_FAULT = 13
+        #: Store/AMO page fault.
         STORE_PAGE_FAULT = 15
+        #: Machine software interrupt.
         MSOFT_INT = 3
+        #: Machine timer interrupt.
         MTIMER_INT = 7
+        #: Machine external interrupt.
         MEXT_INT = 11
 
+    #: Cause of the current trap/exception.
     cause: Cause
+    #: Set if the current trap is an asynchronous interrupt, rather than a
+    #: synchronous exception. If set, the values of
+    #: :attr:`~MCause.Cause.MEXT_INT` and friends are valid.
     interrupt: unsigned(1)

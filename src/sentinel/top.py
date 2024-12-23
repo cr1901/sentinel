@@ -134,6 +134,8 @@ class Top(Component):
         * ``decode``: Forwarded RVFI signals from
           :class:`sentinel.decode.Decode`.
 
+        .. _formal-todo:
+
         .. todo::
 
             Right now, the formal harness tends to directly "reach" into
