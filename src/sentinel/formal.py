@@ -67,12 +67,12 @@ class FormalTop(Component):
 
         .. testcode::
             :hide:
-            :options: +NORMALIZE_WHITESPACE
 
             import sentinel.formal
             print(sentinel.formal.FormalTop().rvfi.signature)
 
         .. testoutput::
+            :options: +NORMALIZE_WHITESPACE
 
             Signature({
                 'valid': Out(1),

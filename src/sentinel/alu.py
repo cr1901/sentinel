@@ -15,41 +15,28 @@ class ASrcMux(Component):
     The ALU does not have registered inputs; the
     :attr:`~sentinel.alu.ASrcMux.data` output is registered and feeds
     immediately into the ALU A input.
-
-    Attributes
-    ----------
-    latch: In(1)
-        When asserted, latch the :attr:`selected <sentinel.alu.ASrcMux.sel>`
-        input into :attr:`~sentinel.alu.ASrcMux.data` on the next clock edge.
-    sel: In(ASrc)
-        Select input. See :class:`~sentinel.ucodefields.ASrc`.
-    gp: In(32)
-        Input source. Register from the
-        :class:`register file <sentinel.datapath.RegFile>`
-        whose value is currently on the read port (e.g. the read address was
-        supplied on the previous clock cycle).
-    imm: In(32)
-        Input source. :attr:`Decoded immediate <sentinel.decoder.Decode.imm>`
-        from current instruction.
-    alu: In(32)
-        Input source. :attr:`ALU output <sentinel.alu.ALU.o>`, fed back as an
-        input.
-    data: Out(32)
-        The output. When :attr:`~sentinel.alu.ASrcMux.latch` is asserted, the
-        data input selected by :attr:`~sentinel.alu.ASrcMux.sel` will appear
-        here on the next clock cycle.
     """
 
-    def __init__(self):
-        sig = {
-            "latch": Out(1),
-            "sel": Out(ASrc),
-            "gp": Out(32),
-            "imm": Out(32),
-            "alu": Out(32),
-            "data": In(32)
-        }
-        super().__init__(Signature(sig).flip())
+    #: When asserted, latch the :attr:`selected <sentinel.alu.ASrcMux.sel>`
+    #: input into :attr:`~sentinel.alu.ASrcMux.data` on the next clock edge.
+    latch: In(1)
+    #: Select input. See :class:`~sentinel.ucodefields.ASrc`.
+    sel: In(ASrc)
+    #: Input source. Register from the
+    #: :class:`register file <sentinel.datapath.RegFile>`
+    #: whose value is currently on the read port (e.g. the read address was
+    #: supplied on the previous clock cycle).
+    gp: In(32)
+    #: Input source. :attr:`Decoded immediate <sentinel.decoder.Decode.imm>`
+    #: from current instruction.
+    imm: In(32)
+    #: Input source. :attr:`Decoded immediate <sentinel.decoder.Decode.imm>`
+    #: from current instruction.
+    alu: In(32)
+    #: The output. When :attr:`~sentinel.alu.ASrcMux.latch` is asserted, the
+    #: data input selected by :attr:`~sentinel.alu.ASrcMux.sel` will appear
+    #: here on the next clock cycle.
+    data: Out(32)
 
     def elaborate(self, platform):  # noqa: D102
         m = Module()
@@ -86,82 +73,67 @@ class BSrcMux(Component):
     16-bits, or any of of 3 high bytes into the bottom 8-bits. The mux will
     latch the aligned data when :attr:`selected <sentinel.alu.BSrcMux.sel>`
     rather than the original input data.
-
-    Attributes
-    ----------
-    latch: In(1)
-        When asserted, latch the :attr:`selected <sentinel.alu.BSrcMux.sel>`
-        input into :attr:`~sentinel.alu.BSrcMux.data` on the next clock edge.
-    sel: In(BSrc)
-        Select input. See :class:`~sentinel.ucodefields.BSrc`.
-    mem_sel: In(MemSel)
-        Select width of :attr:`dat_r` to be output onto :attr:`data`.
-    mem_extend: In(MemExtend)
-        When :attr:`mem_sel` is less than word width, choose whether to sign
-        or zero-extend :attr:`dat_r` when it's output onto :attr:`data`.
-    data_adr: In(32)
-        Contents of the internal address register latched by
-        :class:`~sentinel.ucodefields.LatchAdr`. Used for deciding how to
-        align :attr:`dat_r`.
-    gp: In(32)
-        Input source. Register from the
-        :class:`register file <sentinel.datapath.RegFile>`
-        whose value is currently on the read port (e.g. the read address was
-        supplied on the previous clock cycle).
-    imm: In(32)
-        Input source. :attr:`Decoded immediate <sentinel.decoder.Decode.imm>`
-        from current instruction.
-    pc: In(30)
-        Input source. Current contents of the
-        :class:`Program Counter <sentinel.datapath.ProgramCounter>`.
-    dat_r: In(32)
-        Input source. Current contents of the *unregistered* ``dat_r``
-        in :attr:`Top's Wishbone Bus <sentinel.Top.top.bus>`. Only valid when
-        qualified by :attr:`~CondTest.MEM_VALID`.
-
-        As an input, ``dat_r`` is always 32-bit aligned. The mux contains
-        internal alignment circuitry when a read of 8 or 16-bits on a less than
-        32-bit alignment is requested. When
-        :attr:`selected <sentinel.alu.BSrcMux.sel>`, the mux will latched this
-        modified/aligned data into `~BSrcMux.data`.
-    csr_imm: In(5)
-        Input source. :attr:`Decoded src_a <sentinel.decoder.Decode.src_a>`
-        from the current instruction, which for CSR instructions is reused
-        for specifying 5-bit CSR immediates.
-    csr: In(32)
-        Input source. Register from the
-        :class:`CSR file <sentinel.datapath.CSRFile>`
-        whose value is currently on the read port (e.g. the read address was
-        supplied on the previous clock cycle).
-    mcause: In(MCause)
-        Input source. Current mcause as determined by
-        :class:`~sentinel.exception.ExceptionRouter`.
-    data: Out(32)
-        The output. When :attr:`~sentinel.alu.BSrcMux.latch` is asserted, the
-        data input selected by :attr:`~sentinel.alu.BSrcMux.sel` will appear
-        here on the next clock cycle.
     """
 
+    #: When asserted, latch the :attr:`selected <sentinel.alu.BSrcMux.sel>`
+    #: input into :attr:`~sentinel.alu.BSrcMux.data` on the next clock edge.
+    latch: In(1)
+    #: In(BSrc): Select input.
+    sel: In(BSrc)
+
+    #: In(MemSel): Choose which slice of the input :attr:`dat_r` appears on the
+    #: `~BSrcMux.data` output when :attr:`selected <sentinel.alu.BSrcMux.sel>`.
+    mem_sel: In(MemSel)
+    #: In(MemExtend): When :attr:`mem_sel` is less than word width, choose
+    #: whether to sign or zero-extend :attr:`dat_r` when it's output onto
+    #: :attr:`data`.
+    mem_extend: In(MemExtend)
+    #: Contents of the internal address register latched by
+    #: :class:`~sentinel.ucodefields.LatchAdr`. Used for deciding how to
+    #: align :attr:`dat_r`.
+    data_adr: In(32)
+
+    #: Input source. Register from the
+    #: :class:`register file <sentinel.datapath.RegFile>`
+    #: whose value is currently on the read port (e.g. the read address was
+    #: supplied on the previous clock cycle).
+    gp: In(32)
+    #: Input source. :attr:`Decoded immediate <sentinel.decoder.Decode.imm>`
+    #: from current instruction.
+    imm: In(32)
+    #: Input source. Current contents of the
+    #: :class:`Program Counter <sentinel.datapath.ProgramCounter>`.
+    pc: In(30)
+    #: Input source. Current contents of the *unregistered* ``DAT_I``
+    #: in :attr:`Top's Wishbone Bus <sentinel.top.Top.bus>`. Only valid when
+    #: qualified by :attr:`~CondTest.MEM_VALID`.
+    #:
+    #: As an input, ``DAT_I`` is always 32-bit aligned. The mux contains
+    #: internal alignment circuitry when a read of 8 or 16-bits on a
+    #: less-than-32-bit alignment is requested. When
+    #: :attr:`selected <sentinel.alu.BSrcMux.sel>`, the mux will latched this
+    #: modified/aligned data into :attr:`~BSrcMux.data`.
+    dat_r: In(32)
+    #: Input source. :attr:`Decoded src_a <sentinel.decoder.Decode.src_a>`
+    #: from the current instruction, which for CSR instructions is reused
+    #: for specifying 5-bit CSR immediates.
+    csr_imm: In(5)
+    #: Input source. Register from the
+    #: :class:`CSR file <sentinel.datapath.CSRFile>`
+    #: whose value is currently on the read port (e.g. the read address was
+    #: supplied on the previous clock cycle).
+    csr: In(32)
+    #: In(MCause): Input source. Current ``MCAUSE`` as determined by
+    #: :class:`~sentinel.exception.ExceptionRouter`.
+    mcause: In(MCause)
+    #: The output. When :attr:`~sentinel.alu.BSrcMux.latch` is asserted, the
+    #: data input selected by :attr:`~sentinel.alu.BSrcMux.sel` will appear
+    #: here on the next clock cycle.
+    data: Out(32)
+
     def __init__(self):
-        sig = {
-            "latch": Out(1),
-            "sel": Out(BSrc),
-
-            "mem_sel": Out(MemSel),
-            "mem_extend": Out(MemExtend),
-            "data_adr": Out(32),
-
-            "gp": Out(32),
-            "imm": Out(32),
-            "pc": Out(30),
-            "dat_r": Out(32),
-            "csr_imm": Out(5),
-            "csr": Out(32),
-            "mcause": Out(MCause),
-            "data": In(32)
-        }
         self.rdata_align = ReadDataAlign()
-        super().__init__(Signature(sig).flip())
+        super().__init__()
 
     def elaborate(self, platform):  # noqa: D102
         m = Module()

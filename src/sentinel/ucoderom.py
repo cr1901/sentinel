@@ -7,7 +7,7 @@ from itertools import tee, zip_longest
 from amaranth import Shape, unsigned, Module
 from amaranth.lib.data import StructLayout
 from amaranth.lib.memory import Memory
-from amaranth.lib.wiring import In, Out, Component
+from amaranth.lib.wiring import In, Out, Component, Signature
 from amaranth.utils import ceil_log2
 from m5pre import M5Pre
 from m5meta import M5Meta
@@ -53,21 +53,13 @@ class UCodeROM(Component):
 
     Attributes
     ----------
-    field_map: dict
-        Map of strings to :class:`~amaranth.hdl.ShapeLike`, which are
-        verified against the ``fields`` supplied microcode assembly file.
-
-        Each :class:`~amaranth:amaranth.lib.enum.Enum` class should have
-        values in ``UPPER_CASE`` corresponding to an equivalent
-        `m5meta <https://github.com/brouhaha/m5meta>`_ ``enum`` whose values
-        are `lower_case`.
-    addr : Out(ceil_log2(self.depth))
+    addr : In(ceil_log2(self.depth))
         Address bus. Width is determined by microcode assembly file, which
         also initializes the otherwise-private self.depth.
 
         The default microcode file has an address space depth of 256
         (1 byte).
-    fields : In(StructLayout)
+    fields : Out(StructLayout)
         Microcode field data output.
         :class:`~amaranth:amaranth.lib.data.StructLayout` is determined by the
         microcode assembly file. A default :attr:`fields` layout will look
@@ -112,7 +104,16 @@ class UCodeROM(Component):
         The default microcode file has a data width of 48 bits (6 bytes).
     """
 
-    field_map = {
+    #: :meta hide-value:
+    #:
+    #: Map of strings to :class:`~amaranth.hdl.ShapeLike`, which are
+    #: verified against the ``fields`` supplied in the microcode assembly file.
+    #:
+    #: Each :class:`~amaranth:amaranth.lib.enum.Enum` class should have
+    #: values in ``UPPER_CASE`` corresponding to an equivalent
+    #: `m5meta <https://github.com/brouhaha/m5meta>`_ ``enum`` whose values
+    #: are `lower_case`.
+    field_map: dict = {
         "target": Target,
         "alu_op": OpType,
         "cond_test": CondTest,
@@ -170,10 +171,10 @@ class UCodeROM(Component):
         self.assemble()
         self.ucode_mem = Memory(shape=self.width, depth=self.depth,
                                 init=self.ucode_contents)
-        super().__init__({
+        super().__init__(Signature({
             "addr": Out(ceil_log2(self.depth)),
             "fields": In(self.field_layout)
-        })
+        }).flip())
 
     def elaborate(self, platform):  # noqa: D102
         m = Module()

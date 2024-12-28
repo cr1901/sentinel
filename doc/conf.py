@@ -76,7 +76,8 @@ intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
                        # 'riscof': (f'https://riscof.readthedocs.io/en/{riscof_ver}/', None)}  # noqa: E501
                        'riscof': ('https://riscof.readthedocs.io/en/stable/', None)}  # noqa: E501
 autodoc_default_options = {"members": True,
-                           "undoc-members": True}
+                           "undoc-members": True,
+                           "member-order": "bysource"}
 todo_include_todos = True
 napoleon_custom_sections = ["Registers"]
 

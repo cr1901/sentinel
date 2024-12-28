@@ -48,7 +48,6 @@ address as inputs.
 ```{eval-rst}
 .. automodule:: sentinel.ucoderom
     :members:
-    :exclude-members: field_map
 ```
 
 ```{eval-rst}
