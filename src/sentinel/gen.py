@@ -1,15 +1,20 @@
 """Verilog generation module/script for Sentinel.
 
 At present, only running this module directly from the command-line
-(as ``__main__``) is supported:
+(as ``__main__``) or from PDM is supported:
 
 ::
 
     python -m sentinel.gen --help
 
+.. code-block:: toml
+
+    [tool.pdm.scripts]
+    gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
+
 Individual functions are documented for completeness and should not be treated
 as public (see :doc:`/development/guidelines`).
-"""
+"""  # noqa: E501
 
 import argparse
 import sys
@@ -22,7 +27,14 @@ from .top import Top
 
 
 @contextmanager
-def file_or_stdout(fn):
+def _file_or_stdout(fn):
+    """Context manager to open either a file or stdout if "-" is passed.
+
+    Yields
+    ------
+    fp
+        File-like object representing either stdout or a disk-backed file.
+    """
     is_stdout = not fn or fn == "-"
 
     if not is_stdout:
@@ -37,15 +49,35 @@ def file_or_stdout(fn):
             fp.close()
 
 
-def generate_args(parser):
+def _generate_args(parser):
+    """Add argparse arguments."""
     parser.add_argument("-o", help="output filename")
     parser.add_argument("-n", help="top-level name")
     parser.add_argument("-f", action="store_true", help="add RVFI connections")
 
 
 def generate(args=None):
+    """Intended programmatic entry point to generate Sentinel core.
+
+    .. todo::
+
+        This function is not yet complete and only works in the context of invoking
+        via ``pdm``:
+
+        .. code-block:: toml
+
+            [tool.pdm.scripts]
+            gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
+
+    Parameters
+    ----------
+    args
+        Used to detect whether we are running as a script or as an imported
+        module. Leave as ``None`` until the function is completed in a later
+        release.
+    """  # noqa: E501
     def do_gen(*, n, o, f):
-        with file_or_stdout(o) as fp:
+        with _file_or_stdout(o) as fp:
             if f:
                 m = FormalTop()
             else:
@@ -65,17 +97,18 @@ def generate(args=None):
             print(verilog.convert(m))
         else:
             parser = argparse.ArgumentParser(description="Sentinel Verilog generator (invoked from PDM)")  # noqa: E501
-            generate_args(parser)
+            _generate_args(parser)
             do_gen(**vars(parser.parse_args()))
 
 
-def main():
+def _main():
+    """Scripting entry point to generate Sentinel core."""
     parser = argparse.ArgumentParser(description="Sentinel Verilog generator")
 
-    generate_args(parser)
+    _generate_args(parser)
     args = parser.parse_args()
     generate(args)
 
 
 if __name__ == "__main__":
-    main()
+    _main()
