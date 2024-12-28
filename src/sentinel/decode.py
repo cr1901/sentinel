@@ -261,8 +261,8 @@ class ExceptionControl(Component):
             # of the read-only space should succeed (but the write is
             # ignored). CSRRW and CSRRWI don't have a mechanism to only
             # read a register.
-            with m.Elif(csr_ro_space & ((csr_op == Insn._CSR.RW) |
-                                        (csr_op == Insn._CSR.RWI) |
+            with m.Elif(csr_ro_space & ((csr_op == Insn.CSR.RW) |
+                                        (csr_op == Insn.CSR.RWI) |
                                         (src_a != 0))):
                 m.d.sync += self.exception.valid.eq(1)
 

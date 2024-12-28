@@ -126,29 +126,29 @@ class MappingROM(Component):
             with m.Else():
                 # Jump to microcode routines for actual, implemented
                 # CSR registers.
-                with m.If((csr_op == Insn._CSR.RW) & (dst == 0)):
+                with m.If((csr_op == Insn.CSR.RW) & (dst == 0)):
                     m.d.sync += self.requested_op.eq(0x26)  # csrw
-                with m.Elif((csr_op == Insn._CSR.RW) & (dst != 0)):
+                with m.Elif((csr_op == Insn.CSR.RW) & (dst != 0)):
                     m.d.sync += self.requested_op.eq(0x27)  # csrrw
-                with m.Elif((csr_op == Insn._CSR.RS) & (src_a == 0)):
+                with m.Elif((csr_op == Insn.CSR.RS) & (src_a == 0)):
                     m.d.sync += self.requested_op.eq(0x28)  # csrr
-                with m.Elif((csr_op == Insn._CSR.RS) & (src_a != 0)):
+                with m.Elif((csr_op == Insn.CSR.RS) & (src_a != 0)):
                     m.d.sync += self.requested_op.eq(0x29)  # csrrs
-                with m.Elif((csr_op == Insn._CSR.RC) & (src_a == 0)):
+                with m.Elif((csr_op == Insn.CSR.RC) & (src_a == 0)):
                     m.d.sync += self.requested_op.eq(0x28)  # csrrc, no write
-                with m.Elif((csr_op == Insn._CSR.RC) & (src_a != 0)):
+                with m.Elif((csr_op == Insn.CSR.RC) & (src_a != 0)):
                     m.d.sync += self.requested_op.eq(0x2a)  # csrrc
-                with m.Elif((csr_op == Insn._CSR.RWI) & (dst == 0)):
+                with m.Elif((csr_op == Insn.CSR.RWI) & (dst == 0)):
                     m.d.sync += self.requested_op.eq(0x2b)  # csrwi
-                with m.Elif((csr_op == Insn._CSR.RWI) & (dst != 0)):
+                with m.Elif((csr_op == Insn.CSR.RWI) & (dst != 0)):
                     m.d.sync += self.requested_op.eq(0x2c)  # csrrwi
-                with m.Elif((csr_op == Insn._CSR.RSI) & (src_a == 0)):
+                with m.Elif((csr_op == Insn.CSR.RSI) & (src_a == 0)):
                     m.d.sync += self.requested_op.eq(0x28)  # csrrsi, no write
-                with m.Elif((csr_op == Insn._CSR.RSI) & (src_a != 0)):
+                with m.Elif((csr_op == Insn.CSR.RSI) & (src_a != 0)):
                     m.d.sync += self.requested_op.eq(0x2d)  # csrrsi
-                with m.Elif((csr_op == Insn._CSR.RCI) & (src_a == 0)):
+                with m.Elif((csr_op == Insn.CSR.RCI) & (src_a == 0)):
                     m.d.sync += self.requested_op.eq(0x28)  # csrrci, no write
-                with m.Elif((csr_op == Insn._CSR.RCI) & (src_a != 0)):
+                with m.Elif((csr_op == Insn.CSR.RCI) & (src_a != 0)):
                     m.d.sync += self.requested_op.eq(0x2e)  # csrrci
                 with m.Else():
                     # TODO: cover via rvformal.

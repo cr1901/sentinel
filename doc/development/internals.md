@@ -62,6 +62,11 @@ address as inputs.
     :members:
 ```
 
+```{eval-rst}
+.. automodule:: sentinel.insn
+    :members:
+```
+
 ## Arithmetic Logic Unit (ALU)
 
 ```{eval-rst}
