@@ -123,16 +123,32 @@ class Top(Component):
 
         .. code-block::
 
-            Out(Signature({
+            Signature({
                     "exception": Out(1),
                     "decode": Out(self.decode.rvfi.signature)
             })
 
-        where:
+        where
 
-        * ``exception``: Asserted if an exception occurred this cycle.
-        * ``decode``: Forwarded RVFI signals from
-          :class:`sentinel.decode.Decode`.
+        ..
+            HINT: Put ":type: Out(1)" below the content to change formatting of
+            type field in HTML docs!
+
+        .. py:attribute:: exception
+            :type: Out(1)
+
+            Asserted if an exception occurred this cycle.
+
+        ..
+            FIXME: Need some way to get the hyperlink icon back using a custom
+            index name :(...
+        .. _top-decode:
+        .. py:attribute:: decode
+            :no-index:
+            :type: Out(Signature)
+
+            :ref:`Forwarded <amaranth:wiring-forwarding>` RVFI signals from
+            :class:`sentinel.decode.Decode`.
 
         .. _formal-todo:
 

@@ -1,3 +1,5 @@
+"""Exception control classes and Components."""
+
 from amaranth import Signal, Module
 from amaranth.lib.wiring import Component, Signature, Out, In
 
@@ -6,30 +8,136 @@ from .decode import DecodeException
 from .ucodefields import MemSel, ExceptCtl
 
 
-SrcSignature = Signature({
-    "alu_lo": Out(2),
-    "csr": Out(Signature({
-        "mstatus": Out(MStatus),
-        "mip": Out(MIP),
-        "mie": Out(MIE)
-    })),
-    "ctrl": Out(Signature({
-        "mem_sel": Out(MemSel),
-        "except_ctl": Out(ExceptCtl)
-    })),
-    "decode": Out(DecodeException)
-})
-
-
-OutSignature = Signature({
-    "exception": Out(1),
-    "mcause": Out(MCause)
-})
-
-
 class ExceptionRouter(Component):
-    src: In(SrcSignature)
-    out: Out(OutSignature)
+    """Detect exceptions throughout the Sentinel core.
+
+    RISC-V defines a priority order for exceptions if multiple exceptions
+    occur at the same time. Because Sentinel is microcoded and instructions
+    take multiple cycles, priority checking is deferred to microcode routines.
+    Specifcally, :class:`ExceptionRouter` only checks for exceptions when
+    qualified by values of :class:`~sentinel.ucodefields.ExceptCtl` other than
+    :attr:`~sentinel.ucodefields.ExceptCtl.NONE`; it can only check for
+    one type of exception each clock cycle.
+
+    When :class:`~sentinel.ucodefields.ExceptCtl` is not
+    :attr:`~sentinel.ucodefields.ExceptCtl.NONE`, :class:`ExceptionRouter`
+    will output whether the queried exception occurred and latch which
+    exception occurred at the next active edge. The exception info latch
+    matches the layout of the ``MCAUSE`` register. The :attr:`mcause` port
+    is physically distinct from the ``MCAUSE`` register, and so microcode
+    should save the latch value to the actual ``MCAUSE`` register as part of
+    exception handling.
+
+    While the :class:`~sentinel.csr.MCause`
+    :class:`~amaranth.lib.data.Struct` knows about all currently-defined RISC-V
+    M-Mode exception types, :class:`ExceptionRouter` can only trigger a subset
+    of exceptions:
+
+    * Anything from :attr:`DecodeException.e_type`.
+    * :attr:`~sentinel.csr.MCause.Cause.MEXT_INT`
+    * :attr:`~sentinel.csr.MCause.Cause.INSN_MISALIGNED`
+    * :attr:`~sentinel.csr.MCause.Cause.LOAD_MISALIGNED`
+    * :attr:`~sentinel.csr.MCause.Cause.STORE_MISALIGNED`
+
+    """
+
+    # FIXME: Ugh, want to hide the ugly auto-extracted Signature from docs,
+    # but can't seem to without disabling all annotations
+    # (autodoc_typehints = "none"). Is autodoc_typehints = "description"
+    # supposed to help?
+    #: In(Signature): Exception router sources.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:     Signature({
+    #:         "alu_lo": Out(2),
+    #:         "csr": Out(Signature({
+    #:             "mstatus": Out(:class:MStatus),
+    #:             "mip": Out(MIP),
+    #:             "mie": Out(MIE)
+    #:         })),
+    #:         "ctrl": Out(Signature({
+    #:             "mem_sel": Out(MemSel),
+    #:             "except_ctl": Out(ExceptCtl)
+    #:         })),
+    #:         "decode": Out(DecodeException)
+    #:     })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: alu_lo
+    #:    :type: Out(2)
+    #:
+    #:    The low 2 bits of the :attr:`ALU output <sentinel.alu.ALU.o>`.
+    #:
+    #: .. py:attribute:: csr
+    #:    :type: Out(Signature)
+    #:
+    #:    Snoop CSR registers containing exception state. See
+    #:    :class:`~sentinel.csr.MStatus`, :class:`~sentinel.csr.MIP`, and
+    #:    :class:`~sentinel.csr.MIE`.
+    #:
+    #: .. py:attribute:: ctrl
+    #:    :type: Out(Signature)
+    #:
+    #:    Snoop microcode signals relevant to exceptions. See
+    #:    :class:`~sentinel.ucodefields.Memsel` and
+    #:    :class:`~sentinel.ucodefields.ExceptCtl`. Specifically,
+    #:    :class:`~sentinel.ucodefields.ExceptCtl` controls whether which
+    #:    exception this module
+    #:
+    #:
+    #: .. py:attribute:: decode
+    #:    :type: Out(~sentinel.decode.DecodeException)
+    #:
+    #:    Snoop decoder exception state.
+    src: In(Signature({
+        "alu_lo": Out(2),
+        "csr": Out(Signature({
+            "mstatus": Out(MStatus),
+            "mip": Out(MIP),
+            "mie": Out(MIE)
+        })),
+        "ctrl": Out(Signature({
+            "mem_sel": Out(MemSel),
+            "except_ctl": Out(ExceptCtl)
+        })),
+        "decode": Out(DecodeException)
+    }))
+    #: Out(Signature): Information on current exception.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:     Signature({
+    #:         "exception": Out(1),
+    #:         "mcause": Out(MCause)
+    #:     })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: exception
+    #:    :type: Out(1)
+    #:
+    #:    If asserted, an exception occurred last cycle, and :attr:`mcause`
+    #:    is valid.
+    #:
+    #: .. py:attribute:: mcause
+    #:    :type: Out(~sentinel.csr.MCause)
+    #:
+    #:    Qualified by :attr:`exception`. Indicates the type of exception, if
+    #:    any, which was detected last cycle where
+    #:    :class:`~sentinel.ucodefields.ExceptCtl` was not
+    #:    :attr:`~sentinel.ucodefields.ExceptCtl.NONE`. Must be saved by
+    #:    microcode if the value is needed, as this is *not* meant to hold the
+    #:    ``MCAUSE`` register.
+    out: Out(Signature({
+         "exception": Out(1),
+         "mcause": Out(MCause)
+    }))
 
     def elaborate(self, platform):  # noqa: D102
         m = Module()
