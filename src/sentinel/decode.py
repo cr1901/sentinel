@@ -1,5 +1,7 @@
+"""Sentinel RV32I Instruction decoder implementation."""
+
 from amaranth import Signal, Module, Cat, C, unsigned
-from amaranth.lib.data import Struct, StructLayout
+from amaranth.lib.data import Struct
 from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .control import MappingROM
@@ -12,25 +14,74 @@ class DecodeException(Struct):
     e_type: MCause.Cause
 
 
-# Only valid for Machine Mode CSRs at present (bits 8 and 9 stripped). No plans
-# to support Supervisor Mode, but User Mode might be worthwhile.
-# Read-only mode can be easily calculated from bits 10 and 11, so not handled
-# here.
 class CSRAttributes(Component):
-    _DataLayout = StructLayout({
-        "ill": unsigned(1),
-        "ro0": unsigned(1)
-    })
+    """Look-Up Table for CSR access control.
+
+    Rather than explicitly use combinational circuitry, I check whether the
+    CSR at a given input address is implemented, illegal to access, read-only
+    zero, or has other properties through a large
+    :ref:`Switch <amaranth:lang-switch>`.
+
+    Logic synthesizers are free to optimize this down to a block memory, logic,
+    or whatever implementation is most desirable.
+
+    This table is only valid for Machine Mode CSRs at present;
+    :class:`ExceptionControl` handles trapping on CSRs outside of Machine Mode.
+
+    .. note::
+
+        I have no plans to support Supervisor Mode, but User Mode *might* be
+        worthwhile in the future.
+    """
+
+    class _DataLayout(Struct):
+        """Useful private module-local binding for CSR access control.
+
+        Any fields added should nominally be one-hot, where zero is allowed
+        and represents "implemented and no special restrictions".
+
+        .. todo::
+
+            Right now, this isn't actually private; it is a leaky abstraction
+            because an ad-hoc compatible :class:`~amaranth.lib.data.Layout`
+            is created by :class:`sentinel.control.MappingROM`.
+
+        :meta public:
+        """
+
+        #: Set if CSR address is illegal.
+        ill: unsigned(1)
+        #: Set if CSR is read-only zero.
+        ro0: unsigned(1)
+    #: CSR is implemented mask.
     _Implemented = C({}, _DataLayout)
+    #: Illegal CSR flag.
     _Illegal = C({"ill": 1}, _DataLayout)
+    #: Read-only zero CSR flag.
     _Ro0 = C({"ro0": 1}, _DataLayout)
 
+    #: 12-bit CSR address to query.
+    addr: In(12)
+    #: Out(_DataLayout): Information on queried CSR register.
+    #:
+    #: Data will be valid on the active clock edge after :attr:`addr` is
+    #: received.
+    data: Out(_DataLayout)
+
     class _ROM:
+        """LUT implement for CSR access control.
+
+        Bits 8 and 9 are stripped from the CSR address when indexing into the
+        LUT.
+        """
+
         def __init__(self, init):
             self.rom = init
 
         def idx(self, csr_addr):
             # Strip bits 8 and 9 and concatenate to index into ROM.
+            # Read-only mode can be easily calculated from bits 10 and 11,
+            # so not handled here.
             return (csr_addr & 0xff) + ((csr_addr & 0xc00) >> 2)
 
         def __getitem__(self, k):
@@ -47,23 +98,15 @@ class CSRAttributes(Component):
         # zero: bit 1 set
         # mstatus, mie, mtvec, mscratch, mepc, mcause, mip: both bits clear
         # ^These registers are actually implemented.
-        # By default, access is illegal. Any fields added should nominally
-        # be one-hot (zero allowed).
-        self._rom = CSRAttributes._ROM(
-            [CSRAttributes._Illegal] * 1024)
-
-        sig = {
-            "addr": Out(12),
-            "data": In(CSRAttributes._DataLayout),
-        }
-
+        # By default, access is illegal.
+        self._rom = CSRAttributes._ROM([CSRAttributes._Illegal] * 1024)
         self._rom_init()
-        super().__init__(Signature(sig).flip())
+        super().__init__()
 
     def elaborate(self, platform):  # noqa: D102
         m = Module()
 
-        # FIXME: Use _CSR somehow to make self.addr slicing nicer?
+        # FIXME: Use CSR somehow to make self.addr slicing nicer?
         # Use Cases to let the optimizer decide whether to use a BRAM or not.
         with m.Switch(Cat(self.addr[0:8], self.addr[10:])):
             for i, v in enumerate(self._rom):
