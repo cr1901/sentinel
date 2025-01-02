@@ -107,10 +107,10 @@ Mick and Brick introduces some jargon that I use in Sentinel:
 This list is probably incomplete.
 ```
 
-(cc-mux)=
+```{glossary}
 Condition Code Multiplexer
-: A multiplexer of various conditional tests. The output of this multiplexer,
-  selected by the microcode, becomes an test input to the {ref}`Sequencer <sequencer>`.
+  A multiplexer of various conditional tests. The output of this multiplexer,
+  selected by the microcode, becomes an test input to the {term}`Sequencer`.
   The conditional test result can often be inverted by microcode to double the
   number of possible tests.
   
@@ -122,12 +122,12 @@ Condition Code Multiplexer
   * Unconditionally true/false.
 
 Macroinstruction
-: An unit of execution from the CPU's instruction set, composed of
+  An unit of execution from the CPU's instruction set, composed of
   microinstructions. In Sentinel's case, macroinstructions are RISC-V
   instructions.
 
 Mapping (P)ROM
-: A (P)ROM which maps of the macroarchitecture opcode into microprogram
+  A (P)ROM which maps of the macroarchitecture opcode into microprogram
   jump targets. It is the hardware version of a [jump table](https://en.wikipedia.org/wiki/Branch_table),
   where the jump index is retrived from the macroinstruction opcode.
 
@@ -138,16 +138,16 @@ Mapping (P)ROM
   In Sentinel, the Mapping "(P)ROM" is implemented in combinational logic.
 
 Microinstruction
-: A microprogram/microcode instruction. Macroinstructions are composed of
+  A microprogram/microcode instruction. Macroinstructions are composed of
   multiple microinstructions.
 
 Microprogram Counter
-: Register whose value is the address of the microcode instruction which
+  Register whose value is the address of the microcode instruction which
   will execute on the _next_ clock cycle, _assuming the sequencer chooses
   to use it_.
 
 Pipeline Register
-: In microcode, the pipeline register _specifically_ refers to a holding
+  In microcode, the pipeline register _specifically_ refers to a holding
   register containing the bits of the currently-executing microinstruction.
 
   In Sentinel, the pipeline register is part of the _synchronous_ read port
@@ -156,11 +156,10 @@ Pipeline Register
   the microinstruction at this address appears on the read port on the next
   clock cycle.
 
-(sequencer)=
 Sequencer
-: Component which supplies the address of the microinstruction which will be
+  Component which supplies the address of the microinstruction which will be
   output on the _next_ clock cycle. It chooses between various sources based
-  on a test condition provided by the {ref}`Condition Code Multiplexer <cc-mux>`.
+  on a test condition provided by the {term}`Condition Code Multiplexer`.
   
   Sources used by Sentinel, include:
 
@@ -168,6 +167,7 @@ Sequencer
   * An address constant in the microcode instruction.
   * A mapping PROM.
   * An implied constant `0`.
+```
 
 
 ## Microcode Fields
