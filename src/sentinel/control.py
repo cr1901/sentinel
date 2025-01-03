@@ -1,3 +1,5 @@
+"""Sentinel control unit implementation and microcode ROM wrapper."""
+
 from amaranth import Signal, Elaboratable, Module, Cat, C, unsigned
 from amaranth.lib.data import StructLayout
 from amaranth.lib.wiring import Component, Signature, In, Out
@@ -11,15 +13,6 @@ from .insn import Insn, OpcodeType
 from .ucodefields import JmpType, CondTest
 
 from typing import TextIO, Optional
-
-
-# ControlSignature = Signature({
-#     "alu": Out(AluCtrlSignature),
-#     "decode": In(1),
-#     "gp": Out(GPControlSignature),
-#     "pc": Out(PCControlSignature),
-#     "csr": Out(CSRControlSignature)
-# })
 
 
 # The MappingROM itself knows how to handle CSRs. Logically it's part of the
@@ -287,8 +280,77 @@ class Control(Component):
         return m
 
 
-# Microprogram address generation.
+# FIXME: Why is the an Elaboratable again?
 class Sequencer(Elaboratable):
+    """Microprogram address generation. See :term:`sequencer`.
+
+    :class:`Sequencer` generates the address of the *next*
+    :term:`microinstruction` to execute using the semantics explained in
+    :class:`~sentinel.ucodefields.JmpType`. It also implicitly contains the
+    :term:`microprogram counter (upc) <microprogram counter>`, accessed via
+    :attr:`~sentinel.ucodefields.JmpType.CONT`. On reset, the upc is reset to
+    ``2``, and *stays* at ``2`` until reset is released.
+
+    .. warning::
+
+        Because the upc has "points to *next-cycle* instruction" semantics, the
+        microinstruction driving the CPU is **undefined** for a single clock
+        cycle after reset is explicitly asserted (i.e. non-power-on-reset).
+        This may result in undesirable side effects that require extra guard
+        logic or microcode to quash. Bugs I've found include:
+
+        * ``WB_CYC`` and ``WB_STB`` do not deassert on the first cycle after
+          reset (fixed by guard logic).
+        * Initial instruction fetch uses address ``4`` instead of ``0``
+          (fixed in microcode).
+
+        I have basic tests for flushing out these types of bugs, and to the
+        best of my knowledge (1/3/2025), all of the reset bugs I encountered
+        have been fixed. But I need to create a verification step to
+        characterize all possible reset behavior to flush out other possible
+        issues. *For now, if you find a reset bug, please let me know and try
+        to reproduce*, as this is the likely cause.
+
+        AFAICT, none of the above applies for
+        power-on-reset; your target toolchain should provide
+        `logic <https://github.com/amaranth-lang/amaranth/blob/f9da3c0d166dd2be189945dca5a94e781e74afeb/amaranth/hdl/mem.py#L153>`_
+        so that the microinstruction at ``2`` is driving the CPU on
+        power-on-reset. And even then, a power-on-reset circuit should be
+        holding the design in reset for more than 1 clock cycle, which prevents
+        at least *some* (all?) of the bad side-effects :).
+
+    Parameters
+    ----------
+    ucoderom: :class:`~sentinel.ucoderom.UCodeROM`
+        Microcode program ROM to which to connect the :class:`Sequencer`.
+
+    Attributes
+    ----------
+    target : Signal(:data:`~sentinel.ucodefields.Target`)
+        Target :term:`microinstruction` address microcode field, used by the
+        :term:`sequencer` for :attr:`~sentinel.ucodefields.JmpType.DIRECT` and
+        :attr:`~sentinel.ucodefields.JmpType.DIRECT_ZERO`.
+    jmp_type : Signal(:class:`~sentinel.ucodefields.JmpType`)
+        Select the next :term:`microinstruction` address to place in
+        :attr:`adr`. Next addresses are calculated in parallel for all
+        possible :attr:`JmpTypes <~sentinel.ucodefields.JmpType>`, and are
+        selected/muxed here.
+    adr : Signal(:data:`~sentinel.ucodefields.Target`)
+        Address of the next :term:`microinstruction` to execute, subject to
+        the input :ref:`Signals <amaranth:lang-signals>`.
+    opcode_adr : Signal(:data:`~sentinel.ucodefields.Target`)
+        Address calculated from :class:`MappingROM`, used for
+        :attr:`~sentinel.ucodefields.JmpType.MAP`. It typically contains a
+        microprogram address for handling the currently-executing
+        :term:`macroinstruction`.
+    vec_adr : Signal(:data:`~sentinel.ucodefields.Target`)
+        Currently unused signal for possible future expansion.
+    test: Signal(1)
+        If set, the condition test described by the current value of
+        :class:`~sentinel.ucodefields.CondTest` succeeded this cycle. This in
+        turn affects :attr:`adr`, depending on :attr:`jmp_type`.
+    """  # noqa: RUF100, E501
+
     def __init__(self, ucoderom):
         # Get info required from ucoderom.
         self.target = Signal.like(ucoderom.fields.target)
