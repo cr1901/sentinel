@@ -170,71 +170,17 @@ class BSrcMux(Component):
         return m
 
 
-class Unit(Elaboratable):
-    def __init__(self, width, op):
-        self.a = Signal(width)
-        self.b = Signal(width)
-        self.o = Signal(width)
-        self.op = op
-
-    def elaborate(self, platform):  # noqa: D102
-        m = Module()
-        m.d.comb += self.o.eq(self.op(self.a, self.b))
-        return m
-
-
-class Adder(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a + b)
-
-
-class Subtractor(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a - b)
-
-
-class AND(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a & b)
-
-
-class OR(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a | b)
-
-
-class XOR(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, b: a ^ b)
-
-
-class ShiftLogicalLeft(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, _: a << 1)
-
-
-class ShiftLogicalRight(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, _: a >> 1)
-
-
-class ShiftArithmeticRight(Unit):
-    def __init__(self, width):
-        super().__init__(width, lambda a, _: a.as_signed() >> 1)
-
-
-AluCtrlSignature = Signature({
-    "op": Out(OpType),
-    "imod": Out(ALUIMod),
-    "omod": Out(ALUOMod),
-    "zero": In(1)
-})
-
-
 class ALU(Component):
     """Basic Arithmetic Logic Unit.
 
-    The ALU Performs "A OP B", where "OP" is chosen by :attr:`ctrl`.
+    The ALU Performs "A OP B", where "OP" is chosen by :attr:`ctrl`. More
+    operations can be synthesized from the ones directly supported by
+    :class:`sentinel.ucodefields.OpType` by using :attr:`ctrl` modifiers.
+
+    Parameters
+    ----------
+    width: int
+        Width in bits of the ALU inputs and output.
 
     Attributes
     ----------
@@ -244,10 +190,68 @@ class ALU(Component):
         ALU B input.
     o: Out(width)
         ALU output. Valid 1 clock cycle after inputs.
-    ctrl: In(AluCtrlSignature)
-        Choose the ALU op to perform this cycle, possibly modifying the output.
-        Also check if the ALU op on the previous cycle was ``0``.
+    ctrl: In(:attr:`~sentinel.alu.ALU.ControlSignature`)
+        Choose the ALU op to perform this cycle, possibly modifying the input
+        or output. Also check if the ALU op on the previous cycle was ``0``.
     """
+
+    #: Signature: ALU microcode signals and useful state.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:    Signature({
+    #:        "op": Out(OpType),
+    #:        "imod": Out(ALUIMod),
+    #:        "omod": Out(ALUOMod),
+    #:        "zero": In(1)
+    #:    })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: op
+    #:    :type: Out(~sentinel.ucodefields.OpType)
+    #:
+    #:    ALU operation to perform this cycle.
+    #:
+    #: .. py:attribute:: imod
+    #:    :type: Out(~sentinel.ucodefields.ALUIMod)
+    #:
+    #:    Modify the inputs :attr:`a` and :attr:`b` before doing ALU
+    #:    operation.
+    #:
+    #: .. py:attribute:: omod
+    #:    :type: Out(~sentinel.ucodefields.ALUOMod)
+    #:
+    #:    Modify the output after doing ALU operation, but before latching
+    #:    the ALU output into :attr:`o` (for next cycle).
+    #:
+    #: .. py:attribute:: zero
+    #:    :type: In(1)
+    #:
+    #:    Set if  the current :attr:`output <o>` (i.e. the result of the ALU
+    #:    operation done *last* cycle) is ``0``.
+    ControlSignature = Signature({
+        "op": Out(OpType),
+        "imod": Out(ALUIMod),
+        "omod": Out(ALUOMod),
+        "zero": In(1)
+    })
+
+    class _Unit(Elaboratable):
+        """Wrapper class for implementing basic arithmetic/logic ops."""
+
+        def __init__(self, width, op):
+            self.a = Signal(width)
+            self.b = Signal(width)
+            self.o = Signal(width)
+            self.op = op
+
+        def elaborate(self, platform):
+            m = Module()
+            m.d.comb += self.o.eq(self.op(self.a, self.b))
+            return m
 
     # Assumes: op is held steady for duration of op.
     def __init__(self, width: int):
@@ -256,21 +260,20 @@ class ALU(Component):
             "a": Out(self.width),
             "b": Out(self.width),
             "o": In(self.width),
-            "ctrl": Out(AluCtrlSignature),
+            "ctrl": Out(ALU.ControlSignature),
         }).flip())
 
         ###
 
         self.o_mux = Signal(width)
-
-        self.add = Adder(width)
-        self.sub = Subtractor(width + 1)
-        self.and_ = AND(width)
-        self.or_ = OR(width)
-        self.xor = XOR(width)
-        self.sll = ShiftLogicalLeft(width)
-        self.srl = ShiftLogicalRight(width)
-        self.sar = ShiftArithmeticRight(width)
+        self.add = ALU._Unit(width, lambda a, b: a + b)
+        self.sub = ALU._Unit(width + 1, lambda a, b: a - b)  # width + 1 for borrow bit.  # noqa: E501
+        self.and_ = ALU._Unit(width, lambda a, b: a & b)
+        self.or_ = ALU._Unit(width, lambda a, b: a | b)
+        self.xor = ALU._Unit(width, lambda a, b: a ^ b)
+        self.sll = ALU._Unit(width, lambda a, _: a << 1)
+        self.srl = ALU._Unit(width, lambda a, _: a >> 1)
+        self.sar = ALU._Unit(width, lambda a, _: a.as_signed() >> 1)
 
     def elaborate(self, platform):  # noqa: D102
         m = Module()

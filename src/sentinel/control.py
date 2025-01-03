@@ -2,7 +2,7 @@ from amaranth import Signal, Elaboratable, Module, Cat, C, unsigned
 from amaranth.lib.data import StructLayout
 from amaranth.lib.wiring import Component, Signature, In, Out
 
-from .alu import AluCtrlSignature
+from .alu import ALU
 from .ucoderom import UCodeROM
 from .datapath import GPControlSignature, PCControlSignature, \
     CSRControlSignature
@@ -13,13 +13,13 @@ from .ucodefields import JmpType, CondTest
 from typing import TextIO, Optional
 
 
-ControlSignature = Signature({
-    "alu": Out(AluCtrlSignature),
-    "decode": In(1),
-    "gp": Out(GPControlSignature),
-    "pc": Out(PCControlSignature),
-    "csr": Out(CSRControlSignature)
-})
+# ControlSignature = Signature({
+#     "alu": Out(AluCtrlSignature),
+#     "decode": In(1),
+#     "gp": Out(GPControlSignature),
+#     "pc": Out(PCControlSignature),
+#     "csr": Out(CSRControlSignature)
+# })
 
 
 # The MappingROM itself knows how to handle CSRs. Logically it's part of the
@@ -211,7 +211,7 @@ class Control(Component):
         self.except_ctl = Signal.like(self.ucoderom.fields.except_ctl)
 
         super().__init__({
-            "alu": Out(AluCtrlSignature),
+            "alu": Out(ALU.ControlSignature),
             "decode": In(1),
             "gp": Out(GPControlSignature),
             "pc": Out(PCControlSignature),
