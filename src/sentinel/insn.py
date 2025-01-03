@@ -102,7 +102,7 @@ class Insn:
                        self.raw[12:20], Value.replicate(self.sign, 12))
 
     class CSR:
-        """Extract a RISC-V CSR info from an instruction.
+        """Extract RISC-V CSR info from an instruction.
 
         This class does *not* (and *can not*) check whether the given
         instruction is a CSR instruction. The user is expected to know a priori

@@ -20,7 +20,7 @@ class ASrcMux(Component):
     #: When asserted, latch the :attr:`selected <sentinel.alu.ASrcMux.sel>`
     #: input into :attr:`~sentinel.alu.ASrcMux.data` on the next clock edge.
     latch: In(1)
-    #: Select input. See :class:`~sentinel.ucodefields.ASrc`.
+    #: In(ASrc): Select input.
     sel: In(ASrc)
     #: Input source. Register from the
     #: :class:`register file <sentinel.datapath.RegFile>`
@@ -68,7 +68,8 @@ class BSrcMux(Component):
     :attr:`~sentinel.alu.BSrcMux.data` output is registered and feeds
     immediately into the ALU B input.
 
-    When requested, this module will automatically move/align the top 16-bits
+    When requested, this module will automatically
+    :class:`move/align <sentinel.align.ReadDataAlign>` the top 16-bits
     of the 32-bit :attr:`read data bus input <BSrcMux.dat_r>` to the bottom
     16-bits, or any of of 3 high bytes into the bottom 8-bits. The mux will
     latch the aligned data when :attr:`selected <sentinel.alu.BSrcMux.sel>`
@@ -109,10 +110,10 @@ class BSrcMux(Component):
     #: qualified by :attr:`~CondTest.MEM_VALID`.
     #:
     #: As an input, ``DAT_I`` is always 32-bit aligned. The mux contains
-    #: internal alignment circuitry when a read of 8 or 16-bits on a
-    #: less-than-32-bit alignment is requested. When
-    #: :attr:`selected <sentinel.alu.BSrcMux.sel>`, the mux will latched this
-    #: modified/aligned data into :attr:`~BSrcMux.data`.
+    #: :class:`internal alignment circuitry <sentinel.align.ReadDataAlign>`
+    #: when a read of 8 or 16-bits on a less-than-32-bit alignment is
+    #: requested. When :attr:`selected <sentinel.alu.BSrcMux.sel>`, the mux
+    #: will latched this modified/aligned data into :attr:`~BSrcMux.data`.
     dat_r: In(32)
     #: Input source. :attr:`Decoded src_a <sentinel.decoder.Decode.src_a>`
     #: from the current instruction, which for CSR instructions is reused

@@ -43,7 +43,7 @@ address as inputs.
     :members:
 ```
 
-## Microcode ROM
+## Microcode ROM and Control
 
 ```{eval-rst}
 .. automodule:: sentinel.ucoderom
@@ -112,7 +112,8 @@ using the components from the {py:mod}`~sentinel.align` module.
 ```
 
 Aside from aligning, the glue logic for latching addresses, read data, and
-write data is minimal and controlled directly by microcode signals. -->
+write data is minimal and controlled directly by
+{mod}`microcode signals <sentinel.ucodefields>`.
 
 ## Instruction Cycle Counts
 

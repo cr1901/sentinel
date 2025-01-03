@@ -186,8 +186,8 @@ is extra room. With that said:
 * I try to keep instructions with the similar functionality ("major opcode")
   together.
 * I try to avoid backward jumps, except for jumping to the next
-  macroinstruction, but they are sometimes unavoidable (see `beq` and `bne`
-  labels).
+  {term}`macroinstruction`, but they are sometimes unavoidable (see `beq` and
+  `bne` labels).
 
 ```{eval-rst}
 .. literalinclude:: ../../src/sentinel/microcode.asm

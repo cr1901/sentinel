@@ -83,11 +83,8 @@ class ExceptionRouter(Component):
     #:    :type: Out(Signature)
     #:
     #:    Snoop microcode signals relevant to exceptions. See
-    #:    :class:`~sentinel.ucodefields.Memsel` and
-    #:    :class:`~sentinel.ucodefields.ExceptCtl`. Specifically,
-    #:    :class:`~sentinel.ucodefields.ExceptCtl` controls whether which
-    #:    exception this module
-    #:
+    #:    :class:`~sentinel.ucodefields.MemSel` and
+    #:    :class:`~sentinel.ucodefields.ExceptCtl`.
     #:
     #: .. py:attribute:: decode
     #:    :type: Out(~sentinel.decode.DecodeException)
