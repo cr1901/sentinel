@@ -45,7 +45,7 @@ def make_cpu_tb(mod, sim_mem, regs, mem, csrs):
         for curr_r, curr_m, curr_c in zip(regs, mem, csrs):
             # Wait for insn.
             await ctx.tick().until(m.bus.cyc & m.bus.stb &
-                                   m.control.insn_fetch)
+                                   m.control.mem.insn_fetch)
 
             while ctx.get(~m.bus.ack):
                 await ctx.tick()
@@ -571,7 +571,7 @@ def trigger_reset_tb(mod, request):
 
         ctx.set(m.en, 1)
         *_, addr = await ctx.tick().sample(m.bus.adr).until(
-                 m.bus.cyc & m.bus.stb & m.top.control.insn_fetch)
+                 m.bus.cyc & m.bus.stb & m.top.control.mem.insn_fetch)
 
         ctx.set(m.bus.ack, 1)
         await ctx.tick()
@@ -616,7 +616,7 @@ def trigger_reset_tb(mod, request):
                 ctx.set(m.en, 1)
 
         *_, addr = await ctx.tick().sample(m.bus.adr).until(
-                 m.bus.cyc & m.bus.stb & m.top.control.insn_fetch)
+                 m.bus.cyc & m.bus.stb & m.top.control.mem.insn_fetch)
         # We just reset, so the first insn we fetch better be at addr 0x0!
         assert addr == 0x0
 
@@ -667,7 +667,7 @@ def self_modify_tb(mod):
 
         for _ in range(2):
             await ctx.tick().until(m.bus.cyc & m.bus.stb &
-                                   m.top.control.insn_fetch)
+                                   m.top.control.mem.insn_fetch)
 
         # FIXME: Fragile... we shouldn't depend on microcode addrs, but
         # we need to know the clock cycle before a WB cycle starts and then
@@ -683,7 +683,7 @@ def self_modify_tb(mod):
         assert not ctx.get(m.bus.cyc) and not ctx.get(m.bus.stb)
 
         await ctx.tick().sample(m.bus.adr).until(
-                    m.bus.cyc & m.bus.stb & m.top.control.insn_fetch)
+                    m.bus.cyc & m.bus.stb & m.top.control.mem.insn_fetch)
 
     return control_tb
 

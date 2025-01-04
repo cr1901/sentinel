@@ -291,7 +291,7 @@ class FormalTop(Component):
         # If we fetched an insn and the bus just ACK'ed, the next cycle the
         # microcode will check for interrupts and start processing the
         # insn. Therefore this cycle can be considered retirement.
-        m.d.comb += committed_to_insn.eq(self.cpu.control.insn_fetch &
+        m.d.comb += committed_to_insn.eq(self.cpu.control.mem.insn_fetch &
                                          self.cpu.bus.ack &
                                          (self.cpu.control.ucoderom.addr ==
                                           self._CHECK_INT_ADDR))
@@ -398,7 +398,7 @@ class FormalTop(Component):
             m.d.sync += self.rvfi.trap.eq(1)
 
         # Non-insn memory accesses.
-        with m.If(~self.cpu.control.insn_fetch & self.cpu.control.mem_req &
+        with m.If(~self.cpu.control.mem.insn_fetch & self.cpu.control.mem.req &
                   self.cpu.bus.ack):
             m.d.sync += [
                 self.rvfi.mem_addr.eq(self.cpu.bus.adr << 2),

@@ -237,10 +237,10 @@ class Top(Component):
         write_data = Signal.like(self.bus.dat_w)
         mem_reset_guard = Signal(init=1)
 
-        with m.If(self.control.latch_adr):
+        with m.If(self.control.mem.latch_adr):
             m.d.sync += data_adr.eq(self.alu.o)
 
-        with m.If(self.control.latch_data):
+        with m.If(self.control.mem.latch_data):
             m.d.sync += write_data.eq(self.wdata_align.wb_dat_w)
 
         m.d.sync += mem_reset_guard.eq(0)
@@ -253,16 +253,16 @@ class Top(Component):
         m.d.comb += [
             # Stale microcode entry that asserts mem_req might survive reset
             # and then attempt to read/write address 0!
-            self.bus.cyc.eq(self.control.mem_req & ~mem_reset_guard),
-            self.bus.stb.eq(self.control.mem_req & ~mem_reset_guard),
-            self.bus.we.eq(self.control.write_mem),
+            self.bus.cyc.eq(self.control.mem.req & ~mem_reset_guard),
+            self.bus.stb.eq(self.control.mem.req & ~mem_reset_guard),
+            self.bus.we.eq(self.control.mem.write),
             self.bus.dat_w.eq(write_data),
             self.bus.adr.eq(self.addr_align.wb_adr),
             self.bus.sel.eq(self.addr_align.wb_sel),
             read_data.eq(self.bus.dat_r),
             mem_ack.eq(self.bus.ack),
             irq.eq(self.irq)
-            # self.insn_fetch.eq(self.control.insn_fetch)
+            # self.insn_fetch.eq(self.control.mem.insn_fetch)
         ]
 
         # ALU conns
@@ -270,15 +270,15 @@ class Top(Component):
 
         m.d.comb += [
             self.alu.a.eq(self.a_src.data),
-            self.a_src.latch.eq(self.control.latch_a),
-            self.a_src.sel.eq(self.control.a_src),
+            self.a_src.latch.eq(self.control.route.latch_a),
+            self.a_src.sel.eq(self.control.route.a_src),
             self.a_src.gp.eq(self.datapath.gp.dat_r),
             self.a_src.imm.eq(self.decode.imm),
             self.a_src.alu.eq(self.alu.o),
 
             self.alu.b.eq(self.b_src.data),
-            self.b_src.latch.eq(self.control.latch_b),
-            self.b_src.sel.eq(self.control.b_src),
+            self.b_src.latch.eq(self.control.route.latch_b),
+            self.b_src.sel.eq(self.control.route.b_src),
             self.b_src.gp.eq(self.datapath.gp.dat_r),
             self.b_src.imm.eq(self.decode.imm),
             self.b_src.pc.eq(self.datapath.pc.dat_r),
@@ -294,18 +294,18 @@ class Top(Component):
         insn_fetch_next = Signal()
 
         m.d.comb += [
-            self.control.opcode.eq(self.decode.opcode),
-            self.control.requested_op.eq(self.decode.requested_op),
+            self.control.decode.opcode.eq(self.decode.opcode),
+            self.control.decode.requested_op.eq(self.decode.requested_op),
             # TODO: Spin out into a register of exception sources.
             self.control.exception.eq(self.exception_router.out.exception),
-            self.control.mem_valid.eq(mem_ack),
+            self.control.mem.valid.eq(mem_ack),
 
-            req_next.eq(self.control.mem_req),
-            insn_fetch_next.eq(self.control.insn_fetch),
+            req_next.eq(self.control.mem.req),
+            insn_fetch_next.eq(self.control.mem.insn_fetch),
 
             self.decode.insn.eq(read_data),
             # Decode begins automatically.
-            self.decode.do_decode.eq(self.control.insn_fetch & mem_ack),
+            self.decode.do_decode.eq(self.control.mem.insn_fetch & mem_ack),
         ]
 
         # DataPath conns
@@ -332,17 +332,17 @@ class Top(Component):
 
         # Alignment conns
         m.d.comb += [
-            self.addr_align.mem_req.eq(self.control.mem_req),
-            self.addr_align.mem_sel.eq(self.control.mem_sel),
-            self.addr_align.insn_fetch.eq(self.control.insn_fetch),
+            self.addr_align.mem_req.eq(self.control.mem.req),
+            self.addr_align.mem_sel.eq(self.control.mem.sel),
+            self.addr_align.insn_fetch.eq(self.control.mem.insn_fetch),
             self.addr_align.latched_adr.eq(data_adr),
             self.addr_align.pc.eq(self.datapath.pc.dat_r),
 
-            self.b_src.mem_sel.eq(self.control.mem_sel),
-            self.b_src.mem_extend.eq(self.control.mem_extend),
+            self.b_src.mem_sel.eq(self.control.mem.sel),
+            self.b_src.mem_extend.eq(self.control.mem.extend),
             self.b_src.data_adr.eq(data_adr),
 
-            self.wdata_align.mem_sel.eq(self.control.mem_sel),
+            self.wdata_align.mem_sel.eq(self.control.mem.sel),
             self.wdata_align.latched_adr.eq(data_adr),
             self.wdata_align.data.eq(self.alu.o),
         ]
@@ -351,7 +351,7 @@ class Top(Component):
         # FIXME: This should be replaced with the following glue once I
         # figure out why DataPathSrcMux doesn't optimize well:
         # m.d.comb += [
-        #     self.d_src.insn_fetch.eq(self.control.insn_fetch),
+        #     self.d_src.insn_fetch.eq(self.control.mem.insn_fetch),
         #     self.d_src.reg_r_sel.eq(self.control.reg_r_sel),
         #     self.d_src.reg_w_sel.eq(self.control.reg_w_sel),
         #     self.d_src.csr_sel.eq(self.control.csr_sel),
@@ -371,16 +371,16 @@ class Top(Component):
         # DataPathSrcMux inline implementation. Optimizes much better than the
         # module, especially with the reg_{r,w}_adr intermediate Signals.
         # Doesn't make much sense to me, but whatever...
-        with m.Switch(self.control.reg_r_sel):
+        with m.Switch(self.control.route.reg_r_sel):
             with m.Case(RegRSel.INSN_RS1):
-                with m.If(self.control.insn_fetch):
+                with m.If(self.control.mem.insn_fetch):
                     m.d.comb += reg_r_adr.eq(self.decode.src_a_unreg)
                 with m.Else():
                     m.d.comb += reg_r_adr.eq(self.decode.src_a)
             with m.Case(RegRSel.INSN_RS2):
                 m.d.comb += reg_r_adr.eq(self.decode.src_b)
 
-        with m.Switch(self.control.reg_w_sel):
+        with m.Switch(self.control.route.reg_w_sel):
             with m.Case(RegWSel.INSN_RD):
                 m.d.comb += reg_w_adr.eq(self.decode.dst)
             with m.Case(RegWSel.ZERO):
@@ -391,7 +391,7 @@ class Top(Component):
 
         # CSR Op/Address control (data conns taken care above)
         m.d.comb += self.datapath.csr.ctrl.op.eq(self.control.csr.op)
-        with m.Switch(self.control.csr_sel):
+        with m.Switch(self.control.route.csr_sel):
             with m.Case(CSRSel.INSN_CSR):
                 m.d.comb += self.datapath.csr.adr.eq(self.decode.csr_encoding)
             with m.Case(CSRSel.TRG_CSR):
@@ -404,7 +404,7 @@ class Top(Component):
                 self.datapath.csr.mstatus_r),
             self.exception_router.src.csr.mip.eq(self.datapath.csr.mip_r),
             self.exception_router.src.csr.mie.eq(self.datapath.csr.mie_r),
-            self.exception_router.src.ctrl.mem_sel.eq(self.control.mem_sel),
+            self.exception_router.src.ctrl.mem_sel.eq(self.control.mem.sel),
             self.exception_router.src.ctrl.except_ctl.eq(
                 self.control.except_ctl),
             self.exception_router.src.decode.eq(self.decode.exception),

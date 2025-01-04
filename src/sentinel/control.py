@@ -10,7 +10,9 @@ from .datapath import GPControlSignature, PCControlSignature, \
     CSRControlSignature
 
 from .insn import Insn, OpcodeType
-from .ucodefields import JmpType, CondTest
+from .ucodefields import JmpType, CondTest, MemReq, MemSel, WriteMem, \
+    InsnFetch, MemExtend, LatchData, LatchAdr, ExceptCtl, Target, ASrc, \
+    BSrc, LatchA, LatchB, RegRSel, RegWSel, CSRSel
 
 from typing import TextIO, Optional
 
@@ -153,7 +155,47 @@ class MappingROM(Component):
         return m
 
 
+# Control at present doesn't have a parametric interface. However, I anticipate
+# that will change in the near-future, so preemptively stuff Attributes into
+# class docstring.
 class Control(Component):
+    """Sentinel Control Unit.
+
+    The Sentinel Control Unit consists of three parts:
+
+    * :class:`Sequencer`
+    * :class:`~sentinel.ucoderom.UCodeROM`
+    * Multiplexer for :class:`condition test <sentinel.ucodefields.CondTest>`
+      sources.
+
+    In principle :class:`MappingROM` is also part of the Control Unit.
+    However, I found it to be a space win to tightly couple it to the
+    :class:`~sentinel.decode.Decoder`.
+
+    This :class:`Component <amaranth.lib.wiring.Component>` is pure
+    combinational logic. Beyond connecting the above parts together,
+    :class:`Control` propagates microcode ROM
+    :mod:`control signals <sentinel.ucodefields>` to the rest of the core. In
+    turn, it snoops control and data signals from *other* parts of the core
+    to drive the microcode program forward.
+
+    .. todo::
+
+        Interface attributes are incomplete.
+
+    Parameters
+    ----------
+    ucode: Optional[TextIO] = None
+        Microcode file to assemble and load. By default, use
+        :func:`~sentinel.ucoderom.UCodeROM.main_microcode_file`.
+
+    Attributes
+    ----------
+    ucoderom: UCodeROM
+
+    sequencer: Sequencer
+    """
+
     def __init__(self, ucode: Optional[TextIO] = None):
         self.ucoderom = UCodeROM(main_file=ucode)
         # Enums from microcode ROM.
@@ -161,54 +203,38 @@ class Control(Component):
 
         # Control inputs
         self.vec_adr = Signal.like(self.ucoderom.fields.target)
-        # Direct 5 high bits of opcode.
-        self.opcode = Signal(OpcodeType)
-        # RISCV major/minor opcodes compressed into 8 bits to index into
-        # ucode ROM. Chosen through trial and error.
-        self.requested_op = Signal(8)
-        # funct12 ECALL (0) or EBREAK (1)
-        self.e_type = Signal(1)
-        # Load should zero-extend, not sign extend.
-        # self.load_unsigned = Signal(1)
-
-        # Predicates for test mux.
-        self.mem_valid = Signal()
-        # OR of illegal insn, ecall, ebreak, misaligned load/store,
-        # misaligned insn.
-        self.exception = Signal()
-        self.interrupt = Signal()
-        self.raw_test = Signal()  # Output of test mux.
-        self.test = Signal()  # Possibly-inverted test result.
-
-        # Internally-used microcode signals
-        self.target = Signal.like(self.ucoderom.fields.target)
-        self.jmp_type = Signal.like(self.ucoderom.fields.jmp_type)
-        self.cond_test = Signal.like(self.ucoderom.fields.cond_test)
-        self.invert_test = Signal.like(self.ucoderom.fields.invert_test)
-
-        # Control outputs- mostly from microcode ROM.
-        self.a_src = Signal.like(self.ucoderom.fields.a_src)
-        self.b_src = Signal.like(self.ucoderom.fields.b_src)
-        self.latch_a = Signal.like(self.ucoderom.fields.latch_a)
-        self.latch_b = Signal.like(self.ucoderom.fields.latch_b)
-        self.mem_req = Signal.like(self.ucoderom.fields.mem_req)
-        self.mem_sel = Signal.like(self.ucoderom.fields.mem_sel)
-        self.latch_adr = Signal.like(self.ucoderom.fields.latch_adr)
-        self.latch_data = Signal.like(self.ucoderom.fields.latch_data)
-        self.write_mem = Signal.like(self.ucoderom.fields.write_mem)
-        self.insn_fetch = Signal.like(self.ucoderom.fields.insn_fetch)
-        self.reg_r_sel = Signal.like(self.ucoderom.fields.reg_r_sel)
-        self.reg_w_sel = Signal.like(self.ucoderom.fields.reg_w_sel)
-        self.csr_sel = Signal.like(self.ucoderom.fields.csr_sel)
-        self.mem_extend = Signal.like(self.ucoderom.fields.mem_extend)
-        self.except_ctl = Signal.like(self.ucoderom.fields.except_ctl)
 
         super().__init__({
             "alu": Out(ALU.ControlSignature),
-            "decode": In(1),
+            "decode": In(Signature({
+                "opcode": Out(OpcodeType),
+                "requested_op": Out(8),
+            })),
             "gp": Out(GPControlSignature),
             "pc": Out(PCControlSignature),
-            "csr": Out(CSRControlSignature)
+            "csr": Out(CSRControlSignature),
+            "mem": Out(Signature({
+                "req": Out(MemReq),
+                "sel": Out(MemSel),
+                "valid": In(1),
+                "write": Out(WriteMem),
+                "insn_fetch": Out(InsnFetch),
+                "extend": Out(MemExtend),
+                "latch_data": Out(LatchData),
+                "latch_adr": Out(LatchAdr)
+            })),
+            "route": Out(Signature({
+                "a_src": Out(ASrc),
+                "b_src": Out(BSrc),
+                "latch_a": Out(LatchA),
+                "latch_b": Out(LatchB),
+                "reg_r_sel": Out(RegRSel),
+                "reg_w_sel": Out(RegWSel),
+                "csr_sel": Out(CSRSel)
+            })),
+            "target": Out(Target),
+            "exception": In(1),
+            "except_ctl": Out(ExceptCtl)
         })
 
     def elaborate(self, platform):  # noqa: D102
@@ -217,33 +243,41 @@ class Control(Component):
         m.submodules.ucoderom = self.ucoderom
         m.submodules.sequencer = self.sequencer
 
+        raw_test = Signal()  # Output of test mux.
+        test = Signal()  # Possibly-inverted test result.
+
+        # Internally-used microcode signals
+        jmp_type = Signal.like(self.ucoderom.fields.jmp_type)
+        cond_test = Signal.like(self.ucoderom.fields.cond_test)
+        invert_test = Signal.like(self.ucoderom.fields.invert_test)
+
         # Propogate ucode control signals
         m.d.comb += [
             self.target.eq(self.ucoderom.fields.target),
-            self.jmp_type.eq(self.ucoderom.fields.jmp_type),
-            self.cond_test.eq(self.ucoderom.fields.cond_test),
-            self.invert_test.eq(self.ucoderom.fields.invert_test),
+            jmp_type.eq(self.ucoderom.fields.jmp_type),
+            cond_test.eq(self.ucoderom.fields.cond_test),
+            invert_test.eq(self.ucoderom.fields.invert_test),
             self.pc.action.eq(self.ucoderom.fields.pc_action),
             self.gp.reg_read.eq(self.ucoderom.fields.reg_read),
             self.gp.reg_write.eq(self.ucoderom.fields.reg_write),
             self.csr.op.eq(self.ucoderom.fields.csr_op),
-            self.reg_r_sel.eq(self.ucoderom.fields.reg_r_sel),
-            self.reg_w_sel.eq(self.ucoderom.fields.reg_w_sel),
-            self.csr_sel.eq(self.ucoderom.fields.csr_sel),
-            self.a_src.eq(self.ucoderom.fields.a_src),
-            self.b_src.eq(self.ucoderom.fields.b_src),
-            self.latch_a.eq(self.ucoderom.fields.latch_a),
-            self.latch_b.eq(self.ucoderom.fields.latch_b),
+            self.route.reg_r_sel.eq(self.ucoderom.fields.reg_r_sel),
+            self.route.reg_w_sel.eq(self.ucoderom.fields.reg_w_sel),
+            self.route.csr_sel.eq(self.ucoderom.fields.csr_sel),
+            self.route.a_src.eq(self.ucoderom.fields.a_src),
+            self.route.b_src.eq(self.ucoderom.fields.b_src),
+            self.route.latch_a.eq(self.ucoderom.fields.latch_a),
+            self.route.latch_b.eq(self.ucoderom.fields.latch_b),
             self.alu.op.eq(self.ucoderom.fields.alu_op),
             self.alu.imod.eq(self.ucoderom.fields.alu_i_mod),
             self.alu.omod.eq(self.ucoderom.fields.alu_o_mod),
-            self.mem_req.eq(self.ucoderom.fields.mem_req),
-            self.mem_sel.eq(self.ucoderom.fields.mem_sel),
-            self.latch_adr.eq(self.ucoderom.fields.latch_adr),
-            self.latch_data.eq(self.ucoderom.fields.latch_data),
-            self.write_mem.eq(self.ucoderom.fields.write_mem),
-            self.insn_fetch.eq(self.ucoderom.fields.insn_fetch),
-            self.mem_extend.eq(self.ucoderom.fields.mem_extend),
+            self.mem.req.eq(self.ucoderom.fields.mem_req),
+            self.mem.sel.eq(self.ucoderom.fields.mem_sel),
+            self.mem.latch_adr.eq(self.ucoderom.fields.latch_adr),
+            self.mem.latch_data.eq(self.ucoderom.fields.latch_data),
+            self.mem.write.eq(self.ucoderom.fields.write_mem),
+            self.mem.insn_fetch.eq(self.ucoderom.fields.insn_fetch),
+            self.mem.extend.eq(self.ucoderom.fields.mem_extend),
             self.except_ctl.eq(self.ucoderom.fields.except_ctl)
         ]
 
@@ -251,31 +285,31 @@ class Control(Component):
         m.d.comb += [
             self.ucoderom.addr.eq(self.sequencer.adr),
             self.sequencer.target.eq(self.target),
-            self.sequencer.jmp_type.eq(self.jmp_type)
+            self.sequencer.jmp_type.eq(jmp_type)
         ]
 
         # Connect sequencer to Control.
         m.d.comb += [
-            self.sequencer.test.eq(self.test),
-            self.sequencer.opcode_adr.eq(self.requested_op),
+            self.sequencer.test.eq(test),
+            self.sequencer.opcode_adr.eq(self.decode.requested_op),
             self.sequencer.vec_adr.eq(self.vec_adr),
         ]
 
         # Test mux
-        with m.Switch(self.cond_test):
+        with m.Switch(cond_test):
             with m.Case(CondTest.EXCEPTION):
-                m.d.comb += self.raw_test.eq(self.exception)
+                m.d.comb += raw_test.eq(self.exception)
             with m.Case(CondTest.CMP_ALU_O_ZERO):
-                m.d.comb += self.raw_test.eq(self.alu.zero)
+                m.d.comb += raw_test.eq(self.alu.zero)
             with m.Case(CondTest.MEM_VALID):
-                m.d.comb += self.raw_test.eq(self.mem_valid)
+                m.d.comb += raw_test.eq(self.mem.valid)
             with m.Case(CondTest.TRUE):
-                m.d.comb += self.raw_test.eq(1)
+                m.d.comb += raw_test.eq(1)
 
-        with m.If(self.invert_test):
-            m.d.comb += self.test.eq(~self.raw_test)
+        with m.If(invert_test):
+            m.d.comb += test.eq(~raw_test)
         with m.Else():
-            m.d.comb += self.test.eq(self.raw_test)
+            m.d.comb += test.eq(raw_test)
 
         return m
 
