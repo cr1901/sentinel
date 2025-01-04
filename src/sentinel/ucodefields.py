@@ -155,10 +155,8 @@ class ASrc(enum.Enum):
     ZERO = 3
     #: int: Supply the literal constant ``C(4, 32)``.
     FOUR = 4
-    #: int: Supply the literal constant ``C(-1, 32)``, i.e. "all ones".
-    NEG_ONE = 5
     #: int: Supply the literal constant ``C(31, 32)``.
-    THIRTY_ONE = 6
+    THIRTY_ONE = 5
 
 
 class BSrc(enum.Enum):

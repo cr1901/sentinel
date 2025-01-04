@@ -53,8 +53,6 @@ class ASrcMux(Component):
                     m.d.sync += self.data.eq(self.alu)
                 with m.Case(ASrc.FOUR):
                     m.d.sync += self.data.eq(4)
-                with m.Case(ASrc.NEG_ONE):
-                    m.d.sync += self.data.eq(C(-1, 32))
                 with m.Case(ASrc.THIRTY_ONE):
                     m.d.sync += self.data.eq(31)
 

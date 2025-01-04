@@ -44,7 +44,7 @@ fields block_ram: {
   // ALU src latch/selection.
   latch_a: bool, default 0;
   latch_b: bool, default 0;
-  a_src: enum { gp = 0; imm; alu_o; zero; four; neg_one; thirty_one; }, default gp;
+  a_src: enum { gp = 0; imm; alu_o; zero; four; thirty_one; }, default gp;
   b_src: enum { gp = 0; pc; imm; one; dat_r; csr_imm; csr; mcause_latch }, default gp;
   // Latch the A/B inputs into the ALU. Contents vaid next cycle.
 
@@ -215,7 +215,8 @@ csrr_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
 csrrs_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
             pc_action => inc, jmp_type => direct, target => csrrs;
 csrrc_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
-            pc_action => inc, jmp_type => direct, target => csrrc;
+            latch_b => 1, b_src => one, pc_action => inc, jmp_type => direct, \
+            target => csrrc;
 csrwi_1: a_src => zero, b_src => csr_imm, latch_a => 1, latch_b => 1, pc_action => inc, \
             jmp_type => direct, target => csrwi;
 csrrwi_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, b_src => csr_imm, \
@@ -224,7 +225,8 @@ csrrwi_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, b_src => csr_i
 csrrsi_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
             pc_action => inc, jmp_type => direct, target => csrrsi;
 csrrci_1: csr_op => read_csr, csr_sel => insn_csr, a_src => zero, latch_a => 1, \
-            pc_action => inc, jmp_type => direct, target => csrrci;
+            latch_b => 1, b_src => one, pc_action => inc, jmp_type => direct, \
+            target => csrrci;
 
 origin 0x30;
 misc_mem: pc_action => inc, jmp_type => direct, target => fetch;
@@ -241,9 +243,9 @@ csrrsi: latch_b => 1, b_src => csr;
 csrrs_2: WRITE_RD, a_src => alu_o, latch_a => 1; // Feed back old CSR value.
          alu_op => or, JUMP_TO_OP_END(fast_epilog_csr);
 
-csrrci: latch_b => 1, b_src => csr;
+csrrci: latch_b => 1, b_src => csr, alu_op => sub;  // Synthesize -1 on ALU_O
         // TODO: Unlike GP reads, csr_ops are not sticky. Maybe they should be?
-        csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => neg_one, \
+        csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => alo_o, \
             b_src => csr_imm, latch_a => 1, latch_b => 1;
 csrrc_2: WRITE_RD, b_src => csr, latch_b => 1, alu_op => xor; // Bit Clear = A & ~B
          a_src => alu_o, latch_a => 1;
@@ -270,8 +272,8 @@ andi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
 csrrs: READ_RS1, latch_b => 1, b_src => csr;
         alu_op => add, b_src => gp, latch_b => 1, jmp_type => direct, \
             target => csrrs_2;
-csrrc:  READ_RS1, latch_b => 1, b_src => csr;
-        csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => neg_one, \
+csrrc:  READ_RS1, latch_b => 1, b_src => csr, alu_op => sub;  // Synthesize -1 on ALU_O
+        csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => alu_o, \
             b_src => gp, latch_a => 1, latch_b => 1, jmp_type => direct, target => csrrc_2;
 srai_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => srai;
