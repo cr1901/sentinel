@@ -10,7 +10,46 @@ from .ucodefields import MemSel, ExceptCtl
 
 #: Avoid circular imports.
 class DecodeException(Struct):
+    """Exception info from :class:`~sentinel.decode.Decode`.
+
+    This :class:`~amaranth.lib.data.Struct` has a very similar purpose to
+    :attr:`ExceptionRouter.out`. In fact, the
+    :class:`~amaranth:amaranth.lib.data.Layout` is the same as the
+    :class:`~amaranth:amaranth.lib.wiring.Signature` of
+    :attr:`~ExceptionRouter.out`! The main differences compared to
+    :attr:`~ExceptionRouter.out` is that:
+
+    * :class:`~sentinel.decode.Decode` can only physically trigger a subset of
+      exceptions that :attr:`~ExceptionRouter.out` can:
+
+        * :attr:`~sentinel.csr.MCause.Cause.ILLEGAL_INSN`
+        * :attr:`~sentinel.csr.MCause.Cause.ECALL_MMODE`
+        * :attr:`~sentinel.csr.MCause.Cause.BREAKPOINT`
+
+    * Both :attr:`valid` and :attr:`e_type` are synchronous to the ``sync``
+      :ref:`clock domain <amaranth:lang-domains>` (which is why, AFAIR,
+      :class:`DecodeException` can be a :class:`~amaranth.lib.data.Struct` in
+      the first place). In :attr:`~ExceptionRouter.out`,
+      only :attr:`~ExceptionRouter.mcause` is synchronous to ``sync``;
+      :attr:`~ExceptionRouter.exception` is combinationally driven.
+
+    :class:`DecodeException` physically belongs to
+    :class:`~sentinel.decode.Decode`, but is placed in the
+    :mod:`~sentinel.exception` module to solve circular import issues.
+
+    .. todo::
+
+        Eventually :class:`DecodeException` should be defined as a nested
+        class under :class:`~sentinel.decode.Decode`, similar to e.g.
+        :class:`ALU.RoutingSignature <sentinel.alu.ALU.RoutingSignature>`.
+    """
+
+    #: If asserted, :class:`~sentinel.decode.Decode` detected an exception
+    #: *last* cycle.
     valid: unsigned(1)
+    #: :class:`MCause.Cause <sentinel.csr.MCause.Cause>`: Qualified by
+    #: :attr:`valid`. Indicates the type of exception, if any, that
+    #: :class:`~sentinel.decode.Decode` detected last cycle.
     e_type: MCause.Cause
 
 
@@ -128,14 +167,14 @@ class ExceptionRouter(Component):
     #: .. py:attribute:: exception
     #:    :type: Out(1)
     #:
-    #:    If asserted, an exception occurred last cycle, and :attr:`mcause`
-    #:    is valid.
+    #:    If asserted, an exception occurred *this* cycle, and :attr:`mcause`
+    #:    will be valid *next* cycle.
     #:
     #: .. py:attribute:: mcause
     #:    :type: Out(~sentinel.csr.MCause)
     #:
-    #:    Qualified by :attr:`exception`. Indicates the type of exception, if
-    #:    any, which was detected last cycle where
+    #:    Qualified by :attr:`exception` on the previous cycle. Indicates the
+    #:    type of exception, if any, which was detected last cycle where
     #:    :class:`~sentinel.ucodefields.ExceptCtl` was not
     #:    :attr:`~sentinel.ucodefields.ExceptCtl.NONE`. Must be saved by
     #:    microcode if the value is needed, as this is *not* meant to hold the
