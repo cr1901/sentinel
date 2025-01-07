@@ -3,7 +3,7 @@
 from .align import ReadDataAlign
 from .csr import MCause
 from .ucodefields import OpType, ALUIMod, ALUOMod, ASrc, BSrc, MemSel, \
-    MemExtend
+    MemExtend, LatchA, LatchB
 
 from amaranth import Elaboratable, Signal, Module, C, Cat
 from amaranth.lib.wiring import Component, Signature, In, Out
@@ -237,6 +237,13 @@ class ALU(Component):
         "imod": Out(ALUIMod),
         "omod": Out(ALUOMod),
         "zero": In(1)
+    })
+
+    RoutingSignature = Signature({
+        "a_src": Out(ASrc),
+        "b_src": Out(BSrc),
+        "latch_a": Out(LatchA),
+        "latch_b": Out(LatchB),
     })
 
     class _Unit(Elaboratable):

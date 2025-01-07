@@ -6,12 +6,8 @@ from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .control import MappingROM
 from .csr import MCause, Quadrant, AccessMode, MachineAddr as CSRM
+from .exception import DecodeException
 from .insn import Insn, OpcodeType
-
-
-class DecodeException(Struct):
-    valid: unsigned(1)
-    e_type: MCause.Cause
 
 
 class CSRAttributes(Component):

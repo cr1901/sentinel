@@ -3,73 +3,25 @@ from amaranth.lib.data import View
 from amaranth.lib.memory import Memory, MemoryData
 from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 
-from .ucodefields import CSRSel, PcAction, CSROp, ExceptCtl, RegRSel, RegWSel
+from .ucodefields import CSRSel, PcAction, CSROp, ExceptCtl, RegRSel, \
+    RegWSel, Target
 
 from .csr import MStatus, MTVec, MIP, MIE, MCause
 
 
-PCControlSignature = Signature({
-    "action": Out(PcAction)
-})
-
-GPControlSignature = Signature({
-    "reg_read": Out(1),
-    "reg_write": Out(1),
-    "allow_zero_wr": Out(1),
-})
-
-GPSignature = Signature({
-    "adr_r": Out(5),
-    "adr_w": Out(5),
-    "dat_r": In(32),
-    "dat_w": Out(32),
-    "ctrl": Out(GPControlSignature)
-})
-
-
-CSRControlSignature = Signature({
-    "op": Out(CSROp),
-    "exception": Out(ExceptCtl)
-})
-
-
-CSRSignature = Signature({
-    "adr": Out(5),
-    "dat_r": In(32),
-    "dat_w": Out(32),
-    "ctrl": Out(CSRControlSignature),
-
-    "mstatus_r": In(MStatus),
-    "mip_w": Out(MIP),
-    "mip_r": In(MIP),
-    "mie_r": In(MIE),
-    # These 4 are mainly for peeking in simulation.
-    "mscratch_r": In(32),
-    "mepc_r": In(30),
-    "mtvec_r": In(MTVec),
-    "mcause_r": In(MCause)
-})
-
-
-# Private interface to control accessing CSR regs stored in GP RAM.
-PrivateCSRGPSignature = Signature({
-    "adr": Out(5),
-    "dat_r": In(32),
-    "dat_w": Out(32),
-    "op": Out(CSROp)
-})
-
-
-PcSignature = Signature({
-    "dat_r": In(30),
-    "dat_w": Out(30),
-    "ctrl": Out(PCControlSignature)
-})
-
-
 class ProgramCounter(Component):
+    ControlSignature = Signature({
+        "action": Out(PcAction)
+    })
+
+    PublicSignature = Signature({
+        "dat_r": In(30),
+        "dat_w": Out(30),
+        "ctrl": Out(ControlSignature)
+    })
+
     def __init__(self):
-        super().__init__(PcSignature.flip())
+        super().__init__(ProgramCounter.PublicSignature.flip())
 
     def elaborate(self, platform):  # noqa: D102
         m = Module()
@@ -84,8 +36,35 @@ class ProgramCounter(Component):
 
 
 class RegFile(Component):
-    pub: In(GPSignature)
-    priv: In(PrivateCSRGPSignature)
+    ControlSignature = Signature({
+        "reg_read": Out(1),
+        "reg_write": Out(1),
+        "allow_zero_wr": Out(1),
+    })
+
+    RoutingSignature = Signature({
+        "reg_r_sel": Out(RegRSel),
+        "reg_w_sel": Out(RegWSel),
+    })
+
+    PublicSignature = Signature({
+        "adr_r": Out(5),
+        "adr_w": Out(5),
+        "dat_r": In(32),
+        "dat_w": Out(32),
+        "ctrl": Out(ControlSignature)
+    })
+
+    # Private interface to control accessing CSR regs stored in GP RAM.
+    _PrivateCSRAccessSignature = Signature({
+        "adr": Out(5),
+        "dat_r": In(32),
+        "dat_w": Out(32),
+        "op": Out(CSROp)
+    })
+
+    pub: In(PublicSignature)
+    priv: In(_PrivateCSRAccessSignature)
 
     def __init__(self, *, formal):
         self.formal = formal
@@ -143,8 +122,35 @@ class RegFile(Component):
 
 
 class CSRFile(Component):
-    pub: In(CSRSignature)
-    priv: Out(PrivateCSRGPSignature)
+    ControlSignature = Signature({
+        "op": Out(CSROp),
+        "exception": Out(ExceptCtl)
+    })
+
+    RoutingSignature = Signature({
+        "csr_sel": Out(CSRSel),
+        "target": Out(Target)
+    })
+
+    PublicSignature = Signature({
+        "adr": Out(5),
+        "dat_r": In(32),
+        "dat_w": Out(32),
+        "ctrl": Out(ControlSignature),
+
+        "mstatus_r": In(MStatus),
+        "mip_w": Out(MIP),
+        "mip_r": In(MIP),
+        "mie_r": In(MIE),
+        # These 4 are mainly for peeking in simulation.
+        "mscratch_r": In(32),
+        "mepc_r": In(30),
+        "mtvec_r": In(MTVec),
+        "mcause_r": In(MCause)
+    })
+
+    pub: In(PublicSignature)
+    priv: Out(RegFile._PrivateCSRAccessSignature)
 
     MSTATUS = 0
     MIE = 0x4
@@ -303,9 +309,9 @@ class DataPathSrcMux(Component):
 
 
 class DataPath(Component):
-    gp: In(GPSignature)
-    csr: In(CSRSignature)
-    pc: In(PcSignature)
+    gp: In(RegFile.PublicSignature)
+    csr: In(CSRFile.PublicSignature)
+    pc: In(ProgramCounter.PublicSignature)
 
     def __init__(self, *, formal=False):
         super().__init__()

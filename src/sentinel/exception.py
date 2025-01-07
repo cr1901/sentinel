@@ -1,11 +1,17 @@
 """Exception control classes and Components."""
 
-from amaranth import Signal, Module
+from amaranth import Signal, Module, unsigned
+from amaranth.lib.data import Struct
 from amaranth.lib.wiring import Component, Signature, Out, In
 
 from .csr import MCause, MStatus, MIP, MIE
-from .decode import DecodeException
 from .ucodefields import MemSel, ExceptCtl
+
+
+#: Avoid circular imports.
+class DecodeException(Struct):
+    valid: unsigned(1)
+    e_type: MCause.Cause
 
 
 class ExceptionRouter(Component):
@@ -40,6 +46,12 @@ class ExceptionRouter(Component):
     * :attr:`~sentinel.csr.MCause.Cause.STORE_MISALIGNED`
 
     """
+
+    ControlSignature = Signature({
+        "mem_sel": Out(MemSel),
+        "except_ctl": Out(ExceptCtl),
+        "exception": In(1)
+    })
 
     # FIXME: Ugh, want to hide the ugly auto-extracted Signature from docs,
     # but can't seem to without disabling all annotations
@@ -97,10 +109,7 @@ class ExceptionRouter(Component):
             "mip": Out(MIP),
             "mie": Out(MIE)
         })),
-        "ctrl": Out(Signature({
-            "mem_sel": Out(MemSel),
-            "except_ctl": Out(ExceptCtl)
-        })),
+        "ctrl": Out(ControlSignature),
         "decode": Out(DecodeException)
     }))
     #: Out(Signature): Information on current exception.
@@ -143,6 +152,7 @@ class ExceptionRouter(Component):
         mcause_latch = Signal(MCause)
 
         m.d.comb += [
+            self.src.ctrl.exception.eq(exception),
             self.out.exception.eq(exception),
             self.out.mcause.eq(mcause_latch)
         ]

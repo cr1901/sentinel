@@ -6,13 +6,12 @@ from amaranth.lib.wiring import Component, Signature, In, Out
 
 from .alu import ALU
 from .ucoderom import UCodeROM
-from .datapath import GPControlSignature, PCControlSignature, \
-    CSRControlSignature
+from .datapath import RegFile, CSRFile, ProgramCounter
+from .exception import ExceptionRouter
 
 from .insn import Insn, OpcodeType
 from .ucodefields import JmpType, CondTest, MemReq, MemSel, WriteMem, \
-    InsnFetch, MemExtend, LatchData, LatchAdr, ExceptCtl, Target, ASrc, \
-    BSrc, LatchA, LatchB, RegRSel, RegWSel, CSRSel
+    InsnFetch, MemExtend, LatchData, LatchAdr
 
 from typing import TextIO, Optional
 
@@ -205,14 +204,23 @@ class Control(Component):
         self.vec_adr = Signal.like(self.ucoderom.fields.target)
 
         super().__init__({
-            "alu": Out(ALU.ControlSignature),
+            "alu": Out(Signature({
+                "route": Out(ALU.RoutingSignature),
+                "ctrl": Out(ALU.ControlSignature)
+            })),
             "decode": In(Signature({
                 "opcode": Out(OpcodeType),
                 "requested_op": Out(8),
             })),
-            "gp": Out(GPControlSignature),
-            "pc": Out(PCControlSignature),
-            "csr": Out(CSRControlSignature),
+            "gp": Out(Signature({
+                "route": Out(RegFile.RoutingSignature),
+                "ctrl": Out(RegFile.ControlSignature),
+            })),
+            "pc": Out(ProgramCounter.ControlSignature),
+            "csr": Out(Signature({
+                "route": Out(CSRFile.RoutingSignature),
+                "ctrl": Out(CSRFile.ControlSignature)
+            })),
             "mem": Out(Signature({
                 "req": Out(MemReq),
                 "sel": Out(MemSel),
@@ -223,18 +231,7 @@ class Control(Component):
                 "latch_data": Out(LatchData),
                 "latch_adr": Out(LatchAdr)
             })),
-            "route": Out(Signature({
-                "a_src": Out(ASrc),
-                "b_src": Out(BSrc),
-                "latch_a": Out(LatchA),
-                "latch_b": Out(LatchB),
-                "reg_r_sel": Out(RegRSel),
-                "reg_w_sel": Out(RegWSel),
-                "csr_sel": Out(CSRSel)
-            })),
-            "target": Out(Target),
-            "exception": In(1),
-            "except_ctl": Out(ExceptCtl)
+            "exception": Out(ExceptionRouter.ControlSignature)
         })
 
     def elaborate(self, platform):  # noqa: D102
@@ -247,44 +244,49 @@ class Control(Component):
         test = Signal()  # Possibly-inverted test result.
 
         # Internally-used microcode signals
+        target = Signal.like(self.ucoderom.fields.target)
         jmp_type = Signal.like(self.ucoderom.fields.jmp_type)
         cond_test = Signal.like(self.ucoderom.fields.cond_test)
         invert_test = Signal.like(self.ucoderom.fields.invert_test)
 
         # Propogate ucode control signals
         m.d.comb += [
-            self.target.eq(self.ucoderom.fields.target),
+            target.eq(self.ucoderom.fields.target),
+            self.csr.route.target.eq(self.ucoderom.fields.target),
             jmp_type.eq(self.ucoderom.fields.jmp_type),
             cond_test.eq(self.ucoderom.fields.cond_test),
             invert_test.eq(self.ucoderom.fields.invert_test),
             self.pc.action.eq(self.ucoderom.fields.pc_action),
-            self.gp.reg_read.eq(self.ucoderom.fields.reg_read),
-            self.gp.reg_write.eq(self.ucoderom.fields.reg_write),
-            self.csr.op.eq(self.ucoderom.fields.csr_op),
-            self.route.reg_r_sel.eq(self.ucoderom.fields.reg_r_sel),
-            self.route.reg_w_sel.eq(self.ucoderom.fields.reg_w_sel),
-            self.route.csr_sel.eq(self.ucoderom.fields.csr_sel),
-            self.route.a_src.eq(self.ucoderom.fields.a_src),
-            self.route.b_src.eq(self.ucoderom.fields.b_src),
-            self.route.latch_a.eq(self.ucoderom.fields.latch_a),
-            self.route.latch_b.eq(self.ucoderom.fields.latch_b),
-            self.alu.op.eq(self.ucoderom.fields.alu_op),
-            self.alu.imod.eq(self.ucoderom.fields.alu_i_mod),
-            self.alu.omod.eq(self.ucoderom.fields.alu_o_mod),
+            self.gp.ctrl.reg_read.eq(self.ucoderom.fields.reg_read),
+            self.gp.ctrl.reg_write.eq(self.ucoderom.fields.reg_write),
+            self.csr.ctrl.op.eq(self.ucoderom.fields.csr_op),
+            self.gp.route.reg_r_sel.eq(self.ucoderom.fields.reg_r_sel),
+            self.gp.route.reg_w_sel.eq(self.ucoderom.fields.reg_w_sel),
+            self.csr.route.csr_sel.eq(self.ucoderom.fields.csr_sel),
+            self.alu.route.a_src.eq(self.ucoderom.fields.a_src),
+            self.alu.route.b_src.eq(self.ucoderom.fields.b_src),
+            self.alu.route.latch_a.eq(self.ucoderom.fields.latch_a),
+            self.alu.route.latch_b.eq(self.ucoderom.fields.latch_b),
+            self.alu.ctrl.op.eq(self.ucoderom.fields.alu_op),
+            self.alu.ctrl.imod.eq(self.ucoderom.fields.alu_i_mod),
+            self.alu.ctrl.omod.eq(self.ucoderom.fields.alu_o_mod),
             self.mem.req.eq(self.ucoderom.fields.mem_req),
             self.mem.sel.eq(self.ucoderom.fields.mem_sel),
+            self.exception.mem_sel.eq(self.ucoderom.fields.mem_sel),
             self.mem.latch_adr.eq(self.ucoderom.fields.latch_adr),
             self.mem.latch_data.eq(self.ucoderom.fields.latch_data),
             self.mem.write.eq(self.ucoderom.fields.write_mem),
             self.mem.insn_fetch.eq(self.ucoderom.fields.insn_fetch),
             self.mem.extend.eq(self.ucoderom.fields.mem_extend),
-            self.except_ctl.eq(self.ucoderom.fields.except_ctl)
+            self.csr.ctrl.exception.eq(self.ucoderom.fields.except_ctl),
+            self.exception.except_ctl.eq(
+                self.ucoderom.fields.except_ctl)
         ]
 
         # Connect ucode ROM to sequencer
         m.d.comb += [
             self.ucoderom.addr.eq(self.sequencer.adr),
-            self.sequencer.target.eq(self.target),
+            self.sequencer.target.eq(target),
             self.sequencer.jmp_type.eq(jmp_type)
         ]
 
@@ -298,9 +300,9 @@ class Control(Component):
         # Test mux
         with m.Switch(cond_test):
             with m.Case(CondTest.EXCEPTION):
-                m.d.comb += raw_test.eq(self.exception)
+                m.d.comb += raw_test.eq(self.exception.exception)
             with m.Case(CondTest.CMP_ALU_O_ZERO):
-                m.d.comb += raw_test.eq(self.alu.zero)
+                m.d.comb += raw_test.eq(self.alu.ctrl.zero)
             with m.Case(CondTest.MEM_VALID):
                 m.d.comb += raw_test.eq(self.mem.valid)
             with m.Case(CondTest.TRUE):

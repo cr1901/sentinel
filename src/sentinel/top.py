@@ -266,19 +266,19 @@ class Top(Component):
         ]
 
         # ALU conns
-        connect(m, self.alu.ctrl, self.control.alu)
+        connect(m, self.alu.ctrl, self.control.alu.ctrl)
 
         m.d.comb += [
             self.alu.a.eq(self.a_src.data),
-            self.a_src.latch.eq(self.control.route.latch_a),
-            self.a_src.sel.eq(self.control.route.a_src),
+            self.a_src.latch.eq(self.control.alu.route.latch_a),
+            self.a_src.sel.eq(self.control.alu.route.a_src),
             self.a_src.gp.eq(self.datapath.gp.dat_r),
             self.a_src.imm.eq(self.decode.imm),
             self.a_src.alu.eq(self.alu.o),
 
             self.alu.b.eq(self.b_src.data),
-            self.b_src.latch.eq(self.control.route.latch_b),
-            self.b_src.sel.eq(self.control.route.b_src),
+            self.b_src.latch.eq(self.control.alu.route.latch_b),
+            self.b_src.sel.eq(self.control.alu.route.b_src),
             self.b_src.gp.eq(self.datapath.gp.dat_r),
             self.b_src.imm.eq(self.decode.imm),
             self.b_src.pc.eq(self.datapath.pc.dat_r),
@@ -296,8 +296,6 @@ class Top(Component):
         m.d.comb += [
             self.control.decode.opcode.eq(self.decode.opcode),
             self.control.decode.requested_op.eq(self.decode.requested_op),
-            # TODO: Spin out into a register of exception sources.
-            self.control.exception.eq(self.exception_router.out.exception),
             self.control.mem.valid.eq(mem_ack),
 
             req_next.eq(self.control.mem.req),
@@ -309,8 +307,12 @@ class Top(Component):
         ]
 
         # DataPath conns
-        connect(m, self.datapath.gp.ctrl, self.control.gp)
+        # allow_zero_wr must be set after this line- the control unit ignores
+        # this field, but it's convenient to include it as part of
+        # ControlSignature.
+        connect(m, self.datapath.gp.ctrl, self.control.gp.ctrl)
         connect(m, self.datapath.pc.ctrl, self.control.pc)
+        connect(m, self.datapath.csr.ctrl, self.control.csr.ctrl)
 
         # This is a load-bearing optimization... yes, they must be a Signal of
         # width 6, not 5, and they must directly connect the inline
@@ -326,7 +328,6 @@ class Top(Component):
             # FIXME: Compressed insns.
             self.datapath.pc.dat_w.eq(self.alu.o[2:]),
             self.datapath.csr.dat_w.eq(self.alu.o),
-            self.datapath.csr.ctrl.exception.eq(self.control.except_ctl),
             self.datapath.csr.mip_w.meip.eq(irq)
         ]
 
@@ -371,7 +372,7 @@ class Top(Component):
         # DataPathSrcMux inline implementation. Optimizes much better than the
         # module, especially with the reg_{r,w}_adr intermediate Signals.
         # Doesn't make much sense to me, but whatever...
-        with m.Switch(self.control.route.reg_r_sel):
+        with m.Switch(self.control.gp.route.reg_r_sel):
             with m.Case(RegRSel.INSN_RS1):
                 with m.If(self.control.mem.insn_fetch):
                     m.d.comb += reg_r_adr.eq(self.decode.src_a_unreg)
@@ -380,7 +381,7 @@ class Top(Component):
             with m.Case(RegRSel.INSN_RS2):
                 m.d.comb += reg_r_adr.eq(self.decode.src_b)
 
-        with m.Switch(self.control.route.reg_w_sel):
+        with m.Switch(self.control.gp.route.reg_w_sel):
             with m.Case(RegWSel.INSN_RD):
                 m.d.comb += reg_w_adr.eq(self.decode.dst)
             with m.Case(RegWSel.ZERO):
@@ -389,24 +390,24 @@ class Top(Component):
                     self.datapath.gp.ctrl.allow_zero_wr.eq(1)
                 ]
 
-        # CSR Op/Address control (data conns taken care above)
-        m.d.comb += self.datapath.csr.ctrl.op.eq(self.control.csr.op)
-        with m.Switch(self.control.route.csr_sel):
+        # CSR Address control (data conns taken care above)
+        with m.Switch(self.control.csr.route.csr_sel):
             with m.Case(CSRSel.INSN_CSR):
                 m.d.comb += self.datapath.csr.adr.eq(self.decode.csr_encoding)
             with m.Case(CSRSel.TRG_CSR):
-                m.d.comb += self.datapath.csr.adr.eq(self.control.target[0:4])
+                m.d.comb += self.datapath.csr.adr.eq(
+                    self.control.csr.route.target[0:4])
 
         # Exception Router sources
+        # TODO: Spin out into a register of exception sources.
+        connect(m, self.exception_router.src.ctrl, self.control.exception)
+
         m.d.comb += [
             self.exception_router.src.alu_lo.eq(self.alu.o[0:2]),
             self.exception_router.src.csr.mstatus.eq(
                 self.datapath.csr.mstatus_r),
             self.exception_router.src.csr.mip.eq(self.datapath.csr.mip_r),
             self.exception_router.src.csr.mie.eq(self.datapath.csr.mie_r),
-            self.exception_router.src.ctrl.mem_sel.eq(self.control.mem.sel),
-            self.exception_router.src.ctrl.except_ctl.eq(
-                self.control.except_ctl),
             self.exception_router.src.decode.eq(self.decode.exception),
         ]
 
