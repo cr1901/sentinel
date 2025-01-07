@@ -90,10 +90,10 @@ class Top(Component):
         The Wishbone bus and IRQ line alone don't give enough information to
         properly use the `RISC-V Formal Interface <https://github.com/YosysHQ/riscv-formal/blob/main/docs/rvfi.md>`__
         to verify core properties. If ``True``, Sentinel will gain an extra
-        ``rvfi`` port :class:`~amaranth:amaranth.lib.wiring.Member` with
+        ``rvfi`` signature :class:`~amaranth:amaranth.lib.wiring.Member` with
         signals required to implement RVFI.
 
-        As RVFI is meant for verification, the ``rvfi``
+        As RVFI is meant for verification, the :attr:`rvfi`
         :class:`~amaranth:amaranth.lib.wiring.Member` is not meant to be used
         in a synthesized design. It is best to leave this option disabled
         unless you are using :class:`Top` in conjunction with
@@ -102,7 +102,7 @@ class Top(Component):
     Attributes
     ----------
     formal: bool
-        If ``True``, ``rvfi`` :class:`~amaranth:amaranth.lib.wiring.Member` is
+        If ``True``, :attr:`rvfi` :class:`~amaranth:amaranth.lib.wiring.Member` is
         present.
 
     bus: Out(wishbone.Signature)
@@ -117,7 +117,7 @@ class Top(Component):
 
     rvfi: Out(Signature)
         Internal connections required for implementing the
-        `RISC-V Formal Interface <https://github.com/YosysHQ/riscv-formal/blob/main/docs/rvfi.md>`__
+        `RISC-V Formal Interface <https://github.com/YosysHQ/riscv-formal/blob/main/docs/rvfi.md>`__.
 
         The signature is of the form
 
@@ -159,7 +159,7 @@ class Top(Component):
             and :class:`Components <amaranth:amaranth.lib.wiring.Component>`
             to read the appropriate signals.
 
-            I would prefer encapsulation via an explicity ``rvfi`` port
+            I would prefer encapsulation via an explicity :attr:`rvfi` port
             :class:`~amaranth:amaranth.lib.wiring.Member`, but this process
             `has been slow <https://github.com/cr1901/sentinel/commit/1304842fb5f9be6c25c4c85d44863e849a45e481>`_.
             I will wait to document until this interface :class:`~amaranth:amaranth.lib.wiring.Member`

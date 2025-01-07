@@ -1,4 +1,4 @@
-"""Sentinel datapath implementation."""
+"""Sentinel datapath (register file and read/write ports) implementation."""
 
 from amaranth import Cat, Module, Signal
 from amaranth.lib.data import View

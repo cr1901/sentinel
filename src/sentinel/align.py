@@ -212,7 +212,7 @@ class WriteDataAlign(Component):
     latched_adr: In(32)
     #: Data to be written externally, before alignment.
     data: In(32)
-    #: Aligned data to be :data:`latched <sentinel.ucodefields.LatchAdr>`,
+    #: Aligned data to be :data:`latched <sentinel.ucodefields.LatchData>`,
     #: which then drives Wishbone ``DAT_O``.
     wb_dat_w: Out(32)
 

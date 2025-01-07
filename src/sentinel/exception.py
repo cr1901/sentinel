@@ -66,12 +66,12 @@ class ExceptionRouter(Component):
 
     When :class:`~sentinel.ucodefields.ExceptCtl` is not
     :attr:`~sentinel.ucodefields.ExceptCtl.NONE`, :class:`ExceptionRouter`
-    will output whether the queried exception occurred and latch which
-    exception occurred at the next active edge. The exception info latch
-    matches the layout of the ``MCAUSE`` register. The :attr:`mcause` port
-    is physically distinct from the ``MCAUSE`` register, and so microcode
-    should save the latch value to the actual ``MCAUSE`` register as part of
-    exception handling.
+    will output whether the queried exception type occurred immediately. It
+    will latch which *specific* exception occurred at the next active edge.
+    The exception info latch matches the layout of the ``MCAUSE`` register.
+    The :attr:`mcause` port is physically distinct from the ``MCAUSE``
+    register, and so microcode should save the latch value to the actual
+    ``MCAUSE`` register as part of exception handling.
 
     While the :class:`~sentinel.csr.MCause`
     :class:`~amaranth.lib.data.Struct` knows about all currently-defined RISC-V

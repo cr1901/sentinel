@@ -35,8 +35,11 @@ class JmpType(enum.Enum, shape=2):
     #: is being used for :attr:`something else <CSRSel.TRG_CSR>`.
     NOP = 0
     #: int: Jump to the address supplied by the
-    #: :class:`~sentinel.control.MappingROM`. This is generally used to jump
-    #: to code specific to each :term:`macroinstruction`.
+    #: :class:`~sentinel.control.MappingROM` if :class:`condition <CondTest>`
+    #: is met. Otherwise, unconditionally jump to the address supplied by
+    #: :data:`Target`. This is generally used to jump to code specific to each
+    #: :term:`macroinstruction`, or start exception handling on an invalid
+    #: instruction.
     MAP = 1
     #: int: If :class:`condition <CondTest>` is met, jump to the address
     #: supplied by :data:`Target`. Otherwise, go to the next sequential
@@ -428,6 +431,8 @@ WriteMem = unsigned(1)
 #: :class:`address alignment <sentinel.align.AddressAlign>` behavior so that
 #: instruction fetches will succeed. In the future,
 #: this signal will also be used for a Wishbone tag of some sort.
+#:
+#: Instruction decode begins automatically upon receipt of Wishbone ``ACK_I``.
 InsnFetch = unsigned(1)
 
 

@@ -63,10 +63,13 @@ an {mod}`python:argparse` command-line entry point, and
 the SoC.
 
 Right now, {mod}`~examples.attosoc` uses Amaranth to build a SoC bitstream for
-two {doc}`platforms <amaranth:platform>`:
+several {doc}`platforms <amaranth:platform>`:
 
 * [Lattice iCEstick](https://www.latticesemi.com/icestick)
 * [iCE40-HX8K Breakout Board](https://www.latticesemi.com/Products/DevelopmentBoardsAndKits/iCE40HX8KBreakoutBoard.aspx)
+* [Arty A7 35T](https://digilent.com/shop/arty-a7-100t-artix-7-fpga-development-board/)
+* [Cmod S7](https://digilent.com/shop/cmod-s7-breadboardable-spartan-7-fpga-module/)
+* [iCEBreaker v1.0](https://1bitsquared.com/collections/fpga/products/icebreaker)
 
 The `pdm` [scripts](https://pdm-project.org/latest/usage/scripts/)
 `demo` and `demo-rust` are thin wrappers over {func}`~examples.attosoc.main`

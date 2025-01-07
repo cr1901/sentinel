@@ -22,7 +22,8 @@ class UCodeROM(Component):
     """Microcode ROM assembly and Component.
 
     :class:`UCodeROM` takes a microcode assembly file as input, parses
-    the assembly file, and dynamically creates a
+    the assembly file, creates a :class:`~amaranth.lib.memory.Memory` to hold
+    the assembled program, and dynamically creates a
     :class:`~amaranth:amaranth.lib.wiring.Signature` which splits out all
     microcode fields.
 

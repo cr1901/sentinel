@@ -14,7 +14,7 @@ class Insn:
     """View of all immediately-apparent information in a RISC-V instruction.
 
     "Immediately-apparent" means "I can get this info with
-    :ref:`concatenation, slices and replicates <amaranth:lang-ioops>`. This
+    :ref:`concatenation, slices and replicates <amaranth:lang-ioops>`". This
     class is morally equivalent to a :class:`~amaranth.lib.data.View` for the
     32-bit :ref:`Signal <amaranth:lang-signals>` representing a RISC-V
     instruction. However, it does not inherit from

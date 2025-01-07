@@ -501,7 +501,7 @@ class Decode(Component):
         after :attr:`do_decode` asserts. For all other instructions,
         :attr:`exception` is valid on the active edge after :attr:`do_decode`
         is asserted. :class:`Other <sentinel.control.MappingROM>`
-        :class: `components <ExceptionControl>`
+        :class:`components <ExceptionControl>`
         and the microcode program need to be (and are!) aware of the variable
         latency.
 

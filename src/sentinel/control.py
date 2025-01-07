@@ -62,8 +62,6 @@ class MappingROM(Component):
             For those reading the source, the timing described is conservative
             for non-CSR instructions compared to the actual implementation.
 
-    .. _target name in page A:
-
     Logically, :class:`MappingROM` is part of :class:`Control`. Physically,
     it's part of :class:`~sentinel.decode.Decode` for space optimization
     reasons.
@@ -275,10 +273,6 @@ class Control(Component):
 
     ``RoutingSignature``\ s especially are subject to change as I improve
     how Sentinel is organized.
-
-    .. todo::
-
-        Interface attributes are incomplete.
 
     Parameters
     ----------
