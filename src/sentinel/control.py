@@ -16,24 +16,98 @@ from .ucodefields import JmpType, CondTest, MemReq, MemSel, WriteMem, \
 from typing import TextIO, Optional
 
 
-# The MappingROM itself knows how to handle CSRs. Logically it's part of the
-# control unit. Physically, it's part of the instruction decoder for space
-# reasons.
 class MappingROM(Component):
-    def __init__(self):
-        sig = {
-            "start": Out(1),
-            "insn": Out(32),
-            # Cannot use _DataLayout due to circular imports.
-            "csr_attr": Out(StructLayout({
-                "ill": unsigned(1),
-                "ro0": unsigned(1)
-            })),
-            "requested_op": In(8),
-            "csr_encoding": In(4)
-        }
+    """Sentinel Microcode :term:`Mapping ROM <mapping (p)rom>`.
 
-        super().__init__(Signature(sig).flip())
+    :class:`MappingROM` is a hardware
+    `jump table <https://en.wikipedia.org/wiki/Branch_table>`_ that takes in
+    32-bit RISC-V instructions and maps them down to one of 256 addresses in
+    :class:`~sentinel.ucoderom.UCodeROM`. In addition, if :class:`MappingROM`
+    detects a CSR instruction (logic duplicated from
+    :class:`~sentinel.decode.ExceptionControl`), it will map the CSR address
+    field down to one of 16 addresses in much the same way.
+
+    For non-CSR instructions, the target :class:`~sentinel.ucoderom.UCodeROM`
+    address for the instruction will be available on :attr:`requested_op` on
+    the first active edge after :attr:`start` is asserted. If
+    :class:`MappingROM` detects that the current instruction is a CSR
+    instruction, mapping takes two cycles:
+
+    * On the *first* active edge after :attr:`start` is asserted,
+      :attr:`requested_op` will point to a temporary location that the
+      microcode program jump to this cycle (``0x24``, as of 1/6/2025).
+
+      In addition, :attr:`csr_encoding`- derived from the
+      :attr:`~sentinel.insn.Insn.funct12` instruction field- will be valid at
+      this point.
+
+    * On the *second* active edge after :attr:`start` is asserted,
+      the *actual* target address for the CSR instruction will be available
+      on :attr:`requested_op`.
+
+    ..
+        FIXME: Arbitrary references still not working :(...
+        :ref:`jump to <map-jump>`
+
+    .. _map-jump:
+
+    To use the latched address in :attr:`requested_op`, set the
+    :class:`Sequencer` to use
+    :attr:`JmpType.MAP <sentinel.ucodefields.JmpType.MAP>` via microcode
+    on the clock cycle immediately after :attr:`start` is asserted.
+
+    ..
+        .. note::
+
+            For those reading the source, the timing described is conservative
+            for non-CSR instructions compared to the actual implementation.
+
+    .. _target name in page A:
+
+    Logically, :class:`MappingROM` is part of :class:`Control`. Physically,
+    it's part of :class:`~sentinel.decode.Decode` for space optimization
+    reasons.
+    """
+
+    #: If asserted, perform mapping this cycle. Mapping outputs will be
+    #: valid either on the first active edge (non-CSR) or next two active
+    #: edges (CSR instruction) after :attr:`start` is asserted.
+    #:
+    #: This :ref:`Signal <amaranth:lang-signals>` is equivalent to
+    #: :attr:`~sentinel.decode.Decode.do_decode`.
+    start: In(1)
+
+    #: The current RISC-V instruction, the same
+    #: :ref:`Signal <amaranth:lang-signals>` as
+    #: :attr:`Decode.insn <sentinel.decode.Decode.insn>`.
+    insn: In(32)
+
+    #: In(:class:`~amaranth:amaranth.lib.data.StructLayout`): CSR Attribute
+    #: information for the current :attr:`instruction <insn>` from from the
+    #: :class:`~sentinel.decode.CSRAttributes` look-up
+    #: table.
+    #:
+    #: The :class:`~amaranth:amaranth.lib.data.StructLayout` matches
+    #: that of :class:`CSRAttributes._DataLayout
+    #: <sentinel.decode.CSRAttributes._DataLayout>`;
+    #: the ad-hoc :class:`~amaranth:amaranth.lib.data.StructLayout` object
+    #: avoids circular-dependency import issues.
+    csr_attr: In(StructLayout({
+                    "ill": unsigned(1),
+                    "ro0": unsigned(1)
+                }))
+
+    #: Mapped jump target into :class:`~sentinel.ucoderom.UCodeROM`,
+    #: :ref:`calculated from <mapping-details>` :attr:`insn`. Valid on the
+    #: first active edge after :attr:`start` is asserted. Also valid on the
+    #: second active edge after :attr:`start` assertion for CSR instructions.
+    requested_op: Out(8)
+
+    #: Mapped CSR address output, :ref:`calculated from <mapping-details>`
+    #: :attr:`insn`. Valid on the first active edge after assertion of
+    #: :attr:`start`, but *only if* :class:`MappingROM` detects that the
+    #: current instruction is, in fact, a CSR instruction.
+    csr_encoding: Out(4)
 
     def elaborate(self, platform):  # noqa: D102
         m = Module()
@@ -158,7 +232,7 @@ class MappingROM(Component):
 # that will change in the near-future, so preemptively stuff Attributes into
 # class docstring.
 class Control(Component):
-    """Sentinel Control Unit.
+    r"""Sentinel Control Unit.
 
     The Sentinel Control Unit consists of three parts:
 
@@ -178,6 +252,30 @@ class Control(Component):
     turn, it snoops control and data signals from *other* parts of the core
     to drive the microcode program forward.
 
+    Several interface :class:`Members <amaranth:amaranth.lib.wiring.Member>`
+    of :class:`Control` have
+    :class:`Signatures <amaranth.lib.wiring.Signature>` of the form:
+
+    .. code-block::
+
+        Signature({
+            "route": Out(RoutingSignature),
+            "ctrl": Out(ControlSignature)
+        })
+
+    ``RoutingSignature`` and ``ControlSignature`` are
+    :term:`python:class variable` :class:`~amaranth.lib.wiring.Signature`
+    placeholders:
+
+    * ``RoutingSignature``\ s contain routing information to and from the
+      containing :class:`~amaranth:amaranth.lib.wiring.Component`.
+    * ``ControlSignature``\ s modify the containing
+      :class:`Component's <amaranth:amaranth.lib.wiring.Component>` behavior,
+      typically per clock cycle.
+
+    ``RoutingSignature``\ s especially are subject to change as I improve
+    how Sentinel is organized.
+
     .. todo::
 
         Interface attributes are incomplete.
@@ -190,10 +288,157 @@ class Control(Component):
 
     Attributes
     ----------
+    alu: Out(Signature)
+        :class:`~sentinel.alu.ALU` control signals. The signature is of the
+        form
+
+        .. code-block::
+
+            Signature({
+                "route": Out(ALU.RoutingSignature),
+                "ctrl": Out(ALU.ControlSignature)
+            })
+
+        See :attr:`ALU.RoutingSignature <sentinel.alu.ALU.RoutingSignature>`
+        and :attr:`ALU.ControlSignature <sentinel.alu.ALU.ControlSignature>`.
+
+    decode: In(Signature)
+        :class:`~sentinel.decode.Decoder` control signals. The signature is
+        of the form
+
+        .. code-block::
+
+            Signature({
+                "opcode": Out(OpcodeType),
+                "requested_op": Out(8),
+            })
+
+        where
+
+        .. py:attribute:: opcode
+           :type: Out(~sentinel.insn.OpcodeType)
+
+           Major opcode from the decoded instruction.
+
+        .. py:attribute:: requested_op
+           :type: Out(8)
+
+           Decoded microcode program address, calculated from
+           :class:`MappingROM`. For use with :attr:`Sequencer.opcode_adr`.
+
+    gp: Out(Signature)
+        :class:`~sentinel.datapath.RegFile` control signals. The signature is
+        of the form
+
+        .. code-block::
+
+            Signature({
+                "route": Out(RegFile.RoutingSignature),
+                "ctrl": Out(RegFile.ControlSignature)
+            })
+
+        See :attr:`RegFile.RoutingSignature <sentinel.datapath.RegFile.RoutingSignature>`
+        and :attr:`RegFile.ControlSignature <sentinel.datapath.RegFile.ControlSignature>`.
+
+    pc: Out(:attr:`ProgramCounter.ControlSignature <sentinel.datapath.ProgramCounter.ControlSignature>`)
+        :class:`~sentinel.datapath.ProgramCounter` control signals.
+
+    csr: Out(Signature)
+        :class:`~sentinel.datapath.CSRFile` control signals. The signature is
+        of the form
+
+        .. code-block::
+
+            Signature({
+                "route": Out(CSRFile.RoutingSignature),
+                "ctrl": Out(CSRFile.ControlSignature)
+            })
+
+        See :attr:`CSRFile.RoutingSignature <sentinel.datapath.CSRFile.RoutingSignature>`
+        and :attr:`CSRFile.ControlSignature <sentinel.datapath.CSRFile.ControlSignature>`.
+
+    mem: Out(Signature)
+        Memory transaction control signals. The signature is
+        of the form
+
+        .. code-block::
+
+            Signature({
+                "req": Out(MemReq),
+                "sel": Out(MemSel),
+                "valid": In(1),
+                "write": Out(WriteMem),
+                "insn_fetch": Out(InsnFetch),
+                "extend": Out(MemExtend),
+                "latch_data": Out(LatchData),
+                "latch_adr": Out(LatchAdr)
+            })
+
+        where
+
+        .. py:attribute:: req
+           :type: Out(~sentinel.ucodefields.MemReq)
+
+           Request/start a memory transfer.
+
+           :type: Out(:data:`~sentinel.ucodefields.MemReq`)
+
+        .. py:attribute:: sel
+           :type: Out(~sentinel.ucodefields.MemSel)
+
+           Select width of memory transfer.
+
+        .. py:attribute:: valid
+           :type: In(1)
+
+           When asserted, the memory transfer (read or write) has finished this
+           cycle.
+
+        .. py:attribute:: write
+           :type: Out(~sentinel.ucodefields.WriteMem)
+
+           When asserted, the current memory transfer is a write.
+
+           :type: Out(:data:`~sentinel.ucodefields.WriteMem`)
+
+        .. py:attribute:: insn_fetch
+           :type: Out(~sentinel.ucodefields.InsnFetch)
+
+           When asserted, the current memory transfer is an instruction fetch.
+
+           :type: Out(:data:`~sentinel.ucodefields.InsnFetch`)
+
+        .. py:attribute:: extend
+           :type: Out(~sentinel.ucodefields.MemExtend)
+
+           For read memory transfers less than data bus width, either
+           zero-extend or sign-extend the read data to fill the entire word.
+
+        .. py:attribute:: latch_data
+           :type: Out(~sentinel.ucodefields.LatchData)
+
+           Latch the :attr:`aligned write data <sentinel.align.WriteDataAlign>`
+           into an internal register which drives the external write data
+           bus (``DAT_O``).
+
+           :type: Out(:data:`~sentinel.ucodefields.LatchData`)
+
+        .. py:attribute:: latch_adr
+           :type: Out(~sentinel.ucodefields.LatchAdr)
+
+           Latch the :attr:`ALU output <sentinel.alu.ALU.o>` into an internal
+           register which :class:`indirectly <sentinel.align.AddressAlign>`
+           drives the address bus (``ADR_O``) and select (``SEL_O``) signals.
+
+           :type: Out(:data:`~sentinel.ucodefields.LatchAdr`)
+
+    exception: Out(:attr:`ExceptionRouter.ControlSignature <sentinel.exception.ExceptionRouter.ControlSignature>`)
+        :class:`~sentinel.exception.ExceptionRouter` control signals.
+
     ucoderom: UCodeROM
 
     sequencer: Sequencer
-    """
+    """  # noqa: E501
 
     def __init__(self, ucode: Optional[TextIO] = None):
         self.ucoderom = UCodeROM(main_file=ucode)

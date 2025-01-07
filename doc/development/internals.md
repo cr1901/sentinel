@@ -55,6 +55,96 @@ address as inputs.
     :members:
 ```
 
+<!-- FIXME: I'm tired of writing. Convert this to Markdown later. -->
+
+```{eval-rst}
+.. _mapping-details:
+
+Mapping Details
+---------------
+
+At present (1/6/2025), I mostly hand-calculated the :class:`MappingROM`
+jump table. Many  RV32I :class:`instruction bits <sentinel.insn.Insn>` can
+be reconstructed by other microcode fields after
+:class:`decoding <sentinel.decode.Decoder>`, such as
+:class:`operand sources <sentinel.ucodefields.RegRSel>` and
+:attr:`immediates <sentinel.ucodefields.ASrc.IMM>`. From there, I found a
+reasonably small map in terms of combinational logic by playing with the
+remaining instruction bits- mostly
+:class:`major <sentinel.insn.OpcodeType>` and
+:attr:`minor <sentinel.insn.Insn.funct3>` opcodes- in a text file:
+
+.. code-block::
+
+    LOAD =      0b00001000 0x08
+                0b00001001 0x09
+                0b00001010 0x0A
+                0b00001100 0x0C
+                0b00001101 0x0D
+    MISC_MEM =  0b00110000 0x30
+    OP_IMM =    0b01000000 0x40
+                0b01000010 0x42
+                0b01000011 0x43
+                0b01000100 0x44
+                0b01000110 0x46
+                0b01000111 0x47
+                0b01000001 0x41
+                0b01000101 0x45
+                0b01001101 0x4D
+    AUIPC =     0b01010000 0x50
+    STORE =     0b10000000 0x80
+                0b10000001 0x81
+                0b10000010 0x82
+    BRANCH =    0b10001000 0x88
+                0b10001001 0x89
+                0b10001100 0x8C
+                0b10001101 0x8D
+                0b10001110 0x8E
+                0b10001111 0x8F
+    JALR =      0b10011000 0x98
+    JAL =       0b10110000 0xB0
+    OP =        0b11000000 0xC0
+                0b11000001 0xC1
+                0b11000010 0xC2
+                0b11000011 0xC3
+                0b11000100 0xC4
+                0b11000101 0xC5
+                0b11001101 0xCD
+                0b11000110 0xC6
+                0b11000111 0xC7
+                0b11001000 0xC8
+    SYSTEM =    0b11000000 0xC0 (handled specially)
+                0b11000000 0xC0 (handled specially)
+    LUI =       0b11010000 0xD0
+
+    CSRs are placed wherever they fit; I chose 0x24 as a starting point.
+
+CSR compression relies on the fact that Sentinel doesn't actually implement
+most CSRs, and so their addresses can be treated as blanket
+`don't cares <https://en.wikipedia.org/wiki/Don%27t-care_term>`_:
+
+.. code-block::
+
+    mstatus   0x300 => 0b001100000000 => 0bxxxxx0xxx000 => 0b0000 - ffs
+    mie       0x304 => 0b001100000100 => 0bxxxxx0xxx100 => 0b0100 - ffs
+    mtvec     0x305 => 0b001100000101 => 0bxxxxx0xxx101 => 0b0101 - bram
+    mscratch  0x340 => 0b001101000000 => 0bxxxxx1xxx000 => 0b1000 - bram
+    mepc      0x341 => 0b001101000001 => 0bxxxxx1xxx001 => 0b1001 - bram
+    mcause    0x342 => 0b001101000010 => 0bxxxxx1xxx010 => 0b1010 - bram
+    mip       0x344 => 0b001101000100 => 0bxxxxx1xxx100 => 0b1100 - ffs
+
+Of course, if I physically implement more registers, the table will need
+to change, up to and including using more than 16 addresses :).
+
+.. todo::
+
+    * Perhaps include rest of the raw notes on how I derived start
+      locations from opcodes; right now only the results are included.
+    * Start locations need to be documented as constants, including "base"
+      constants where the minor opcode is just added to the base to form
+      the final constant.
+```
+
 ## Instruction Decoder
 
 ```{eval-rst}
