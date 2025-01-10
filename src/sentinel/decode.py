@@ -39,8 +39,9 @@ class CSRAttributes(Component):
         .. todo::
 
             Right now, this isn't actually private; it is a leaky abstraction
-            because an ad-hoc compatible :class:`~amaranth.lib.data.Layout`
-            is created by :class:`sentinel.control.MappingROM`.
+            because e.g. an ad-hoc compatible
+            :class:`~amaranth.lib.data.Layout` is created by
+            :class:`sentinel.control.MappingROM`.
 
         :meta public:
         """
@@ -141,14 +142,80 @@ class CSRAttributes(Component):
 
 
 class ImmediateGenerator(Component):
-    def __init__(self):
-        sig = {
-            "enable": Out(1),
-            "insn": Out(32),
-            "imm": In(32)
-        }
+    """
+    Decode the immediate field from a RISC-V instruction.
 
-        super().__init__(Signature(sig).flip())
+    When :attr:`enable` is asserted, this
+    :class:`~amaranth:amaranth.lib.wiring.Component` examines an
+    :attr:`input instruction's <insn>` :class:`~sentinel.insn.OpcodeType`,
+    and extracts the correct *sign-extended* 32-bit immediate encoded in that
+    :class:`~sentinel.insn.OpcodeType`. The immediate is available on
+    :attr:`imm` the active edge after :attr:`enable` is asserted.
+
+    RISC-V instructions encode several forms and widths of 32-bit immediate
+    operands, based upon an instruction's
+    :class:`major opcode <sentinel.insn.OpcodeType>`.
+    :class:`ImmediateGenerator` abstracts this away with a straightforward
+    "decode all immediate types simultaneously, select
+    the correct immediate type based on opcode via a mux, and latch the mux
+    output" impelementation. The mux is inactive if the current instruction
+    doesn't have an immediate field. Consequently, the
+    :attr:`output immediate <imm>` is only valid for certain
+    :class:`major opcodes <sentinel.insn.OpcodeType>` in the
+    :attr:`input instruction <insn>`:
+
+    * :attr:`~sentinel.insn.OpcodeType.OP_IMM`
+    * :attr:`~sentinel.insn.OpcodeType.JALR`
+    * :attr:`~sentinel.insn.OpcodeType.LOAD`
+    * :attr:`~sentinel.insn.OpcodeType.LUI`
+    * :attr:`~sentinel.insn.OpcodeType.AUIPC`
+    * :attr:`~sentinel.insn.OpcodeType.JAL`
+    * :attr:`~sentinel.insn.OpcodeType.BRANCH`
+    * :attr:`~sentinel.insn.OpcodeType.STORE`
+
+    .. warning::
+
+        The fact that :class:`ImmediateGenerator` *does* currently check
+        whether the current instruction has an immediate field or not
+        is an implementation detail. It does not (intentionally!) forward
+        "instruction contains/does not contain immediate" information to other
+        parts of Sentinel via e.g. interface
+        :class:`Members <amaranth:amaranth.lib.wiring.Member>`.
+
+    Assuming that the current instruction has an immediate field,
+    class:`ImmediateGenerator` does *not* (and *can not* in some cases, really)
+    check whether the immediate will cause an exception. For
+    instance, adding certain immediates to
+    :class:`~sentinel.datapath.ProgramCounter` for
+    :attr:`~sentinel.insn.OpcodeType.JALR` is supposed to trigger
+    :attr:`~sentinel.csr.MCause.Cause.INSN_MISALIGNED`. However, in the
+    case of Sentinel, the immediate generator does not have access to
+    :class:`~sentinel.datapath.ProgramCounter`, and so the core doesn't know
+    whether a :attr:`~sentinel.csr.MCause.Cause.INSN_MISALIGNED` exception will
+    trigger until a later clock cycle (jump target calculation via
+    :class:`~sentinel.alu.ALU`).
+
+    It is the microcode program's responsibility to know whether the
+    the current instruction has an immediate field at all, and assuming it
+    does, check whether it is valid for the current instruction (e.g. does not
+    cause exceptions).
+    """
+
+    #: If asserted, generate an immediate from :attr:`insn` his cycle. Output
+    #: will be valid on the first active edge after :attr:`enable` is asserted.
+    #:
+    #: This :ref:`Signal <amaranth:lang-signals>` is equivalent to
+    #: :attr:`~sentinel.decode.Decode.do_decode`.
+    enable: In(1)
+
+    #: The current RISC-V instruction, the same
+    #: :ref:`Signal <amaranth:lang-signals>` as
+    #: :attr:`Decode.insn <sentinel.decode.Decode.insn>`.
+    insn: In(32)
+
+    #: The extracted sign-extended 32-bit immediate from :attr:`insn`. Valid
+    #: on the first active edge after :attr:`enable` is asserted.
+    imm: Out(32)
 
     def elaborate(self, platform):  # noqa: D102
         m = Module()
@@ -179,15 +246,57 @@ class ImmediateGenerator(Component):
 
 # ExceptionControl is aware of CSR decode cycles.
 class ExceptionControl(Component):
-    def __init__(self):
-        sig = {
-            "start": Out(1),
-            "insn": Out(32),
-            "csr_attr": Out(CSRAttributes._DataLayout),
-            "exception": In(DecodeException),
-        }
+    """Detect and handle :class:`Decode`-releated exceptions.
 
-        super().__init__(Signature(sig).flip())
+    When :attr:`start` is asserted, :class:`ExceptionControl` examines the
+    current instruction checks whether the :attr:`input instruction <insn>`
+    :class:`fields <sentinel.insn.Insn>` are valid. Once :attr:`start` is
+    asserted, exception information will be available on :attr:`exception`
+    on the next active edge for non-CSR instructions and two active edges
+    later for CSR instructions; like :class:`~sentinel.control.MappingROM`,
+    :class:`ExceptionControl` is aware of CSR decode cycles.
+
+    :class:`ExceptionControl` found an exception for the current instruction
+    if it asserts the :attr:`valid <sentinel.exception.DecodeException>` field
+    of the :attr:`exception` :class:`amaranth:amaranth.lib.wiring.Member` on
+    *any* active edge after :attr:`start` assertion (although in practice,
+    exceptions are detected no later than two cycles after :attr:`start`
+    assertion). It can trigger the following exceptions:
+
+    * :attr:`~sentinel.csr.MCause.Cause.ILLEGAL_INSN`
+    * :attr:`~sentinel.csr.MCause.Cause.ECALL_MMODE`
+    * :attr:`~sentinel.csr.MCause.Cause.BREAKPOINT`
+
+    This :class:`~amaranth:amaranth.lib.wiring.Component` should be used with
+    conjunction with :class:`~sentinel.insn.Insn` and
+    :class:`ImmediateGenerator`, since neither of those classes check for
+    instruction validity (to save logic).
+    """
+
+    #: If asserted, check for exceptions this cycle. Output will be
+    #: valid either on the first active edge (non-CSR) or next two active
+    #: edges (CSR instruction) after :attr:`start` is asserted.
+    #:
+    #: This :ref:`Signal <amaranth:lang-signals>` is equivalent to
+    #: :attr:`~sentinel.decode.Decode.do_decode`.
+    start: In(1)
+
+    #: The current RISC-V instruction, the same
+    #: :ref:`Signal <amaranth:lang-signals>` as
+    #: :attr:`Decode.insn <sentinel.decode.Decode.insn>`.
+    insn: In(32)
+
+    #: In(:class:`~CSRAttributes._DataLayout`): CSR Attribute
+    #: information for the current :attr:`instruction <insn>` from from the
+    #: :class:`~sentinel.decode.CSRAttributes` look-up table.
+    csr_attr: In(CSRAttributes._DataLayout)
+
+    #: Out(:class:`~sentinel.exception.DecodeException`): If asserted, an
+    #: exception was detected for this instruction. Valid on the
+    #: first active edge after :attr:`start` is asserted for non-CSR
+    #: instructions; valid on the second active edge after :attr:`start`
+    #: assertion for CSR instructions.
+    exception: Out(DecodeException)
 
     def elaborate(self, platform):  # noqa: D102
         m = Module()
@@ -391,7 +500,8 @@ class Decode(Component):
         For CSR instructions, :attr:`exception` is valid *two* active edges
         after :attr:`do_decode` asserts. For all other instructions,
         :attr:`exception` is valid on the active edge after :attr:`do_decode`
-        is asserted. :class:`Other components <sentinel.control.MappingROM>`
+        is asserted. :class:`Other <sentinel.control.MappingROM>`
+        :class: `components <ExceptionControl>`
         and the microcode program need to be (and are!) aware of the variable
         latency.
 
