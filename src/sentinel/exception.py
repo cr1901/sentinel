@@ -86,6 +86,39 @@ class ExceptionRouter(Component):
 
     """
 
+    #: Signature: Exception Router microcode signals and useful state.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:    Signature({
+    #:        "mem_sel": Out(MemSel),
+    #:        "except_ctl": Out(ExceptCtl),
+    #:        "exception": In(1)
+    #:    })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: op
+    #:    :type: Out(~sentinel.ucodefields.MemSel)
+    #:
+    #:    Memory operation in progress this cycle.
+    #:
+    #: .. py:attribute:: except_ctl
+    #:    :type: Out(~sentinel.ucodefields.ExceptCtl)
+    #:
+    #:    Choose which action :class:`ExceptionRouter` performs this cycle,
+    #:    such as checking for a specific exception, or entering/leaving
+    #:    the exception handler.
+    #:
+    #: .. py:attribute:: exception
+    #:    :type: In(1)
+    #:    :no-index:
+    #:
+    #:    Sent back to :class:`~sentinel.control.Control`; if asserted, an
+    #:    exception condition was detected this cycle. The
+    #:    :attr:`cause <mcause>` will be available on the next active edge.
     ControlSignature = Signature({
         "mem_sel": Out(MemSel),
         "except_ctl": Out(ExceptCtl),

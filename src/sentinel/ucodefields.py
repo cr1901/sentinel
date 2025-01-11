@@ -116,7 +116,7 @@ class PcAction(enum.Enum):
 
     #: int: Do not change the Program Counter; hold the current value.
     HOLD = 0
-    #: int: Increment the Program Counter by ``4``.
+    #: int: Increment the Program Counter by ``4`` bytes (``1`` 32-bit word).
     INC = 1
     #: int: Set the Program Counter to the value currently on the
     #: :attr:`ALU output <sentinel.alu.ALU.o>`.

@@ -239,6 +239,51 @@ class ALU(Component):
         "zero": In(1)
     })
 
+    #: Signature: Useful microcode signals concerned with routing to the ALU.
+    #:
+    #: The ALU does not directly use this
+    #: :class:`~amaranth:amaranth.lib.wiring.Signature`; it is provided for
+    #: convenience to route data sources to the :class:`ASrcMux` and
+    #: :class:`BSrcMux`.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:    Signature({
+    #:        "a_src": Out(ASrc),
+    #:        "b_src": Out(BSrc),
+    #:        "latch_a": Out(LatchA),
+    #:        "latch_b": Out(LatchB),
+    #:    })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: a_src
+    #:    :type: Out(~sentinel.ucodefields.ASrc)
+    #:
+    #:    :class:`ASrcMux` source to pass through this clock cycle.
+    #:
+    #: .. py:attribute:: b_src
+    #:    :type: Out(~sentinel.ucodefields.BSrc)
+    #:
+    #:    :class:`BSrcMux` source to pass through this clock cycle.
+    #:
+    #: .. py:attribute:: latch_a
+    #:    :type: Out(~sentinel.ucodefields.LatchA)
+    #:
+    #:    If set, latch the :attr:`selected <a_src>` source to the
+    #:    :attr:`ASrcMux output <ASrcMux.data>` this cycle.
+    #:
+    #:    :type: Out(:data:`~sentinel.ucodefields.LatchA`)
+    #:
+    #: .. py:attribute:: latch_b
+    #:    :type: Out(~sentinel.ucodefields.LatchB)
+    #:
+    #:    If set, latch the :attr:`selected <b_src>` source to the
+    #:    :attr:`BSrcMux output <BSrcMux.data>` this cycle.
+    #:
+    #:    :type: Out(:data:`~sentinel.ucodefields.LatchB`)
     RoutingSignature = Signature({
         "a_src": Out(ASrc),
         "b_src": Out(BSrc),

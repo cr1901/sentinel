@@ -10,10 +10,94 @@ from .csr import MStatus, MTVec, MIP, MIE, MCause
 
 
 class ProgramCounter(Component):
+    """Sentinel RV32I Program Counter.
+
+    Unlike most registers, the :class:`ProgramCounter` (PC) is implemented
+    using sequential logic rather than in RAM, because the value needs to be
+    available as an :attr:`ALU source <sentinel.alu.BSrcMux.pc>` on any given
+    clock cycle. See the bottom half of :class:`CSRFile` documentation for
+    more details. Before microcode takes an
+    :class:`action <sentinel.ucodefields.PcAction>` on the PC besides
+    :attr:`~sentinel.ucodefields.PcAction.HOLD`, the PC points to the
+    *currently-executing* instruction. After an action is taken, the PC will
+    point to the *next* instruction address to be executed.
+
+    For any given clock cycle, the PC is modified on the next active edge by
+    setting :class:`~sentinel.ucodefields.PcAction` to a value besides
+    :attr:`~sentinel.ucodefields.PcAction.HOLD`:
+
+    * If :attr:`~sentinel.ucodefields.PcAction.INC` is selected, automatically
+      increment by the PC ``4`` bytes on the next active edge. Physically,
+      the increment is by ``1`` 32-bit word, because the bottom two bits of
+      the PC are unimplemented.
+    * If :attr:`~sentinel.ucodefields.PcAction.LOAD_ALU_O` is selected, load
+      the PC with the current :attr:`alu output <sentinel.alu.ALU.o>` on the
+      next active edge.
+
+    :class:`ProgramCounter` only physically implements the top 30 bits of the
+    register, because the least-significant bits are the PC are always ``0``
+    for valid RV32I instructions. Loads to the PC from the
+    :attr:`alu output <sentinel.alu.ALU.o>` will discard the low two bits.
+    With that said, microcode should take care to trigger an exception *as if*
+    loading a non-zero value to the low bits of the PC would succeed, when
+    appropriate (e.g. :attr:`~sentinel.insn.OpcodeType.JAL` and
+    :attr:`~sentinel.insn.OpcodeType.JALR` instructions.)
+    """
+
+    #: Signature: Program Counter microcode signals.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:    Signature({
+    #:        "action": Out(PcAction)
+    #:    })
+    #:
+    #: .. py:attribute:: action
+    #:    :type: Out(~sentinel.ucodefields.PcAction)
+    #:
+    #:    Perform an action on the PC for the current clock cycle.
     ControlSignature = Signature({
         "action": Out(PcAction)
     })
 
+    #: Signature: Program Counter interface that is passed to external modules.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:    Signature({
+    #:        "dat_r": In(30),
+    #:        "dat_w": Out(30),
+    #:        "ctrl": Out(ControlSignature)
+    #:    })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: dat_r
+    #:    :type: In(30)
+    #:
+    #:    Current value
+    #:
+    #: .. py:attribute:: imod
+    #:    :type: Out(~sentinel.ucodefields.ALUIMod)
+    #:
+    #:    Modify the inputs :attr:`a` and :attr:`b` before doing ALU
+    #:    operation.
+    #:
+    #: .. py:attribute:: omod
+    #:    :type: Out(~sentinel.ucodefields.ALUOMod)
+    #:
+    #:    Modify the output after doing ALU operation, but before latching
+    #:    the ALU output into :attr:`o` (for next cycle).
+    #:
+    #: .. py:attribute:: zero
+    #:    :type: In(1)
+    #:
+    #:    Set if  the current :attr:`output <o>` (i.e. the result of the ALU
+    #:    operation done *last* cycle) is ``0``.
     PublicSignature = Signature({
         "dat_r": In(30),
         "dat_w": Out(30),
@@ -47,6 +131,7 @@ class RegFile(Component):
         "reg_w_sel": Out(RegWSel),
     })
 
+    #: Signature: GP register interface that is passed to external modules.
     PublicSignature = Signature({
         "adr_r": Out(5),
         "adr_w": Out(5),
@@ -64,6 +149,8 @@ class RegFile(Component):
     })
 
     pub: In(PublicSignature)
+
+    #: Signature: CSR register interface that is passed to external modules.
     priv: In(_PrivateCSRAccessSignature)
 
     def __init__(self, *, formal):
@@ -122,6 +209,75 @@ class RegFile(Component):
 
 
 class CSRFile(Component):
+    """Control and Status Registers register file controller.
+
+    As :data:`hinted <sentinel.ucodefields.RegRead>`
+    :data:`at <sentinel.ucodefields.RegWrite>`
+    :class:`by <sentinel.ucodefields.RegRSel>`
+    :class:`several <sentinel.ucodefields.RegWSel>`
+    :class:`microcode <sentinel.ucodefields.CSROp>`
+    :class:`fields <sentinel.ucodefields.CSRSel>`, :class:`CSRFile` and
+    :class:`RegFile` share a single memory resource defined in
+    :class:`RegFile`; GP regs use the bottom half, and CSRs use the top half.
+    This :class:`~amaranth:amaranth.lib.wiring.Component` masquerades as a
+    register file whose control signals are completely independent from
+    :class:`RegFile`, and generates the signals required to access the top
+    half of the shared register memory. See :attr:`MSTATUS`, etc.
+
+    :class:`CSRFile` and :class:`RegFile` sharing the same block RAM
+    was originally supposed to be an implementation detail. The current
+    :doc:`Interface <amaranth:stdlib/wiring>` *attempts* to hide these
+    details, but the final design ended up more with a more
+    tightly-coupled :class:`CSRFile` and :class:`RegFile` than I originally
+    wanted. Right now, only a GP reg or a CSR reg op can happen on a given
+    clock cycle, but not both.
+
+    .. todo::
+
+        I can likely relax this restriction without much extra logic (maybe
+        even less logic!), but I haven't decided what guarantees I'm willing to
+        provide as of 1/10/2025.
+
+    Note that CSR registers are not necessarily stored sequentially in the
+    top-half of block RAM. Rather, I store them at addresses that minimize the
+    amount of logic to :attr:`map <sentinel.control.MappingROM.csr_encoding>`
+    the :attr:`12-bit <sentinel.insn.Insn.CSR.addr>` CSR addresses to 4-bits.
+
+    :class:`~sentinel.csr.MStatus`, :class:`~sentinel.csr.MIP`, and
+    :class:`~sentinel.csr.MIE` regs are special in that, similar to the
+    :class:`ProgramCounter`, they must be readable *or writable* on any given
+    clock cycle for interrupt/exception handling. The block RAM as implemented
+    in the :class:`RegFile` cannot accomodate registers whose values are
+    always available. Therefore, the above registers are implemented as
+    sequential logic storage elements outside of the shared block RAM. Writes
+    to these registers go to both the physical logic and the block RAM, while
+    reads are always from the dedicated logic for these registers.
+
+    .. note::
+
+        In principle, one can add dedicated read/write ports for each register
+        (i.e. fixed address) to the shared block RAM to implement registers
+        which can always be written/read in a shared memory. In my opinion,
+        dedicated is far simpler, if less elegant, and it *definitely* requires
+        more logic and RAM resources to implement!
+
+    If the :attr:`IRQ line <sentinel.top.Top.irq>` is asserted on the same
+    cycle that the CPU attempts to clear
+    :attr:`MIP.MEIP <sentinel.csr.MIP.meip>`, the IRQ line takes priority to
+    avoid lost interrupts.
+
+    .. note::
+
+        As of 1/10/2025, only :attr:`MIP.MEIP <sentinel.csr.MIP.meip>` is
+        physically implemented, and it's not clear I will implement the 
+        :attr:`MIP.MSIP <sentinel.csr.MIP.msip>`,
+        :attr:`MIP.MTIP <sentinel.csr.MIP.mtip>`, and top 16 bits of
+        :class:`~sentinel.csr.MIP`. However,
+        the same "external value takes priority" will apply to any future
+        bits of :class:`~sentinel.csr.MIP` that I implement.
+
+    """
+
     ControlSignature = Signature({
         "op": Out(CSROp),
         "exception": Out(ExceptCtl)
@@ -132,6 +288,7 @@ class CSRFile(Component):
         "target": Out(Target)
     })
 
+    #: Signature: CSR register interface that is passed to external modules.
     PublicSignature = Signature({
         "adr": Out(5),
         "dat_r": In(32),
@@ -143,21 +300,38 @@ class CSRFile(Component):
         "mip_r": In(MIP),
         "mie_r": In(MIE),
         # These 4 are mainly for peeking in simulation.
-        "mscratch_r": In(32),
-        "mepc_r": In(30),
-        "mtvec_r": In(MTVec),
-        "mcause_r": In(MCause)
+        # "mscratch_r": In(32),
+        # "mepc_r": In(30),
+        # "mtvec_r": In(MTVec),
+        # "mcause_r": In(MCause)
     })
 
     pub: In(PublicSignature)
     priv: Out(RegFile._PrivateCSRAccessSignature)
 
+    #: :class:`~sentinel.csr.MStatus` CSR address in the shared register file,
+    #: relative to its top-half. Register is implemented as sequential logic,
+    #: but a reg file address is required for decoding.
     MSTATUS = 0
+    #: :class:`~sentinel.csr.MIE` CSR address in the shared register file,
+    #: relative to its top-half. Register is implemented as sequential logic,
+    #: but a reg file address is required for decoding.
     MIE = 0x4
+    #: ``MTVEC`` CSR address in the shared register file, relative to its
+    #: top-half.
     MTVEC = 0x5
+    #: ``MSCRATCH`` CSR address in the shared register file, relative to its
+    #: top-half.
     MSCRATCH = 0x8
+    #: ``MEPC`` CSR address in the shared register file, relative to its
+    #: top-half.
     MEPC = 0x9
+    #: :class:`~sentinel.csr.MCause` CSR address in the shared register file,
+    #: relative to its top-half.
     MCAUSE = 0xA
+    #: :class:`~sentinel.csr.MIP` CSR address in the shared register file,
+    #: relative to its top-half. Register is implemented as sequential logic,
+    #: but a reg file address is required for decoding.
     MIP = 0xC
 
     def elaborate(self, platform):  # noqa: D102
