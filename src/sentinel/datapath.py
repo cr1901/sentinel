@@ -1,3 +1,5 @@
+"""Sentinel datapath implementation."""
+
 from amaranth import Cat, Module, Signal
 from amaranth.lib.data import View
 from amaranth.lib.memory import Memory, MemoryData
@@ -6,7 +8,7 @@ from amaranth.lib.wiring import Component, Signature, In, Out, connect, flipped
 from .ucodefields import CSRSel, PcAction, CSROp, ExceptCtl, RegRSel, \
     RegWSel, Target
 
-from .csr import MStatus, MTVec, MIP, MIE, MCause
+from .csr import MStatus, MTVec, MIP, MIE, MCause  # noqa: F401
 
 
 class ProgramCounter(Component):
@@ -120,18 +122,189 @@ class ProgramCounter(Component):
 
 
 class RegFile(Component):
+    """RV32I General Purpose Registers (GP) register file and backing RAM.
+
+    The :class:`RegFile` :class:`~amaranth:amaranth.lib.wiring.Component`
+    provides an :doc:`Interface <amaranth:stdlib/wiring>` to read and write
+    the 32 RV32I GP regs. The GP reg file is implemented as a 64x32
+    (e.g. 64 words, 32-bits per word)
+    `psuedo/simple <https://en.wikipedia.org/wiki/Dual-ported_RAM>`_
+    dual-port synchronous RAM; on any given clock cycle, the core can do one
+    read *and* one write to the RAM at independent addresses. Values are
+    written to the RAM and appear on its read port on the subsequent active
+    edge. The backing RAM is transparent; on a given clock, if the core reads
+    and writes the same address, the newly-written value will appear on the
+    read port on the next active edge.
+
+    .. note::
+
+        It is an implementation detail that the backing RAM is transparent.
+        I'm not even sure I depend on it much. I'll have to run the tests
+        without it and see what fails; it might be a net size win if I can
+        make non-transparent work :).
+
+    The backing RAM also holds Sentinel's implemented RISC-V
+    :mod:`Configuration and Status Registers (CSRs) <sentinel.csr>` in its top
+    32 words. The synchronous RAM's most-significant address line (``A5``)
+    is morally equivalent to a "chip select"; ``A5=0`` chooses one 32-word GP
+    reg file RAM chip and ``A5=1`` chooses a *separate* 32-word CSR reg file
+    RAM, and their data lines are muxed together to read/write only one RAM at
+    a time. See :class:`CSRFile` for rationale on what I called *shared RAM*.
+    Note that CSR addresses in :class:`CSRFile` are relative to address
+    ``0x20`` in the shared RAM.
+
+    :class:`RegFile` :attr:`snoops <priv>` CSR accesses to decide which
+    half of the shared RAM to access each clock cycle. If a given
+    :term:`microinstruction` tries to access the GP reg and CSR half
+    simultaneously (e.g. if :class:`~sentinel.ucodefields.CSROp` is not
+    :attr:`~sentinel.ucodefields.CSROp.NONE`), the CSR access takes priority.
+
+    .. note::
+
+        In the future, it is possible the top-half of the backing RAM will
+        *also* be used for scratch space by the microprogram, though at present
+        I do no such thing.
+
+    Unlike many RISC-V implementations, Sentinel does *not* have a hardwired
+    zero register (``x0``). Rather, memory address ``0`` holds the "value" of
+    ``x0``. For a small core like Sentinel, ``x0`` in RAM saves *a lot* of
+    logic that would otherwise have to choose between a hardwired ``x0`` and
+    the backing memory. It is microcode's responsibility to initialize address
+    ``0`` to value ``0`` using :attr:`allow_zero_wr` before the first
+    :term:`macroinstruction` begins processing. If :attr:`allow_zero_wr` is
+    not asserted on a given clock cycle, writes to address ``0`` are ignored,
+    which implements RISC-V instruction semantics.
+
+    Parameters
+    ----------
+    formal: bool
+        Presently unused.
+
+    Attributes
+    ----------
+    formal: bool
+        Presently unused.
+
+    m_data: :class:`~amaranth:amaranth.lib.memory.MemoryData`
+        In simulation, use this attribute to get access to the shared register
+        file contents.
+    """
+
+    #: Signature: GP reg microcode control signals.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:    Signature({
+    #:       "reg_read": Out(1),
+    #:       "reg_write": Out(1),
+    #:       "allow_zero_wr": Out(1),
+    #:   })
+    #:
+    #: .. py:attribute:: reg_read
+    #:    :type: Out(1)
+    #:
+    #:    Perform a read from the GP reg file at :attr:`adr_r` this cycle.
+    #:    :attr:`Data <dat_r>` is valid on the next active edge.
+    #:
+    #: .. py:attribute:: reg_write
+    #:    :type: Out(1)
+    #:
+    #:    Perform a write from the GP reg file at :attr:`adr_w` this cycle.
+    #:    :attr:`Data <dat_w>` is written on the next active edge.
+    #:
+    #: .. py:attribute:: allow_zero_wr
+    #:    :type: Out(1)
+    #:
+    #:    By default, writes to address ``0`` are ignored; qualify
+    #:    :attr:`reg_write` with this signal to bypass that restriction for
+    #:    this clock cycle.
     ControlSignature = Signature({
         "reg_read": Out(1),
         "reg_write": Out(1),
         "allow_zero_wr": Out(1),
     })
 
+    #: Signature: Useful microcode signals concerned with routing to GP regs.
+    #:
+    #: :class:`RegFile` does not directly use this
+    #: :class:`~amaranth:amaranth.lib.wiring.Signature`; it is provided for
+    #: convenience to route data sources to itself.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:      Signature({
+    #:          "reg_r_sel": Out(RegRSel),
+    #:          "reg_w_sel": Out(RegWSel),
+    #:      })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: reg_r_sel
+    #:    :type: Out(~sentinel.ucodefields.RegRSel)
+    #:
+    #:    Select a :attr:`read address <adr_r>` for :class:`RegFile`.
+    #:
+    #: .. py:attribute:: reg_w_sel
+    #:    :type: Out(~sentinel.ucodefields.RegRSel)
+    #:
+    #:    Select a :attr:`write address <adr_w>` for :class:`RegFile`.
     RoutingSignature = Signature({
         "reg_r_sel": Out(RegRSel),
         "reg_w_sel": Out(RegWSel),
     })
 
     #: Signature: GP register interface that is passed to external modules.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:      Signature({
+    #:          "adr_r": Out(5),
+    #:          "adr_w": Out(5),
+    #:          "dat_r": In(32),
+    #:          "dat_w": Out(32),
+    #:          "ctrl": Out(ControlSignature)
+    #:      })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: adr_r
+    #:    :type: Out(5)
+    #:
+    #:    GP Register address to read.
+    #:
+    #: .. py:attribute:: adr_w
+    #:    :type: Out(5)
+    #:
+    #:    GP Register address to write.
+    #:
+    #: .. py:attribute:: dat_r
+    #:    :type: In(32)
+    #:
+    #:    Data read from register specified by :attr:`adr_r`. Valid on the next
+    #:    active edge after :attr:`adr_r` is presented *and*
+    #:    :attr:`reg_read` is asserted
+    #:
+    #: .. py:attribute:: dat_w
+    #:    :type: In(32)
+    #:
+    #:    Data written to register specified by :attr:`adr_w`. Valid on the
+    #:    next active edge after :attr:`adr_w` is presented *and*
+    #:    :attr:`reg_write` is asserted.
+    #:
+    #: .. py:attribute:: ctrl
+    #:    :type: Out(ControlSignature)
+    #:
+    #:    Choose whether to perform a register read, write, or both. Writes
+    #:    to address ``0`` are ignored unless :attr:`allow_zero_wr` is
+    #:    asserted.
+    #:
+    #:    :type: Out(:class:`ControlSignature`)
     PublicSignature = Signature({
         "adr_r": Out(5),
         "adr_w": Out(5),
@@ -140,7 +313,49 @@ class RegFile(Component):
         "ctrl": Out(ControlSignature)
     })
 
-    # Private interface to control accessing CSR regs stored in GP RAM.
+    #: Private interface to control accessing CSR regs stored in GP RAM.
+    #:
+    #: This :class:`~amaranth:amaranth.lib.wiring.Signature` is private, but
+    #: documented for completeness/as a courtesy.
+    #:
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:      Signature({
+    #:          "adr": Out(5),
+    #:          "dat_r": In(32),
+    #:          "dat_w": Out(32),
+    #:          "op": Out(CSROp)
+    #:      })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: adr
+    #:    :type: Out(5)
+    #:
+    #:    CSR address being read, zero-extended to 5-bits, relative to
+    #:    address ``0x20`` in the shared RAM.
+    #:
+    #: .. py:attribute:: dat_r
+    #:    :type: In(5)
+    #:    :no-index:
+    #:
+    #:    Data of CSR at address :attr:`adr` being read.
+    #:
+    #: .. py:attribute:: dat_w
+    #:    :type: Out(32)
+    #:    :no-index:
+    #:
+    #:    Data of CSR at address :attr:`adr` being written.
+    #:
+    #: .. py:attribute:: csr_op
+    #:    :type: Out(~sentinel.ucodefields.CSROp)
+    #:
+    #:    CSR operation requested by :class:`CSRFile` this cycle, if any.
+    #:
+    #: :meta public:
     _PrivateCSRAccessSignature = Signature({
         "adr": Out(5),
         "dat_r": In(32),
@@ -148,9 +363,11 @@ class RegFile(Component):
         "op": Out(CSROp)
     })
 
+    #: In(:class:`PublicSignature`): Public bus exposed to external modules.
     pub: In(PublicSignature)
 
-    #: Signature: CSR register interface that is passed to external modules.
+    #: In(:class:`_PrivateCSRAccessSignature`): Private bus used to snoop
+    #: accesses to :class:`CSRFile`.
     priv: In(_PrivateCSRAccessSignature)
 
     def __init__(self, *, formal):
@@ -258,8 +475,8 @@ class CSRFile(Component):
         In principle, one can add dedicated read/write ports for each register
         (i.e. fixed address) to the shared block RAM to implement registers
         which can always be written/read in a shared memory. In my opinion,
-        dedicated is far simpler, if less elegant, and it *definitely* requires
-        more logic and RAM resources to implement!
+        this is far more complex than sequential logic and muxing, and it
+        *definitely* requires more logic and RAM resources to implement!
 
     If the :attr:`IRQ line <sentinel.top.Top.irq>` is asserted on the same
     cycle that the CPU attempts to clear
@@ -269,26 +486,161 @@ class CSRFile(Component):
     .. note::
 
         As of 1/10/2025, only :attr:`MIP.MEIP <sentinel.csr.MIP.meip>` is
-        physically implemented, and it's not clear I will implement the 
+        physically implemented, and it's not clear I will implement the
         :attr:`MIP.MSIP <sentinel.csr.MIP.msip>`,
         :attr:`MIP.MTIP <sentinel.csr.MIP.mtip>`, and top 16 bits of
         :class:`~sentinel.csr.MIP`. However,
         the same "external value takes priority" will apply to any future
         bits of :class:`~sentinel.csr.MIP` that I implement.
-
     """
 
+    #: Signature: CSR microcode control signals.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:    Signature({
+    #:        "op": Out(CSROp),
+    #:        "exception": Out(ExceptCtl)
+    #:   })
+    #:
+    #: .. py:attribute:: op
+    #:    :type: Out(CSROp)
+    #:
+    #:    CSR operation to perform this cycle, if any.
+    #:
+    #: .. py:attribute:: exception
+    #:    :type: Out(~sentinel.ucodefields.ExceptCtl)
+    #:
+    #:    If set to :attr:`~sentinel.ucodefields.ExceptCtl.ENTER_INT`, set
+    #:    :attr:`MStatus.MPIE <sentinel.csr.MStatus.mpie>` to
+    #:    :attr:`MStatus.MIE <sentinel.csr.MStatus.mie>`, and set
+    #:    :attr:`MStatus.MIE <sentinel.csr.MStatus.mie>` to ``0``.
+    #:
+    #:    If set to :attr:`~sentinel.ucodefields.ExceptCtl.LEAVE_INT`, set
+    #:    :attr:`MStatus.MIE <sentinel.csr.MStatus.mie>` to
+    #:    :attr:`MStatus.MPIE <sentinel.csr.MStatus.mpie>`, and set
+    #:    :attr:`MStatus.MPIE <sentinel.csr.MStatus.mpie>` to ``1``.
+    #:
+    #:    Other values have no effect on :class:`CSRFile`.
     ControlSignature = Signature({
         "op": Out(CSROp),
         "exception": Out(ExceptCtl)
     })
 
+    #: Signature: Useful microcode signals concerned with routing to CSRs.
+    #:
+    #: :class:`CSRFile` does not directly use this
+    #: :class:`~amaranth:amaranth.lib.wiring.Signature`; it is provided for
+    #: convenience to route data sources to itself.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:      Signature({
+    #:          "csr_sel": Out(CSRSel),
+    #:          "target": Out(Target)
+    #:      })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: csr_sel
+    #:    :type: Out(~sentinel.ucodefields.CSRSel)
+    #:
+    #:    Select a source from where to get a :attr:`CSR address <adr>` for
+    #:    :class:`CSRFile`.
+    #:
+    #: .. py:attribute:: target
+    #:    :type: Out(~sentinel.ucodefields.Target)
+    #:
+    #:    The :data:`~sentinel.ucodefields.Target` microcode field. Used as
+    #:    an explicitly-specified CSR address if
+    #:    :attr:`CSRSel.TARGET <sentinel.ucodefields.CSRSel.TARGET>`
+    #:    is selected.
+    #:
+    #:    :type: Out(:data:`~sentinel.ucodefields.Target`)
     RoutingSignature = Signature({
         "csr_sel": Out(CSRSel),
         "target": Out(Target)
     })
 
     #: Signature: CSR register interface that is passed to external modules.
+    #:
+    #: The signature is of the form
+    #:
+    #: .. code-block::
+    #:
+    #:      Signature({
+    #:          "adr": Out(5),
+    #:          "dat_r": In(32),
+    #:          "dat_w": Out(32),
+    #:          "ctrl": Out(ControlSignature),
+    #:
+    #:          "mstatus_r": In(MStatus),
+    #:          "mip_w": Out(MIP),
+    #:          "mip_r": In(MIP),
+    #:          "mie_r": In(MIE),
+    #:      })
+    #:
+    #: where
+    #:
+    #: .. py:attribute:: adr
+    #:    :type: Out(5)
+    #:
+    #:    CSR Register address or write.
+    #:
+    #: .. py:attribute:: dat_r
+    #:    :type: In(32)
+    #:
+    #:    Data read from register specified by :attr:`adr`. Valid on the next
+    #:    active edge after :attr:`adr` is presented *and* :attr:`ctrl` is
+    #:    set to :attr:`~sentinel.ucodefields.CSROp.READ_CSR`.
+    #:
+    #: .. py:attribute:: dat_w
+    #:    :type: Out(32)
+    #:
+    #:    Data written to register specified by :attr:`adr`. Valid on the
+    #:    next active edge after :attr:`adr` is presented *and* :attr:`ctrl` is
+    #:    set to :attr:`~sentinel.ucodefields.CSROp.WRITE_CSR`.
+    #:
+    #: .. py:attribute:: ctrl
+    #:    :type: Out(ControlSignature)
+    #:
+    #:    Choose whether to perform a CSR register read or write this clock
+    #:    cycle. Also save and restore :class:`~sentinel.csr.MStatus` when
+    #:    entering and leaving an exception handler.
+    #:
+    #:    :type: Out(:class:`ControlSignature`)
+    #:
+    #: .. py:attribute:: mstatus_r
+    #:    :type: Out(~sentinel.csr.MStatus)
+    #:
+    #:    Current read value of the :class:`~sentinel.csr.MStatus` register.
+    #:
+    #: .. py:attribute:: mip_w
+    #:    :type: Out(~sentinel.csr.MIP)
+    #:
+    #:    Value of the :class:`~sentinel.csr.MIP` register, direct from
+    #:    the interrupt lines (currently only :attr:`~sentinel.top.Top.irq`).
+    #:
+    #: .. py:attribute:: mip_r
+    #:    :type: Out(~sentinel.csr.MIP)
+    #:
+    #:    Current read value of the :class:`~sentinel.csr.MIP` register.
+    #:    Right now, combinationally equivalent to :attr:`mip_w`.
+    #:
+    #:    .. note::
+    #:
+    #:       In the future, I might make :attr:`mip_r` a registered version
+    #:       of :attr:`mip_w`. I don't quite remember the rationale of making
+    #:       :attr:`mip_r` a pass-through (probably saved space).
+    #:
+    #: .. py:attribute:: mie_r
+    #:    :type: Out(~sentinel.csr.MIE)
+    #:
+    #:    Current read value of the :class:`~sentinel.csr.MIE` register.
     PublicSignature = Signature({
         "adr": Out(5),
         "dat_r": In(32),
@@ -306,7 +658,10 @@ class CSRFile(Component):
         # "mcause_r": In(MCause)
     })
 
+    #: In(:class:`PublicSignature`): Public bus exposed to external modules.
     pub: In(PublicSignature)
+    #: Out(:class:`RegFile._PrivateCSRAccessSignature`): Request to
+    #: :class:`RegFile` for CSR values stored in shared RAM.
     priv: Out(RegFile._PrivateCSRAccessSignature)
 
     #: :class:`~sentinel.csr.MStatus` CSR address in the shared register file,
@@ -431,6 +786,18 @@ class CSRFile(Component):
 
 
 class DataPathSrcMux(Component):
+    """Route decoded instruction and microcode control to :class:`Datapath`.
+
+    .. todo::
+
+        :class:`DataPathSrcMux` is analogous to :class:`~sentinel.alu.ASrcMux`
+        and :class:`~sentinel.alu.BSrcMux` for the :class:`~sentinel.alu.ALU`.
+        However, I couldn't get it to optimize well compared to putting the
+        logic directly in :class:`~sentinel.top.Top`. I keep it around as
+        "dead code" just in case in comes in handy later. If/when that time
+        comes, I'll properly document it.
+    """
+
     def __init__(self):
         sig = {
             "insn_fetch": Out(1),
@@ -483,6 +850,29 @@ class DataPathSrcMux(Component):
 
 
 class DataPath(Component):
+    """Public interface to Sentinel datapath.
+
+    This module :ref:`forwards <amaranth:wiring-forwarding>` the public
+    interfaces to the various register types. It is completely combinational
+    logic.
+
+    Parameters
+    ----------
+    formal: bool
+        Presently unused.
+
+    Attributes
+    ----------
+    formal: bool
+        Presently unused.
+
+    pc_mod: ProgramCounter
+
+    regfile: RegFile
+
+    csrfile: CSRFile
+    """
+
     gp: In(RegFile.PublicSignature)
     csr: In(CSRFile.PublicSignature)
     pc: In(ProgramCounter.PublicSignature)

@@ -139,7 +139,7 @@ Mapping (P)ROM
 
 Microinstruction
   A microprogram/microcode instruction. Macroinstructions are composed of
-  multiple microinstructions.
+  multiple microinstructions. Each microinstruction takes one clock cycle.
 
 Microprogram Counter
   Register whose value is the address of the microcode instruction which
