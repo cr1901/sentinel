@@ -3,6 +3,8 @@ on:
       branches-ignore:
         - update-yosys-*
         - renovate/*
+      tags:
+        - v*
     pull_request:
 
 name: CI
@@ -94,7 +96,7 @@ jobs:
             - name: Lint
               if: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
               run: |
-                pdm -G lint
+                pdm install -G lint
                 pdm run lint
             - name: Build docs
               # ReadTheDocs handles docs, this is more of a lint than anything.
