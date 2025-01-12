@@ -71,11 +71,16 @@ class FormalTop(Component):
             import sentinel.formal
             print(sentinel.formal.FormalTop().rvfi.signature)
 
+        .. todo::
+
+            Fix goofy formatting, currently (1/11/2025) a
+            `side-effect <https://stackoverflow.com/a/17640475>`_ of how
+            ``NORMALIZE_WHITESPACE`` in :mod:`python:doctest` works.
+
         .. testoutput::
             :options: +NORMALIZE_WHITESPACE
 
-            Signature({
-                'valid': Out(1),
+            Signature({'valid': Out(1),
                 'order': Out(64),
                 'insn': Out(32),
                 'trap': Out(1),
@@ -96,104 +101,83 @@ class FormalTop(Component):
                 'mem_wmask': Out(4),
                 'mem_rdata': Out(32),
                 'mem_wdata': Out(32),
-                'csr': Out(Signature({
-                    'mscratch': Out(Signature({
-                        'rmask': Out(32),
+                'csr': Out(Signature({'mscratch': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mcause': Out(Signature({
-                        'rmask': Out(32),
+                    'mcause': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mip': Out(Signature({
-                        'rmask': Out(32),
+                    'mip': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mie': Out(Signature({
-                        'rmask': Out(32),
+                    'mie': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mstatus': Out(Signature({
-                        'rmask': Out(32),
+                    'mstatus': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mtvec': Out(Signature({
-                        'rmask': Out(32),
+                    'mtvec': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mepc': Out(Signature({
-                        'rmask': Out(32),
+                    'mepc': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'misa': Out(Signature({
-                        'rmask': Out(32),
+                    'misa': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mvendorid': Out(Signature({
-                        'rmask': Out(32),
+                    'mvendorid': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'marchid': Out(Signature({
-                        'rmask': Out(32),
+                    'marchid': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mimpid': Out(Signature({
-                        'rmask': Out(32),
+                    'mimpid': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mhartid': Out(Signature({
-                        'rmask': Out(32),
+                    'mhartid': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mconfigptr': Out(Signature({
-                        'rmask': Out(32),
+                    'mconfigptr': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mstatush': Out(Signature({
-                        'rmask': Out(32),
+                    'mstatush': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mcountinhibit': Out(Signature({
-                        'rmask': Out(32),
+                    'mcountinhibit': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mtval': Out(Signature({
-                        'rmask': Out(32),
+                    'mtval': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)})),
-                    'mcycle': Out(Signature({
-                        'rmask': Out(64),
+                    'mcycle': Out(Signature({'rmask': Out(64),
                         'wmask': Out(64),
                         'rdata': Out(64),
                         'wdata': Out(64)})),
-                    'minstret': Out(Signature({
-                        'rmask': Out(64),
+                    'minstret': Out(Signature({'rmask': Out(64),
                         'wmask': Out(64),
                         'rdata': Out(64),
                         'wdata': Out(64)})),
-                    'mhpmcounter3': Out(Signature({
-                        'rmask': Out(64),
+                    'mhpmcounter3': Out(Signature({'rmask': Out(64),
                         'wmask': Out(64),
                         'rdata': Out(64),
                         'wdata': Out(64)})),
-                    'mhpmevent3': Out(Signature({
-                        'rmask': Out(32),
+                    'mhpmevent3': Out(Signature({'rmask': Out(32),
                         'wmask': Out(32),
                         'rdata': Out(32),
                         'wdata': Out(32)}))}))})
