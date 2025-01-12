@@ -241,7 +241,7 @@ class Control(Component):
 
     In principle :class:`MappingROM` is also part of the Control Unit.
     However, I found it to be a space win to tightly couple it to the
-    :class:`~sentinel.decode.Decoder`.
+    :class:`~sentinel.decode.Decode`.
 
     This :class:`Component <amaranth.lib.wiring.Component>` is pure
     combinational logic. Beyond connecting the above parts together,
@@ -297,7 +297,7 @@ class Control(Component):
         and :attr:`ALU.ControlSignature <sentinel.alu.ALU.ControlSignature>`.
 
     decode: In(Signature)
-        :class:`~sentinel.decode.Decoder` control signals. The signature is
+        :class:`~sentinel.decode.Decode` control signals. The signature is
         of the form
 
         .. code-block::
@@ -608,7 +608,7 @@ class Sequencer(Elaboratable):
     jmp_type : Signal(:class:`~sentinel.ucodefields.JmpType`)
         Select the next :term:`microinstruction` address to place in
         :attr:`adr`. Next addresses are calculated in parallel for all
-        possible :attr:`JmpTypes <~sentinel.ucodefields.JmpType>`, and are
+        possible :class:`JmpTypes <~sentinel.ucodefields.JmpType>`, and are
         selected/muxed here.
     adr : Signal(:data:`~sentinel.ucodefields.Target`)
         Address of the next :term:`microinstruction` to execute, subject to

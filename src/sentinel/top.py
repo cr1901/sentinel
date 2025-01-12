@@ -97,7 +97,7 @@ class Top(Component):
         :class:`~amaranth:amaranth.lib.wiring.Member` is not meant to be used
         in a synthesized design. It is best to leave this option disabled
         unless you are using :class:`Top` in conjunction with
-        :class:`FormalTop`.
+        :class:`~sentinel.formal.FormalTop`.
 
     Attributes
     ----------

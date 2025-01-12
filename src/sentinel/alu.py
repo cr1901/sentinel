@@ -27,10 +27,10 @@ class ASrcMux(Component):
     #: whose value is currently on the read port (e.g. the read address was
     #: supplied on the previous clock cycle).
     gp: In(32)
-    #: Input source. :attr:`Decoded immediate <sentinel.decoder.Decode.imm>`
+    #: Input source. :attr:`Decoded immediate <sentinel.decode.Decode.imm>`
     #: from current instruction.
     imm: In(32)
-    #: Input source. :attr:`Decoded immediate <sentinel.decoder.Decode.imm>`
+    #: Input source. :attr:`Decoded immediate <sentinel.decode.Decode.imm>`
     #: from current instruction.
     alu: In(32)
     #: The output. When :attr:`~sentinel.alu.ASrcMux.latch` is asserted, the
@@ -99,7 +99,7 @@ class BSrcMux(Component):
     #: whose value is currently on the read port (e.g. the read address was
     #: supplied on the previous clock cycle).
     gp: In(32)
-    #: Input source. :attr:`Decoded immediate <sentinel.decoder.Decode.imm>`
+    #: Input source. :attr:`Decoded immediate <sentinel.decode.Decode.imm>`
     #: from current instruction.
     imm: In(32)
     #: Input source. Current contents of the
@@ -107,7 +107,7 @@ class BSrcMux(Component):
     pc: In(30)
     #: Input source. Current contents of the *unregistered* ``DAT_I``
     #: in :attr:`Top's Wishbone Bus <sentinel.top.Top.bus>`. Only valid when
-    #: qualified by :attr:`~CondTest.MEM_VALID`.
+    #: qualified by :attr:`~sentinel.ucodefields.CondTest.MEM_VALID`.
     #:
     #: As an input, ``DAT_I`` is always 32-bit aligned. The mux contains
     #: :class:`internal alignment circuitry <sentinel.align.ReadDataAlign>`
@@ -115,7 +115,7 @@ class BSrcMux(Component):
     #: requested. When :attr:`selected <sentinel.alu.BSrcMux.sel>`, the mux
     #: will latched this modified/aligned data into :attr:`~BSrcMux.data`.
     dat_r: In(32)
-    #: Input source. :attr:`Decoded src_a <sentinel.decoder.Decode.src_a>`
+    #: Input source. :attr:`Decoded src_a <sentinel.decode.Decode.src_a>`
     #: from the current instruction, which for CSR instructions is reused
     #: for specifying 5-bit CSR immediates.
     csr_imm: In(5)

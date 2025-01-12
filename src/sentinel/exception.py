@@ -171,7 +171,7 @@ class ExceptionRouter(Component):
     #:    :class:`~sentinel.ucodefields.ExceptCtl`.
     #:
     #: .. py:attribute:: decode
-    #:    :type: Out(~sentinel.decode.DecodeException)
+    #:    :type: Out(DecodeException)
     #:
     #:    Snoop decoder exception state.
     src: In(Signature({

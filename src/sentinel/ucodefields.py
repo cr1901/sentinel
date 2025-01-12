@@ -52,7 +52,7 @@ class JmpType(enum.Enum, shape=2):
 
 
 class OpType(enum.Enum):
-    """:attr:`ALU operation <sentinel.alu.ALU.ctrl.op>` to perform this cycle.
+    """:attr:`ALU operation <sentinel.alu.ALU.op>` to perform this cycle.
 
     On the next active edge, :attr:`ALU output (O) <sentinel.alu.ALU.o>` will
     be equal to result of the operation performed using its
@@ -148,7 +148,7 @@ class ASrc(enum.Enum):
     GP = 0
     #: int: Select the decoded Immediate from the current instruction.
     IMM = 1
-    #: int: Feed back the :attr:`ALU output <sentinel.alu.ALU.o` into the
+    #: int: Feed back the :attr:`ALU output <sentinel.alu.ALU.o>` into the
     #: input. Intended to facilitate chaining ALU ops together.
     ALU_O = 2
     #: int: Supply the literal constant ``C(0, 32)``.
@@ -191,7 +191,7 @@ class BSrc(enum.Enum):
     #: :class:`CSR reg file <sentinel.datapath.CSRFile>` last cycle.
     CSR = 6
     #: int: Select the current value of the
-    #: :attr:`MCAUSE latch <sentinel.exception.ExceptionControl.out>`.
+    #: :attr:`MCAUSE latch <sentinel.exception.ExceptionRouter.out>`.
     MCAUSE_LATCH = 7
 
 
@@ -334,7 +334,8 @@ class CSRSel(enum.Enum):
     """  # noqa: E501
 
     #: int: Select the CSR register specified by the
-    #: :attr:`compressed CSR address`, derived from the current instruction.
+    #: :ref:`compressed CSR address <mapping-details>`, derived from the
+    #: current instruction.
     #:
     #: ..
     #:   This in turn is derived
@@ -342,13 +343,13 @@ class CSRSel(enum.Enum):
     #:   instruction.
     INSN_CSR = 0
     #: int: Select the CSR register specified by :data:`Target`, using the
-    #: :attr:`compressed address encoding`.
+    #: :ref:`compressed address encoding <mapping-details>`.
     TRG_CSR = 1
 
 
 #: If set, set Wishbone ``CYC_O`` and ``STB_O`` to the asserted state,
 #: indicating that a memory transfer is imminent. This signal also qualifies
-#: :class:`~sentinel.align.AddrAlign` outputs.
+#: :class:`~sentinel.align.AddressAlign` outputs.
 #:
 #: As per the Wishbone spec, since Sentinel does not use wait states,
 #: tying ``CYC_O`` and ``STB_O`` to the same signal is sound. See Permission
@@ -441,7 +442,7 @@ class ExceptCtl(enum.Enum):
 
     #: int: Do nothing this cycle.
     NONE = 0
-    #: int: Check :class:`~sentinel.decode.Decoder` for exceptions and latch
+    #: int: Check :class:`~sentinel.decode.Decode` for exceptions and latch
     #: results into :class:`~sentinel.exception.ExceptionRouter` this cycle.
     LATCH_DECODER = 1
     #: int: Use :class:`~sentinel.exception.ExceptionRouter` to check whether a

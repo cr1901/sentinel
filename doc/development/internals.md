@@ -63,10 +63,10 @@ address as inputs.
 Mapping Details
 ---------------
 
-At present (1/6/2025), I mostly hand-calculated the :class:`MappingROM`
+At present (1/6/2025), I mostly hand-calculated the :class:`~sentinel.control.MappingROM`
 jump table. Many  RV32I :class:`instruction bits <sentinel.insn.Insn>` can
 be reconstructed by other microcode fields after
-:class:`decoding <sentinel.decode.Decoder>`, such as
+:class:`decoding <sentinel.decode.Decode>`, such as
 :class:`operand sources <sentinel.ucodefields.RegRSel>` and
 :attr:`immediates <sentinel.ucodefields.ASrc.IMM>`. From there, I found a
 reasonably small map in terms of combinational logic by playing with the

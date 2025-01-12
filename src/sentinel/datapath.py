@@ -56,10 +56,15 @@ class ProgramCounter(Component):
     #:        "action": Out(PcAction)
     #:    })
     #:
+    #: where
+    #:
     #: .. py:attribute:: action
     #:    :type: Out(~sentinel.ucodefields.PcAction)
     #:
     #:    Perform an action on the PC for the current clock cycle.
+    #:
+    #: This is a :class:`~amaranth:amaranth.lib.wiring.Signature` with a single
+    #: :class:`~amaranth.lib.wiring.Member` in case I need to expand it.
     ControlSignature = Signature({
         "action": Out(PcAction)
     })
@@ -81,25 +86,22 @@ class ProgramCounter(Component):
     #: .. py:attribute:: dat_r
     #:    :type: In(30)
     #:
-    #:    Current value
+    #:    Current value of the Program Counter.
     #:
-    #: .. py:attribute:: imod
-    #:    :type: Out(~sentinel.ucodefields.ALUIMod)
+    #: .. py:attribute:: dat_w
+    #:    :type: Out(30)
     #:
-    #:    Modify the inputs :attr:`a` and :attr:`b` before doing ALU
-    #:    operation.
+    #:    Value to write to the Program Counter from the
+    #:    :attr:`ALU output <sentinel.alu.ALU.o>` this clock cycle, if
+    #:    :attr:`action` is :attr:`~sentinel.ucodefields.PcAction.LOAD_ALU_O`.
     #:
-    #: .. py:attribute:: omod
-    #:    :type: Out(~sentinel.ucodefields.ALUOMod)
+    #: .. py:attribute:: ctrl
+    #:    :type: Out(~ProgramCounter.ControlSignature)
     #:
-    #:    Modify the output after doing ALU operation, but before latching
-    #:    the ALU output into :attr:`o` (for next cycle).
+    #:    Hold the Program Counter at the current value, increment it, or
+    #:    load it from the ALU this clock cycle.
     #:
-    #: .. py:attribute:: zero
-    #:    :type: In(1)
-    #:
-    #:    Set if  the current :attr:`output <o>` (i.e. the result of the ALU
-    #:    operation done *last* cycle) is ``0``.
+    #:    type: Out(:class:`~ProgramCounter.ControlSignature`)
     PublicSignature = Signature({
         "dat_r": In(30),
         "dat_w": Out(30),
@@ -298,13 +300,13 @@ class RegFile(Component):
     #:    :attr:`reg_write` is asserted.
     #:
     #: .. py:attribute:: ctrl
-    #:    :type: Out(ControlSignature)
+    #:    :type: Out(~sentinel.datapath.RegFile.ControlSignature)
     #:
     #:    Choose whether to perform a register read, write, or both. Writes
     #:    to address ``0`` are ignored unless :attr:`allow_zero_wr` is
     #:    asserted.
     #:
-    #:    :type: Out(:class:`ControlSignature`)
+    #:    :type: Out(:class:`~sentinel.datapath.RegFile.ControlSignature`)
     PublicSignature = Signature({
         "adr_r": Out(5),
         "adr_w": Out(5),
@@ -557,8 +559,7 @@ class CSRFile(Component):
     #:
     #:    The :data:`~sentinel.ucodefields.Target` microcode field. Used as
     #:    an explicitly-specified CSR address if
-    #:    :attr:`CSRSel.TARGET <sentinel.ucodefields.CSRSel.TARGET>`
-    #:    is selected.
+    #:    :attr:`~sentinel.ucodefields.CSRSel.TRG_CSR` is selected.
     #:
     #:    :type: Out(:data:`~sentinel.ucodefields.Target`)
     RoutingSignature = Signature({
@@ -606,13 +607,13 @@ class CSRFile(Component):
     #:    set to :attr:`~sentinel.ucodefields.CSROp.WRITE_CSR`.
     #:
     #: .. py:attribute:: ctrl
-    #:    :type: Out(ControlSignature)
+    #:    :type: Out(~sentinel.datapath.CSRFile.ControlSignature)
     #:
     #:    Choose whether to perform a CSR register read or write this clock
     #:    cycle. Also save and restore :class:`~sentinel.csr.MStatus` when
     #:    entering and leaving an exception handler.
     #:
-    #:    :type: Out(:class:`ControlSignature`)
+    #:    :type: Out(:class:`~sentinel.datapath.CSRFile.ControlSignature`)
     #:
     #: .. py:attribute:: mstatus_r
     #:    :type: Out(~sentinel.csr.MStatus)
@@ -786,7 +787,7 @@ class CSRFile(Component):
 
 
 class DataPathSrcMux(Component):
-    """Route decoded instruction and microcode control to :class:`Datapath`.
+    """Route decoded instruction and microcode control to :class:`DataPath`.
 
     .. todo::
 

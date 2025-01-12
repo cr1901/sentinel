@@ -561,7 +561,6 @@ class Decode(Component):
             *Unregistered* copy of :attr:`src_b`.
 
         .. py:attribute:: rd
-            :no-index:
             :type: Out(5)
 
             *Unregistered* copy of :attr:`dst`.
