@@ -29,7 +29,7 @@ class ProgramCounter(Component):
     :attr:`~sentinel.ucodefields.PcAction.HOLD`:
 
     * If :attr:`~sentinel.ucodefields.PcAction.INC` is selected, automatically
-      increment by the PC ``4`` bytes on the next active edge. Physically,
+      increment the PC by ``4`` bytes on the next active edge. Physically,
       the increment is by ``1`` 32-bit word, because the bottom two bits of
       the PC are unimplemented.
     * If :attr:`~sentinel.ucodefields.PcAction.LOAD_ALU_O` is selected, load
