@@ -65,7 +65,14 @@ the SoC.
 Right now, {mod}`~examples.attosoc` uses Amaranth to build a SoC bitstream for
 several {doc}`platforms <amaranth:platform>`:
 
-* [Lattice iCEstick](https://www.latticesemi.com/icestick)
+* [Lattice iCEstick](https://www.latticesemi.com/icestick), _if the demo fits!_
+  If when running the demo with iCEstick, you see an error like:
+
+  ```
+  ERROR: Failed to expand region (0, 0) |_> (13, 17) of 1303 ICESTORM_LCs
+  ```
+
+  that means the demo has decided it doesn't want to fit :). See [this issue](https://github.com/cr1901/sentinel/issues/2).
 * [iCE40-HX8K Breakout Board](https://www.latticesemi.com/Products/DevelopmentBoardsAndKits/iCE40HX8KBreakoutBoard.aspx)
 * [Arty A7 35T](https://digilent.com/shop/arty-a7-100t-artix-7-fpga-development-board/)
 * [Cmod S7](https://digilent.com/shop/cmod-s7-breadboardable-spartan-7-fpga-module/)

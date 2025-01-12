@@ -70,15 +70,23 @@ to generate an up-to-date list of commands?
 _Not all scripts listed above are commonly used._ In particular, the following
 scripts must pass as part of CI:
 
-* `lint`: Lint using [`ruff`](https://docs.astral.sh/ruff/).
-* `gen`, `demo`, `demo-rust`: Check that code/demo generation works.
-* `test-quick`, `rvformal-all`, and `riscof-all`: Run tests.
-
-```{todo}
-Although [ReadTheDocs](https://sentinel-cpu.readthedocs.io/en/latest/) handles
-building docs at present, CI release should be gated on building docs
-successfully.
-```
+* `lint`: Lint using [`ruff`](https://docs.astral.sh/ruff/). Tested on releases
+  only.
+* `gen`, `demo`, `demo-rust`: Check that code/demo generation works. Tested
+  with [both](../usage/installation.md#yosys-and-foss-toolchains) [YoWASP](https://yowasp.org/)
+  and [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build). I test
+  the demos on:
+  
+  * [Lattice iCEstick](https://www.latticesemi.com/icestick) (not required
+    to pass, because the demo [doesn't always fit!](../usage/quickstart.md#a-full-example-soc-in-amaranth))
+  * [iCE40-HX8K Breakout Board](https://www.latticesemi.com/Products/DevelopmentBoardsAndKits/iCE40HX8KBreakoutBoard.aspx)
+* `test-quick`, `rvformal-all`, and `riscof-all`: Run tests. Tested with
+  [OSS CAD Suite](https://github.com/YosysHQ/oss-cad-suite-build). In
+  particular, I have [issues with](testing.md#run-riscof-flow) testing RISCOF
+  on Windows, so CI is Linux only for now.
+* `doc`, `doc-test`: Check that docs build and doc tests pass. Tested on
+  releases only, mainly as a lint since [ReadTheDocs](https://sentinel-cpu.readthedocs.io/en/latest/)
+  builds docs automatically.
 
 If necessary, the above PDM scripts invoke `doit`, which reads the `dodo.py`
 file to find out how to do the actual work.[^1]
