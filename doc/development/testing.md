@@ -525,11 +525,16 @@ opam switch create create ocaml-base-compiler.4.08.1
 opam install sail -y
 ```
 
-Then, to actually _rebuild_ the SAIL RISC-V emulators in a _hopefully_ turnkey
+Then, to actually _(re)build_ the SAIL RISC-V emulators in a _hopefully_ turnkey
 fashion, run `pdm doit _build_sail`. As with other `doit` tasks, this should
 not be relied upon for normal development. Note that the actual build requires
 `make`; `opam` only handles installing dependencies, and delegates to `make`
 for building.
+
+```{hint}
+You will probably want to run `pdm doit forget _decompress_sail` afterwards,
+so that your fresh new SAIL emulator replaces the old one :).
+```
 
 ```{todo}
 It'd be nice to remove the immediate dependency on `make`. Since we don't want

@@ -209,7 +209,8 @@ def opam_vars():  # noqa: D103
             continue
         tmp = var.split("=")
         k, v = tmp
-        vars[k] = v
+        # I don't remember needing this at the end of 2023...
+        vars[k] = v.strip("'")
 
     return {"env": vars}
 
