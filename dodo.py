@@ -346,8 +346,12 @@ def last_testfile(task, values, testfile):  # noqa: D103
 # location. Yes, this is all to support using custom testfiles :).
 @task_params([{"name": "testfile", "short": "t",
                "default": "./tests/riscof/riscof_work/test_list.yaml",
-               "help": "path to alternate test list"}])
-def task_run_riscof(testfile):
+               "help": "path to alternate test list"},
+              {"name": "verbose", "short": "v",
+               "type": bool,
+               "default": False,
+               "help": "print debug messages"}])
+def task_run_riscof(testfile, verbose):
     """run RISCOF tests against Sentinel/Sail, and report results, removes previous run's artifacts"""  # noqa: E501
     riscof_tests = Path("./tests/riscof/")
     riscof_work = riscof_tests / "riscof_work"
@@ -371,18 +375,24 @@ def task_run_riscof(testfile):
     path_tf = Path(testfile)
     if not path_tf.is_absolute():
         path_tf = path_tf.absolute()
+    verbose_str = "--verbose debug" if verbose else ""
 
-    vars = os.environ.copy()
-    vars["PATH"] += os.pathsep + str(riscof_tests.absolute() / "bin")
+    # Would be nice if I didn't need this; SAIL plugin takes a PATH in
+    # config.ini, but the default plugin expects it to be an absolute PATH,
+    # when I want relative (and construct full path with absolute()).
+    # Perhaps lightly modify the plugin later.
+    vars_ = os.environ.copy()
+    vars_["PATH"] += os.pathsep + str(riscof_tests.absolute() / "bin")
     return {
         "title": partial(print_title, title="Running RISCOF tests"),
-        "actions": [CmdAction("pdm run riscof run --config=config.ini "
+        "actions": [CmdAction(f"pdm run riscof {verbose_str} run "
+                              "--config=config.ini "
                               "--suite=riscv-arch-test/riscv-test-suite/ "
                               "--env=riscv-arch-test/riscv-test-suite/env "
                               f"--testfile={path_tf} "
                               "--no-browser --no-clean",
                               cwd=riscof_tests,
-                              env=vars)],
+                              env=vars_)],
         "targets": [riscof_work / "report.html"],
         "verbosity": 2,
         "setup": ["_git_init:sail-riscv",

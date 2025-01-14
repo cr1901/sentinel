@@ -541,6 +541,10 @@ It'd be nice to remove the immediate dependency on `make`. Since we don't want
 to _install_ the emulators in the system, it should be in principle possible to
 `cd sail-riscv`, do `opam install . --deps-only`, and then build SAIL manually.
 However, I [couldn't get that to work](https://stackoverflow.com/questions/50942323/opam-install-error-no-solution-found)...
+
+Additionally, the default RISCOF SAIL plugin
+[uses](https://github.com/riscv-software-src/riscof/blob/9fe3597d75757c6c6198e034bbe62e8dceecc755/riscof/Templates/setup/sail_cSim/riscof_sail_cSim.py#L131-L132)
+`make`, and I haven't gotten around to ripping that out yet :).
 ```
 
 As of 11/6/2023, the {ref}`build instructions <riscof:quickstart>`
