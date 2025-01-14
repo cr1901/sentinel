@@ -103,6 +103,13 @@ class sentinel(pluginTemplate):
         else:
             self.target_run = True
 
+        # riscv64-unknown-elf-gcc may not know about Zicsr... so strip that
+        # string if requested!
+        if 'strip_zicsr' in config and config['strip_zicsr'] == '1':
+            self.strip_zicsr = True
+        else:
+            self.strip_zicsr = False
+
     def initialise(self, suite, work_dir, archtest_env):
 
         # capture the working directory. Any artifacts that the DUT creates
@@ -203,6 +210,9 @@ class sentinel(pluginTemplate):
 
         # collect the march string required for the compiler
         marchstr = testentry['isa'].lower()
+
+        if self.strip_zicsr:
+            marchstr = marchstr.replace("_zicsr", "")
 
         # substitute all variables in the compile command that we created
         # in the initialize function

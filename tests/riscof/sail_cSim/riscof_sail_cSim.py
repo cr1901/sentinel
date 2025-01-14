@@ -33,6 +33,13 @@ class sail_cSim(pluginTemplate):
         self.isa_spec = os.path.abspath(config['ispec']) if 'ispec' in config else ''
         self.platform_spec = os.path.abspath(config['pspec']) if 'ispec' in config else ''
         self.make = config['make'] if 'make' in config else 'make'
+
+        # My additions.
+        if 'strip_zicsr' in config and config['strip_zicsr'] == '1':
+            self.strip_zicsr = True
+        else:
+            self.strip_zicsr = False
+
         logger.debug("SAIL CSim plugin initialised using the following configuration.")
         for entry in config:
             logger.debug(entry+' : '+config[entry])
@@ -94,7 +101,11 @@ class sail_cSim(pluginTemplate):
 
             execute = "@cd "+testentry['work_dir']+";"
 
-            cmd = self.compile_cmd.format(testentry['isa'].lower()) + ' ' + test + ' -o ' + elf
+            marchstr = testentry['isa'].lower()
+            if self.strip_zicsr:
+                marchstr = marchstr.replace("_zicsr", "")
+
+            cmd = self.compile_cmd.format(marchstr) + ' ' + test + ' -o ' + elf
             compile_cmd = cmd + ' -D' + " -D".join(testentry['macros'])
             execute+=compile_cmd+";"
 
