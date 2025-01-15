@@ -84,6 +84,10 @@ class sail_cSim(pluginTemplate):
         if shutil.which(self.make) is None:
             logger.error(self.make+": executable not found. Please check environment setup.")
             raise SystemExit(1)
+        
+        # Sentinel MTVAL is read-only 0, tests need a define to reflect this.
+        # https://github.com/riscv-software-src/riscof/issues/115#issuecomment-2593091439
+        self.compile_cmd += "-DSET_REL_TVAL_MSK=0 "
 
 
     def runTests(self, testList, cgf_file=None):

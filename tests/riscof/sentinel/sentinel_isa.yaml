@@ -10,6 +10,9 @@ hart0:
   Privilege_Spec_Version: '1.11'
   hw_data_misaligned_support: False
   supported_xlen: [32]
+  # FIXME: The doesn't seem to have an effect :(...
+  # https://github.com/riscv-software-src/riscof/issues/115
+  mtval_update: 0
   mstatus:
     reset-val: 0x00018000
     rv64:

@@ -160,6 +160,10 @@ class sentinel(pluginTemplate):
         self.compile_cmd = self.compile_cmd + ' -mabi=' + \
             ('lp64 ' if 64 in ispec['supported_xlen'] else 'ilp32 ')
 
+        # Sentinel MTVAL is read-only 0, tests need a define to reflect this.
+        # https://github.com/riscv-software-src/riscof/issues/115#issuecomment-2593091439
+        self.compile_cmd += "-DSET_REL_TVAL_MSK=0 "
+
     # Sentinel elects to use the alternate template to avoid a dependency on
     # make.
     def runTests(self, testList):
