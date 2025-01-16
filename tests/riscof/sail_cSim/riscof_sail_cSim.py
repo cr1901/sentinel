@@ -40,6 +40,11 @@ class sail_cSim(pluginTemplate):
         else:
             self.strip_zicsr = False
 
+        if 'disable_compressed' in config and config['disable_compressed'] == '1':
+            self.disable_compressed = True
+        else:
+            self.disable_compressed = False
+
         logger.debug("SAIL CSim plugin initialised using the following configuration.")
         for entry in config:
             logger.debug(entry+' : '+config[entry])
@@ -116,7 +121,13 @@ class sail_cSim(pluginTemplate):
             execute += self.objdump_cmd.format(elf, 'ref.disass')
             sig_file = os.path.join(test_dir, self.name[:-1] + ".signature")
 
-            execute += self.sail_exe[self.xlen] + ' --test-signature={0} {1} > {2}.log 2>&1;'.format(sig_file, elf, test_name)
+            if self.disable_compressed:
+                disable_compressed = " --disable-compressed"
+            else:
+                disable_compressed = ""
+
+            execute += self.sail_exe[self.xlen] + disable_compressed + \
+                ' --test-signature={0} {1} > {2}.log 2>&1;'.format(sig_file, elf, test_name)
 
             cov_str = ' '
             for label in testentry['coverage_labels']:
