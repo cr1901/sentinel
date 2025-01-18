@@ -404,16 +404,17 @@ bgeu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_GEU, \
 
 origin 0x98;
 jalr: b_src => imm, latch_b => 1;
-      // Bring in PC and prepare to add to it. Calculate jmp target.
+      // Bring in PC and prepare to construct PC + 4. Calculate jmp target.
       latch_a => 1, latch_b => 1, a_src => four, b_src => pc, alu_op => add, \
         alu_o_mod => clear_lsb_o;
       // PC + 4 will be avail on next cycle, which fast_epilog will save into
       // RD. If we had an exception, then we have to wait until the old PC
       // is available, which is still latched in ALU B input.
+      // Preemptively load PC with jmp target.
       a_src => zero, latch_a => 1, pc_action => load_alu_o, alu_op => add, \
         except_ctl => latch_jal, jmp_type => direct, cond_test => exception, \
         invert_test => 1, target => fast_epilog;
-      // Exception detected. Pass the old PC through.
+      // Exception detected. Pass the old PC through, and then reload.
       alu_op => add, jmp_type => direct, cond_test => true, \
         target => branch_exception_detected;
 
@@ -442,10 +443,17 @@ sw_wait:  mem_req => 1, invert_test => 1, cond_test => mem_valid, \
 
 origin 0xB0;
 jal: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1;
-     alu_op => add;
-     except_ctl => latch_jal, jmp_type => direct, cond_test => exception, target => save_pc;
-     pc_action => load_alu_o, latch_a => 1, latch_b => 1, a_src => four, b_src => pc;
-     INSN_FETCH, alu_op => add, JUMP_TO_OP_END(fast_epilog);
+     // Prepare to construct PC + 4. Calculate jmp target.
+     latch_a => 1, a_src => four, alu_op => add, alu_o_mod => clear_lsb_o;
+     // PC + 4 available on next cycle, just in time to be stored in RD.
+     // Preemptively load target PC. If there's an exception, make sure the old
+     // PC is still available on ALU output so we can reload.
+     a_src => zero, latch_a => 1, pc_action => load_alu_o, alu_op => add, \
+        except_ctl => latch_jal, jmp_type => direct, cond_test => exception, \
+        invert_test => 1, target => fast_epilog;
+     // Exception detected. Pass the old PC through, and then reload.
+     alu_op => add, jmp_type => direct, cond_test => true, \
+         target => branch_exception_detected;
 
 fast_epilog: INSN_FETCH_EAGER_READ_RS1, WRITE_RD, SKIP_WAIT_IF_ACK;
 fast_epilog_csr: INSN_FETCH_EAGER_READ_RS1, WRITE_RD_CSR, SKIP_WAIT_IF_ACK;
