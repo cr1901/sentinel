@@ -106,6 +106,7 @@ fields block_ram: {
 #define CMP_GE  alu_op => cmp_ltu, alu_i_mod => inv_msb_a_b, alu_o_mod => inv_lsb_o
 // The LT[U]/GE[U] tests will either return zero or one; this makes it fine
 // to reuse the conditional meant for shift ops.
+#define CONDTEST_ALU_ZERO cond_test => cmp_alu_o_zero
 #define CONDTEST_ALU_NONZERO invert_test => 1, cond_test => cmp_alu_o_zero
 #define JUMP_TO_ZERO cond_test => true, invert_test=> true, jmp_type => direct_zero
 #define STOP_MEMREQ_THEN_JUMP_TO_ZERO mem_req=>0, JUMP_TO_ZERO
@@ -350,9 +351,27 @@ bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub, \
         jmp_type => direct, target => branch_epilog;
 
 beq: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
-     alu_op => add, CONDTEST_ALU_NONZERO, jmp_type => direct, target => not_taken;
-     except_ctl => latch_jal, jmp_type => direct, cond_test => exception, target => save_pc;
-     jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
+predict_not_taken:
+     // Old PC still available in ALU latches. Preemptively assume branch not
+     // taken and load new PC. Construct the jump target in case this was a bad
+     // assumption, and pass the old PC through.
+     pc_action => inc, a_src => zero, latch_a => 1, alu_op => add, \
+        CONDTEST_ALU_ZERO, jmp_type => direct_zero, \
+        target => mispredict_branch_was_taken;
+
+mispredict_branch_was_taken:
+     // If branch required, preemptively assume the address is good, and load
+     // the branch target into the PC. If this fails, the old PC will be
+     // available to rollback and go to exception handler.
+     alu_op => add, pc_action => load_alu_o, except_ctl => latch_jal, \
+        jmp_type => direct_zero, cond_test => exception, \
+        target => branch_exception_detected;
+
+branch_exception_detected:
+     // Old PC is available on ALU output. We have an exception. Rollback PC
+     // and begin exception handler.
+     pc_action => load_alu_o, cond_test => true, jmp_type => direct, \
+        target => save_pc;
 
 origin 0x88;
 branch_ops:
@@ -375,7 +394,7 @@ bltu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => cmp_ltu, 
 bgeu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_GEU, \
         jmp_type => direct, target => branch_epilog;
 
-branch_epilog: alu_op => add, cond_test => cmp_alu_o_zero, jmp_type => direct, target => not_taken;
+branch_epilog: alu_op => add, CONDTEST_ALU_ZERO, jmp_type => direct, target => not_taken;
 taken:  except_ctl => latch_jal, jmp_type => direct, cond_test => exception, target => save_pc;
         jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
 not_taken: pc_action => inc, jmp_type => direct, target => fetch;
