@@ -347,11 +347,15 @@ sb_1: READ_RS2, latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct
 sh_1: READ_RS2, latch_b => 1, b_src => imm, jmp_type => direct, target => sh;
 sw_1: READ_RS2, latch_b => 1, b_src => imm, jmp_type => direct, target => sw;
 
-bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub, \
-        jmp_type => direct, target => branch_epilog;
+predict_not_taken_neq:
+     // Old PC still available in ALU latches. Preemptively assume branch not
+     // taken and load new PC. Construct the jump target in case this was a bad
+     // assumption, and pass the old PC through.
+     pc_action => inc, a_src => zero, latch_a => 1, alu_op => add, \
+        CONDTEST_ALU_NONZERO, jmp_type => direct_zero, \
+        target => mispredict_branch_was_taken;
 
-beq: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub;
-predict_not_taken:
+predict_not_taken_eq:
      // Old PC still available in ALU latches. Preemptively assume branch not
      // taken and load new PC. Construct the jump target in case this was a bad
      // assumption, and pass the old PC through.
@@ -385,19 +389,18 @@ bge_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bge;
 bltu_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bltu;
 bgeu_1: latch_b => 1, b_src => gp, jmp_type => direct, target => bgeu;
 
+beq: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub, \
+        jmp_type => direct, target => predict_not_taken_eq;
+bne: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => sub, \
+        jmp_type => direct, target => predict_not_taken_neq;
 blt: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_LT, \
-        jmp_type => direct, target => branch_epilog;
+        jmp_type => direct, target => predict_not_taken_neq;
 bge: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_GE, \
-        jmp_type => direct, target => branch_epilog;
+        jmp_type => direct, target => predict_not_taken_neq;
 bltu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, alu_op => cmp_ltu, \
-        jmp_type => direct, target => branch_epilog;
+        jmp_type => direct, target => predict_not_taken_neq;
 bgeu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_GEU, \
-        jmp_type => direct, target => branch_epilog;
-
-branch_epilog: alu_op => add, CONDTEST_ALU_ZERO, jmp_type => direct, target => not_taken;
-taken:  except_ctl => latch_jal, jmp_type => direct, cond_test => exception, target => save_pc;
-        jmp_type => direct, cond_test => true, target => fetch, pc_action => load_alu_o;
-not_taken: pc_action => inc, jmp_type => direct, target => fetch;
+        jmp_type => direct, target => predict_not_taken_neq;
 
 origin 0x98;
 jalr: b_src => imm, latch_b => 1; 
