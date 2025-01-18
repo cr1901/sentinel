@@ -403,12 +403,19 @@ bgeu: a_src => imm, b_src => pc, latch_a => 1, latch_b => 1, CMP_GEU, \
         jmp_type => direct, target => predict_not_taken_neq;
 
 origin 0x98;
-jalr: b_src => imm, latch_b => 1; 
-      alu_op => add, alu_o_mod => clear_lsb_o;
-      latch_a => 1, latch_b => 1, a_src => four, b_src => pc, except_ctl => latch_jal, \
-        jmp_type => direct, cond_test => exception, target => save_pc;
-      pc_action => load_alu_o;
-      INSN_FETCH, alu_op => add, JUMP_TO_OP_END(fast_epilog);
+jalr: b_src => imm, latch_b => 1;
+      // Bring in PC and prepare to add to it. Calculate jmp target.
+      latch_a => 1, latch_b => 1, a_src => four, b_src => pc, alu_op => add, \
+        alu_o_mod => clear_lsb_o;
+      // PC + 4 will be avail on next cycle, which fast_epilog will save into
+      // RD. If we had an exception, then we have to wait until the old PC
+      // is available, which is still latched in ALU B input.
+      a_src => zero, latch_a => 1, pc_action => load_alu_o, alu_op => add, \
+        except_ctl => latch_jal, jmp_type => direct, cond_test => exception, \
+        invert_test => 1, target => fast_epilog;
+      // Exception detected. Pass the old PC through.
+      alu_op => add, jmp_type => direct, cond_test => true, \
+        target => branch_exception_detected;
 
 sb: a_src => zero, b_src => gp, latch_a => 1, latch_b => 1, alu_op => add;
     alu_op => add, latch_adr => 1;
