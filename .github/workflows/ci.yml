@@ -174,6 +174,8 @@ jobs:
               run: echo >> $GITHUB_PATH `echo ~/cache/oss-cad-suite-linux-x64/*/bin`
             - name: Install PDM dependencies
               run: pdm install -G dev -G riscof
+            - name: Disable strip_zicsr hack
+              run: sed -i 's/strip_zicsr=1/strip_zicsr=0/' tests/riscof/config.ini
             - name: Run RISCOF Suite
               run: |
                 LD_PRELOAD="" pdm riscof-all
