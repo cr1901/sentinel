@@ -324,14 +324,13 @@ class ExceptionControl(Component):
             # TODO: Might be worth hoisting comb statements out of m.If?
             with m.Switch(insn.opcode):
                 with m.Case(OpcodeType.OP_IMM):
-                    with m.If((insn.funct3 == 1) | (insn.funct3 == 5)):
-                        with m.If(insn.funct3 == 1):
-                            with m.If(insn.funct7 != 0):
-                                m.d.sync += self.exception.valid.eq(1)
-                        with m.Else():
-                            with m.If((insn.funct7 != 0) &
-                                      (insn.funct7 != 0b0100000)):
-                                m.d.sync += self.exception.valid.eq(1)
+                    with m.If(insn.funct3 == 1):
+                        with m.If(insn.funct7 != 0):
+                            m.d.sync += self.exception.valid.eq(1)
+                    with m.Elif(insn.funct3 == 5):
+                        with m.If((insn.funct7 != 0) &
+                                  (insn.funct7 != 0b0100000)):
+                            m.d.sync += self.exception.valid.eq(1)
                 with m.Case(OpcodeType.LUI):
                     pass
                 with m.Case(OpcodeType.AUIPC):
