@@ -250,7 +250,7 @@ csrrs_2: WRITE_RD, a_src => alu_o, latch_a => 1; // Feed back old CSR value.
 
 csrrci: latch_b => 1, b_src => csr, alu_op => sub;  // Synthesize -1 on ALU_O
         // TODO: Unlike GP reads, csr_ops are not sticky. Maybe they should be?
-        csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => alo_o, \
+        csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => alu_o, \
             b_src => csr_imm, latch_a => 1, latch_b => 1;
 csrrc_2: WRITE_RD, b_src => csr, latch_b => 1, alu_op => xor; // Bit Clear = A & ~B
          a_src => alu_o, latch_a => 1;

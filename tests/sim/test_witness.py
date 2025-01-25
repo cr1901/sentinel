@@ -139,3 +139,66 @@ def csrrc_bad_rd_process(mod):
 def test_csrrc_bad_rd(sim, csrrc_bad_rd_process, ucode_panic):
     sim.run(testbenches=[csrrc_bad_rd_process],
             processes=[ucode_panic])
+
+
+# This doesn't actually have a witness trace. This is just the best place to
+# put it. Due to a microcode typo, which m5meta sometimes doesn't diagnose,
+# the CSRRCI instruction would sometimes clear extra bits for CSRs that
+# are implemented as FFs rather than BRAM. This wasn't detected until I put a
+# design on FPGA! I made a test case by running test_rust for 20000 (sic)
+# cycles with the typo present, and the typo fixed, finding when their traces
+# diverged, and minimizing a test case.
+@pytest.fixture
+def csrrci_bad_write(mod):
+    m = mod
+
+    async def proc(ctx):
+        ctx.set(m.datapath.regfile.m_data[10], 1)
+        ctx.set(m.datapath.regfile.m_data[0x20], 0x00001808)
+
+        await ctx.tick().until(m.bus.cyc & m.bus.stb &
+                               m.control.mem.insn_fetch)
+
+        # mret- force MPIE to 1, as in the trace this is originally from.
+        ctx.set(m.bus.dat_r, 0x30200073)
+        ctx.set(m.bus.ack, 1)
+        await ctx.tick()
+        ctx.set(m.bus.ack, 0)
+
+        await ctx.tick().until(m.bus.cyc & m.bus.stb &
+                               m.control.mem.insn_fetch)
+
+        # csrrci x10, mstatus, 8
+        ctx.set(m.bus.dat_r, 0x30047573)
+        ctx.set(m.bus.ack, 1)
+        await ctx.tick()
+        ctx.set(m.bus.ack, 0)
+
+        await ctx.tick().until(m.bus.cyc & m.bus.stb &
+                               m.control.mem.insn_fetch)
+
+        # lui x11, 1
+        ctx.set(m.bus.dat_r, 0x000015B7)
+        ctx.set(m.bus.ack, 1)
+        await ctx.tick()
+        ctx.set(m.bus.ack, 0)
+
+        # Due to a typo in microcode "a_src => alo_o", MSTATUS.MPIE was being
+        # cleared when it shouldn't!
+        #
+        # This wasn't caught until deploying on FPGA; I have some assumptions
+        # around interrupt-handling in RISC-V Formal that must prevent this
+        # from being detected. Use as a handwritten test for now until I
+        # come up with a better mechanism to detect any other (?) interrupt
+        # misbehavior.
+        expected_regs = CSRRegs(MSTATUS=0b11000_1000_0000)
+        actual_regs = CSRRegs.from_top_module(m, ctx)
+        assert expected_regs == actual_regs
+
+    return proc
+
+
+@pytest.mark.parametrize("mod,clks", [(Top(), 1.0 / 12e6)])
+def test_csrrci_bad_wr(sim, csrrci_bad_write, ucode_panic):
+    sim.run(testbenches=[csrrci_bad_write],
+            processes=[ucode_panic])
