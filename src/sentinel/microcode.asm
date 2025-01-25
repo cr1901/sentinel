@@ -107,6 +107,11 @@ fields block_ram: {
 // The LT[U]/GE[U] tests will either return zero or one; this makes it fine
 // to reuse the conditional meant for shift ops.
 #define CONDTEST_ALU_ZERO cond_test => cmp_alu_o_zero
+// HINT: alu_o_mod -> inv_lsb_o can be used to
+// implement a check for ALU output being exactly one. Can
+// this be utilized anywhere?
+// Also, inv_lsb_o does the same as XOR 1. So ((A XOR 1)) XOR 1 is a no-op,
+// if a bit convoluted.
 #define CONDTEST_ALU_NONZERO invert_test => 1, cond_test => cmp_alu_o_zero
 #define JUMP_TO_ZERO cond_test => true, invert_test=> true, jmp_type => direct_zero
 #define STOP_MEMREQ_THEN_JUMP_TO_ZERO mem_req=>0, JUMP_TO_ZERO
@@ -254,16 +259,22 @@ csrrc_2: WRITE_RD, b_src => csr, latch_b => 1, alu_op => xor; // Bit Clear = A &
 origin 0x40;
 addi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => addi;
-slli_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
-                target => slli;
+slli_1:
+        // All the Shift-Immediates pass through to the Shift-Register logic;
+        // the AND with 31 is harmless for SLL and SRL, and required for SRA
+        // because of a hardcoded 1 in the imm12.
+        READ_RS1, a_src => thirty_one, latch_a => 1, b_src => imm, \
+                latch_b => 1, pc_action => inc, jmp_type => direct, \
+                target => sll;
 slti_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => slti;
 sltiu_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => sltiu;
 xori_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => xori;
-srli_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
-                target => srli;
+srli_1: READ_RS1, a_src => thirty_one, latch_a => 1, b_src => imm, \
+                latch_b => 1, pc_action => inc, jmp_type => direct, \
+                target => srl;
 ori_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
                 target => ori;
 andi_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
@@ -275,8 +286,9 @@ csrrs: READ_RS1, latch_b => 1, b_src => csr;
 csrrc:  READ_RS1, latch_b => 1, b_src => csr, alu_op => sub;  // Synthesize -1 on ALU_O
         csr_op => read_csr, csr_sel => insn_csr, alu_op => add, a_src => alu_o, \
             b_src => gp, latch_a => 1, latch_b => 1, jmp_type => direct, target => csrrc_2;
-srai_1: latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
-                target => srai;
+srai_1: READ_RS1, a_src => thirty_one, latch_a => 1, b_src => imm, \
+                latch_b => 1, pc_action => inc, jmp_type => direct, \
+                target => sra;
 
 origin 0x50;
 auipc: latch_a => 1, latch_b => 1, a_src => imm, b_src => pc;
@@ -290,18 +302,6 @@ xori:         alu_op => xor, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 ori:          alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 andi:         alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
-              // Need 3-way jump! alu_op => sll, jmp_type => direct, cond_test => alu_ready, target => imm_ops_end;
-slli:
-              // Re: READ_RS1... the reg values read out of the GP file are
-              // sticky, but as part of pipelining, we read out RS2's value
-              // during dispatch/check_int.
-              // This was a bad assumption, so we need to latch RS1 from the
-              // file again.
-              READ_RS1, a_src => zero, latch_a => 1;
-              // Bail if shift count was initially zero.
-              a_src => gp, b_src => imm, latch_a => 1, latch_b => 1, alu_op => add;
-              READ_RS1, a_src => imm, b_src => one, latch_a => 1, latch_b => 1, alu_op => sll, \
-                  jmp_type => direct, cond_test => cmp_alu_o_zero, target => shift_zero;
 sll_loop:
               // Subtract 1 from shift cnt, preliminarily save shift results
               // in case we bail (microcode cannot be interrupted, so user
@@ -313,33 +313,16 @@ sll_loop:
               alu_op => sll, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
                   jmp_type => direct_zero, CONDTEST_ALU_NONZERO, target => sll_loop;
 
-srli:
-              // Same comments as slli apply here.
-              READ_RS1, a_src => zero, latch_a => 1;
-              a_src => gp, b_src => imm, latch_a => 1, latch_b => 1, alu_op => add;
-              READ_RS1, a_src => imm, b_src => one, latch_a => 1, latch_b => 1, alu_op => srl,
-                  jmp_type => direct, cond_test => cmp_alu_o_zero, target => shift_zero;
 srl_loop:
               alu_op => sub, a_src => alu_o, latch_a => 1, WRITE_RD;
               alu_op => srl, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
                   jmp_type => direct_zero, CONDTEST_ALU_NONZERO, target => srl_loop;
 
-srai:
-              // Same comments as slli apply here.
-              // We AND here because imm12 will have a hardcoded "1" outside
-              // the 5 LSBs.
-              READ_RS1, a_src => thirty_one, latch_a => 1;
-              a_src => gp, latch_a => 1, alu_op => and;
-              READ_RS1, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, alu_op => sra,
-                  jmp_type => direct, cond_test => cmp_alu_o_zero, target => shift_zero;
 sra_loop:
               alu_op => sub, a_src => alu_o, latch_a => 1, WRITE_RD;
               // Then, do the shift, and bail if the shift cnt reached zero.
               alu_op => sra, a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, \
                   jmp_type => direct_zero, CONDTEST_ALU_NONZERO, target => sra_loop;
-
-shift_zero:   a_src => zero, b_src => gp, latch_a => 1, latch_b => 1;
-              alu_op => add, JUMP_TO_OP_END(fast_epilog);
 
 origin 0x80;
 sb_1: READ_RS2, latch_b => 1, b_src => imm, pc_action => inc, jmp_type => direct, \
@@ -452,7 +435,12 @@ fast_epilog_csr: INSN_FETCH_EAGER_READ_RS1, WRITE_RD_CSR, SKIP_WAIT_IF_ACK;
 origin 0xc0;
 add_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => add;
-sll_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
+              // Re: READ_RS1... the reg values read out of the GP file are
+              // sticky, but as part of pipelining, we read out RS2's value
+              // during dispatch/check_int.
+              // We'll need RS1 again, so get it back.
+sll_1:        READ_RS1, a_src => thirty_one, latch_a => 1, b_src => gp, \
+                    latch_b => 1, pc_action => inc, jmp_type => direct, \
                     target => sll;
 slt_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => slt;
@@ -460,7 +448,8 @@ sltu_1:       latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => sltu;
 xor_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => xor;
-srl_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
+srl_1:        READ_RS1, a_src => thirty_one, latch_a => 1, b_src => gp, \
+                    latch_b => 1, pc_action => inc, jmp_type => direct, \
                     target => srl;
 or_1:         latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
                     target => or;
@@ -472,7 +461,8 @@ sub_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
               NOT_IMPLEMENTED;  // 0b1010
               NOT_IMPLEMENTED;  // 0b1011
               NOT_IMPLEMENTED;  // 0b1101
-sra_1:        latch_b => 1, b_src => gp, pc_action => inc, jmp_type => direct, \
+sra_1:        READ_RS1, a_src => thirty_one, latch_a => 1, b_src => gp, \
+                    latch_b => 1, pc_action => inc, jmp_type => direct, \
                     target => sra;
 
 origin 0xd0;
@@ -488,29 +478,34 @@ or:           alu_op => or, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 and:          alu_op => and, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 sub:          alu_op => sub, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
-             // Re: add; pass through RS2 unmodified, and check whether 5 LSBs
-             // were zero. The shift loops above can be reused once we do
-             // the initial zero check.
 sll:
-             READ_RS1, a_src => thirty_one, latch_a => 1;
-             READ_RS2, a_src => gp, latch_a => 1, alu_op => and;
-             a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, alu_op => sll,
+             // Get first input to shift it. Restrict second input
+             // (shift count) from 0-31. Set up b_src for shift loop.
+             a_src => gp, latch_a => 1, b_src => one, latch_b => 1, alu_op => and;
+             // Do a shift, but also check if shift count was zero/
+             // If so, bail. Otherwise, we're all set for the main shift loop.
+             a_src => alu_o, latch_a => 1, alu_op => sll, \
                   jmp_type => direct, CONDTEST_ALU_NONZERO, target => sll_loop;
-             READ_RS1, jmp_type => direct, target => shift_zero;
+             // Whoops, was a zero shift. Pass through original RS1 and write
+             // to dest!
+             a_src => zero, b_src => gp, latch_a => 1, latch_b => 1;
+             alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
-srl:  
-             READ_RS1, a_src => thirty_one, latch_a => 1;
-             READ_RS2, a_src => gp, latch_a => 1, alu_op => and;
-             a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, alu_op => srl,
+srl:
+             // Same comments as sll apply here.
+             a_src => gp, latch_a => 1, b_src => one, latch_b => 1, alu_op => and;
+             a_src => alu_o, latch_a => 1, alu_op => srl, \
                   jmp_type => direct, CONDTEST_ALU_NONZERO, target => srl_loop;
-             READ_RS1, jmp_type => direct, target => shift_zero;
+             a_src => zero, b_src => gp, latch_a => 1, latch_b => 1;
+             alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
 sra:  
-             READ_RS1, a_src => thirty_one, latch_a => 1;
-             READ_RS2, a_src => gp, latch_a => 1, alu_op => and;
-             a_src => alu_o, b_src => one, latch_a => 1, latch_b => 1, alu_op => sra,
+             // Same comments as sll apply here.
+             a_src => gp, latch_a => 1, b_src => one, latch_b => 1, alu_op => and;
+             a_src => alu_o, latch_a => 1, alu_op => sra, \
                   jmp_type => direct, CONDTEST_ALU_NONZERO, target => sra_loop;
-             READ_RS1, jmp_type => direct, target => shift_zero;
+             a_src => zero, b_src => gp, latch_a => 1, latch_b => 1;
+             alu_op => add, INSN_FETCH, JUMP_TO_OP_END(fast_epilog);
 
 // Interrupt handler.
 origin 0xf0;
