@@ -3,7 +3,7 @@
 
 import argparse
 from functools import reduce
-import itertools
+import operator
 from random import randint
 from pathlib import Path, PurePosixPath
 import shutil
@@ -930,18 +930,31 @@ def demo(args):
     if args.g:
         # In-line objcopy -O binary implementation. Probably does not handle
         # anything but basic cases well, but I think it's "good enough".
+        def seg_data(fp, pad_byte=b"\x00"):
+            loadable_segs = filter(lambda s: s["p_type"] == "PT_LOAD",
+                                    ELFFile(fp).iter_segments())
+
+            bytes_yielded = None
+            for el in sorted(loadable_segs, key=lambda s: s["p_paddr"]):
+                # First iteration init.
+                if bytes_yielded is None:
+                    # Strip leading padding. Only has an effect if loading
+                    # at non-zero offset.
+                    initial_offset = el["p_paddr"]
+                    bytes_yielded = 0
+
+                # Yield padding, if empty yield an empty bytestring.
+                seg_start = el["p_paddr"] - initial_offset
+                padding = pad_byte * (seg_start - bytes_yielded)
+
+                yield padding
+                yield el.data()
+                bytes_yielded += (el["p_filesz"] + len(padding))
+
         with open(args.g, "rb") as fp:
-            def append_bytes(a, b):
-                return a + b
-
-            def seg_data(seg):
-                return seg.data()
-
-            segs = ELFFile(fp).iter_segments()
-            text_ro_and_data_segs = itertools.islice(segs, 2)
-            rom = reduce(append_bytes,
-                         map(seg_data, text_ro_and_data_segs),
-                         b"")
+            # Emit the segment data of all loadable segments, plus padding
+            # in-between them as necessary, and combine them all together.
+            rom = reduce(operator.add, seg_data(fp), b"")
     elif args.r:
         rom = [randint(0, 0xffffffff) for _ in range(0x400)]
     else:
