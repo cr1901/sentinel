@@ -752,12 +752,12 @@ class CSRSerial(Component):
         return m
 
 
-class BusType(enum.Enum):
+class BusType(enum.StrEnum):
     """Choose between Wishbone and CSR Peripheral Interfacing."""
 
-    #: int: Use Wishbone bus.
-    WB = auto()
-    #: int: Use CSR bus.
+    #: str: Use Wishbone bus.
+    WB = "wishbone"
+    #: str: Use CSR bus.
     CSR = auto()
 
 
@@ -830,72 +830,8 @@ class AttoSoC(Elaboratable):
         else:
             self.mem.init = source_or_list
 
-    def elaborate(self, plat):  # noqa: D102
-        m = Module()
-
-        m.submodules.cpu = self.cpu
-        m.submodules.mem = self.mem
-        m.submodules.leds = self.leds
-        m.submodules.decoder = self.decoder
-
-        if plat:
-            for i in range(8):
-                try:
-                    led = plat.request("led", i)
-                except ResourceError:
-                    break
-                m.d.comb += led.o.eq(self.leds.leds[i])
-
-            ser = plat.request("uart")
-
-            for i in range(8):
-                try:
-                    gpio = plat.request("gpio", i)
-                except ResourceError:
-                    break
-
-                m.d.comb += [
-                    self.leds.gpio[i].i.eq(gpio.i),
-                    gpio.oe.eq(self.leds.gpio[i].oe),
-                    gpio.o.eq(self.leds.gpio[i].o)
-                ]
-
-        self.decoder.add(flipped(self.mem.bus))
-
-        if self.bus_type == BusType.WB:
-            self.decoder.add(flipped(self.leds.bus), sparse=True)
-
-            m.submodules.timer = self.timer
-            self.decoder.add(flipped(self.timer.bus), sparse=True)
-
-            m.submodules.serial = self.serial
-            self.decoder.add(flipped(self.serial.bus), sparse=True)
-
-        elif self.bus_type == BusType.CSR:
-            # CSR (has to be done first other mem map "frozen" errors?)
-            periph_decode = csr.Decoder(addr_width=25, data_width=8,
-                                        alignment=23)
-            periph_decode.add(self.leds.bus, name="leds", addr=0)
-
-            periph_decode.add(self.timer.bus, name="timer")
-            periph_decode.add(self.serial.bus, name="serial")
-            m.submodules.timer = self.timer
-            m.submodules.serial = self.serial
-
-            # Connect peripherals to Wishbone
-            periph_wb = WishboneCSRBridge(periph_decode.bus, data_width=32)
-            self.decoder.add(flipped(periph_wb.wb_bus))
-
-            m.submodules.periph_bus = periph_decode
-            m.submodules.periph_wb = periph_wb
-
-        if plat:
-            m.d.comb += [
-                self.serial.rx.eq(ser.rx.i),
-                ser.tx.o.eq(self.serial.tx)
-            ]
-
-        m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
+    def print_memory_map(self):
+        """Print out memory map of attached AttoSoC peripherals."""
 
         def destruct_res(res):
             ls = []
@@ -906,60 +842,91 @@ class AttoSoC(Elaboratable):
                     ls.extend(c)
                 else:
                     raise ValueError("can only create a name for a str, "
-                                     f"tuple, or list, not {type(c)}")
+                                        f"tuple, or list, not {type(c)}")
 
             return ("/".join(ls), res.start, res.end, res.width)
 
-        print(tabulate(map(destruct_res,
-                           self.decoder.bus.memory_map.all_resources()),
+        res = self.decoder.bus.memory_map.all_resources()
+        print(tabulate(map(destruct_res, res),
                        intfmt=("", "#010x", "#010x", ""),
                        headers=["name", "start", "end", "width"]))
+
+    def _acquire_io(self, m, plat):
+        for i in range(8):
+            try:
+                led = plat.request("led", i)
+            except ResourceError:
+                break
+            m.d.comb += led.o.eq(self.leds.leds[i])
+
+        ser = plat.request("uart")
+        m.d.comb += [
+            self.serial.rx.eq(ser.rx.i),
+            ser.tx.o.eq(self.serial.tx)
+        ]
+
+        for i in range(8):
+            try:
+                gpio = plat.request("gpio", i)
+            except ResourceError:
+                break
+
+            m.d.comb += [
+                self.leds.gpio[i].i.eq(gpio.i),
+                gpio.oe.eq(self.leds.gpio[i].oe),
+                gpio.o.eq(self.leds.gpio[i].o)
+            ]
+
+    def _connect_periphs(self, m):
+        self.decoder.add(self.mem.bus)
+
+        if self.bus_type == BusType.WB:
+            for smod, name in zip([self.leds, self.timer, self.serial],
+                                  ["leds", "timer", "serial"]):
+                m.submodules[name] = smod
+                self.decoder.add(smod.bus, sparse=True)
+        elif self.bus_type == BusType.CSR:
+            # CSR (has to be done first other mem map "frozen" errors?)
+            periph_decode = csr.Decoder(addr_width=25, data_width=8,
+                                        alignment=23)
+            for smod, name, kwargs in zip([self.leds, self.timer, self.serial],
+                                          ["leds", "timer", "serial"],
+                                          [dict(addr=0), {}, {}]):
+                periph_decode.add(smod.bus, name=name, **kwargs)
+                m.submodules[name] = smod
+
+            # Connect peripherals to Wishbone
+            periph_wb = WishboneCSRBridge(periph_decode.bus, data_width=32)
+            self.decoder.add(flipped(periph_wb.wb_bus))
+
+            m.submodules.periph_bus = periph_decode
+            m.submodules.periph_wb = periph_wb
+
+    def elaborate(self, plat):  # noqa: D102
+        m = Module()
+
+        m.submodules.cpu = self.cpu
+        m.submodules.mem = self.mem
+        m.submodules.decoder = self.decoder
+
+        if plat:
+            self._acquire_io(m, plat)
+
+        self._connect_periphs(m)
+
+        m.d.comb += self.cpu.irq.eq(self.timer.irq | self.serial.irq)
+
+        self.print_memory_map()
         connect(m, self.cpu.bus, self.decoder.bus)
 
         return m
 
 
-def demo(args):
-    """AttoSoC generator entry point."""
-    match args.i:
-        case "wishbone":
-            bus_type = BusType.WB
-        case "csr":
-            bus_type = BusType.CSR
+PMOD_PINS = ["1", "2", "3", "4", "7", "8", "9", "10"]
 
-    if args.g:
-        # In-line objcopy -O binary implementation. Probably does not handle
-        # anything but basic cases well, but I think it's "good enough".
-        def seg_data(fp, pad_byte=b"\x00"):
-            loadable_segs = filter(lambda s: s["p_type"] == "PT_LOAD",
-                                    ELFFile(fp).iter_segments())
 
-            bytes_yielded = None
-            for el in sorted(loadable_segs, key=lambda s: s["p_paddr"]):
-                # First iteration init.
-                if bytes_yielded is None:
-                    # Strip leading padding. Only has an effect if loading
-                    # at non-zero offset.
-                    initial_offset = el["p_paddr"]
-                    bytes_yielded = 0
-
-                # Yield padding, if empty yield an empty bytestring.
-                seg_start = el["p_paddr"] - initial_offset
-                padding = pad_byte * (seg_start - bytes_yielded)
-
-                yield padding
-                yield el.data()
-                bytes_yielded += (el["p_filesz"] + len(padding))
-
-        with open(args.g, "rb") as fp:
-            # Emit the segment data of all loadable segments, plus padding
-            # in-between them as necessary, and combine them all together.
-            rom = reduce(operator.add, seg_data(fp), b"")
-    elif args.r:
-        rom = [randint(0, 0xffffffff) for _ in range(0x400)]
-    else:
-        # Primes test firmware from tests and nextpnr AttoSoC.
-        rom = """
+# Primes test firmware from tests and nextpnr AttoSoC.
+PRIMES = """
             li      s0,2
             lui     s1,0x2000  # IO port at 0x2000000
             li      s3,256
@@ -994,91 +961,82 @@ def demo(args):
             addi    t0,t0,-1
             bnez    t0,countdown
             ret
-    """
+"""
 
-    asoc = AttoSoC(num_bytes=0x1000, bus_type=bus_type)
-    asoc.rom = rom
+
+def demo(args):
+    """AttoSoC generator entry point."""
+    def mk_gpio(num, pins, conn, *args):
+        return list(Resource("gpio", n, Pins(p, dir="io", conn=conn), *args)
+                    for n, p in zip(num, pins))
+
+    # In-line objcopy -O binary implementation. Probably does not handle
+    # anything but basic cases well, but I think it's "good enough".
+    def mk_bin(fp):
+        def seg_data(pad_byte=b"\x00"):
+            loadable_segs = filter(lambda s: s["p_type"] == "PT_LOAD",
+                                    ELFFile(fp).iter_segments())
+
+            bytes_yielded = None
+            for el in sorted(loadable_segs, key=lambda s: s["p_paddr"]):
+                # First iteration init.
+                if bytes_yielded is None:
+                    # Strip leading padding. Only has an effect if loading
+                    # at non-zero offset.
+                    initial_offset = el["p_paddr"]
+                    bytes_yielded = 0
+
+                # Yield padding, if empty yield an empty bytestring.
+                seg_start = el["p_paddr"] - initial_offset
+                padding = pad_byte * (seg_start - bytes_yielded)
+
+                yield padding
+                yield el.data()
+                bytes_yielded += (el["p_filesz"] + len(padding))
+
+        return reduce(operator.add, seg_data(), b"")
+
+    asoc = AttoSoC(num_bytes=0x1000, bus_type=BusType(args.i))
+
+    if args.g:
+        with open(args.g, "rb") as fp:
+            # Emit the segment data of all loadable segments, plus padding
+            # in-between them as necessary, and combine them all together.
+            asoc.rom = mk_bin(fp)
+    elif args.r:
+        asoc.rom = [randint(0, 0xffffffff) for _ in range(0x400)]
+    else:
+        asoc.rom = PRIMES
 
     match args.p:
         case "cmod_s7":
             plat = cmod_s7.CmodS7_Platform()
             plat.default_rst = "button"  # Cheating a bit :).
-            plat.add_resources([
-                Resource("gpio", 0, Pins("1", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 1, Pins("2", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 2, Pins("3", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 3, Pins("4", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 4, Pins("7", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 5, Pins("8", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 6, Pins("9", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 7, Pins("10", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33"))
-            ])
+            plat.add_resources([*mk_gpio(range(8), PMOD_PINS, ("pmod", 0),
+                                         Attrs(IOSTANDARD="LVCMOS33"))])
         case "icebreaker":
             plat = icebreaker.ICEBreakerPlatform()
             plat.default_rst = "button"  # Cheating a bit :).
             plat.add_resources([*plat.break_off_pmod,
-                Resource("gpio", 0, Pins("1", dir="io", conn=("pmod", 0))),
-                Resource("gpio", 1, Pins("2", dir="io", conn=("pmod", 0))),
-                Resource("gpio", 2, Pins("3", dir="io", conn=("pmod", 0))),
-                Resource("gpio", 3, Pins("4", dir="io", conn=("pmod", 0))),
-                Resource("gpio", 4, Pins("7", dir="io", conn=("pmod", 0))),
-                Resource("gpio", 5, Pins("8", dir="io", conn=("pmod", 0))),
-                Resource("gpio", 6, Pins("9", dir="io", conn=("pmod", 0))),
-                Resource("gpio", 7, Pins("10", dir="io", conn=("pmod", 0)))
-            ])
+                                *mk_gpio(range(8), PMOD_PINS, ("pmod", 0))])
         case "ice40_hx8k_b_evn":
             plat = ice40_hx8k_b_evn.ICE40HX8KBEVNPlatform()
-            plat.add_resources([
-                Resource("gpio", 0, Pins("4", dir="io", conn=("j", 2))),
-                Resource("gpio", 1, Pins("5", dir="io", conn=("j", 2))),
-                Resource("gpio", 2, Pins("6", dir="io", conn=("j", 2))),
-                Resource("gpio", 3, Pins("9", dir="io", conn=("j", 2))),
-                Resource("gpio", 4, Pins("10", dir="io", conn=("j", 2))),
-                Resource("gpio", 5, Pins("11", dir="io", conn=("j", 2))),
-                Resource("gpio", 6, Pins("12", dir="io", conn=("j", 2))),
-                Resource("gpio", 7, Pins("13", dir="io", conn=("j", 2)))
-            ])
+            plat.add_resources([*mk_gpio(range(8),
+                                         [4, 5, 6, 9, 10, 11, 12, 13],
+                                         ("j", 2))])
         case "icestick":
             plat = icestick.ICEStickPlatform()
             plat.add_resources([
                 # Cutting a bit close to 1280 LCs. Right now, just expose
                 # enough to bitbang I2C based on PMOD spec pins:
                 # https://digilent.com/blog/new-i2c-standard-for-pmods/
-                # Resource("gpio", 0, Pins("1", dir="io", conn=("pmod", 0))),
-                # Resource("gpio", 1, Pins("2", dir="io", conn=("pmod", 0))),
-                # Resource("gpio", 2, Pins("3", dir="io", conn=("pmod", 0))),
-                # Resource("gpio", 3, Pins("4", dir="io", conn=("pmod", 0)))
-                Resource("gpio", 0, Pins("3", dir="io", conn=("pmod", 0))),
-                Resource("gpio", 1, Pins("4", dir="io", conn=("pmod", 0)))
+                # *mk_gpio(range(4), PMOD_PINS[:4], ("pmod", 0))
+                *mk_gpio(range(2), ["3", "4"], ("pmod", 0))
             ])
         case "arty_a7":
             plat = arty_a7.ArtyA7_35Platform()
-            plat.add_resources([
-                Resource("gpio", 0, Pins("1", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 1, Pins("2", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 2, Pins("3", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 3, Pins("4", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 4, Pins("7", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 5, Pins("8", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 6, Pins("9", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33")),
-                Resource("gpio", 7, Pins("10", dir="io", conn=("pmod", 0)),
-                         Attrs(IOSTANDARD="LVCMOS33"))
-            ])
+            plat.add_resources([*mk_gpio(range(8), PMOD_PINS, ("pmod", 0),
+                                         Attrs(IOSTANDARD="LVCMOS33"))])
 
             m = Module()
 
@@ -1098,8 +1056,7 @@ def demo(args):
 
     name = "rand" if args.r else "top"
     if isinstance(plat, LatticeICE40Platform):
-        plan = plat.build(asoc, name=name,
-                          do_build=False,
+        build_args = dict(do_build=False,
                           debug_verilog=True,
                           # Optimize for area, not speed.
                           # https://libera.irclog.whitequark.org/yosys/2023-11-20#1700497858-1700497760;  # noqa: E501
@@ -1111,12 +1068,11 @@ def demo(args):
                           synth_opts="-dff")
         prod_suffs = (".bin", ".asc")
     else:
-        plan = plat.build(asoc, name=name,
-                          do_build=False,
+        build_args = dict(do_build=False,
                           debug_verilog=True)
         prod_suffs = (".bit", ".bin")
 
-    prod_names = [str(Path(name).with_suffix(s)) for s in prod_suffs]
+    plan = plat.build(asoc, name=name, **build_args)
 
     if args.s:
         import paramiko
@@ -1140,7 +1096,8 @@ def demo(args):
         local_path = (Path(".") / PurePosixPath(args.b).stem)
         local_path.mkdir(exist_ok=True)
         if not args.n:
-            for prod in prod_names:
+            for prod in map(lambda s: str(Path(name).with_suffix(s)),
+                            prod_suffs):
                 with products.extract(prod) as fn:
                     shutil.copy2(fn, local_path / prod)
     else:
