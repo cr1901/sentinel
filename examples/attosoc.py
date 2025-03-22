@@ -586,7 +586,7 @@ class WBSerial(Component):
                                          name=("serial", "rxtx"), size=1)
         self.bus.memory_map.add_resource(Component({}),
                                          name=("serial", "irq"), size=1)
-        self.serial = UART(divisor=12000000 // 9600)
+        self.serial = UART(divisor=12000000 // 460800)
 
     def elaborate(self, plat):  # noqa: D102
         m = Module()
@@ -698,7 +698,7 @@ class CSRSerial(Component):
         }
 
         super().__init__(sig)
-        self.serial = UART(divisor=12000000 // 9600)
+        self.serial = UART(divisor=12000000 // 460800)
         self.bus.memory_map = self.bridge.bus.memory_map
 
     def elaborate(self, plat):  # noqa: D102
