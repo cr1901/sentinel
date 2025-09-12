@@ -1022,7 +1022,8 @@ def demo(args):
         case "ice40_hx8k_b_evn":
             plat = ice40_hx8k_b_evn.ICE40HX8KBEVNPlatform()
             plat.add_resources([*mk_gpio(range(8),
-                                         [4, 5, 6, 9, 10, 11, 12, 13],
+                                         ["4", "5", "6", "9", "10", "11",
+                                          "12", "13"],
                                          ("j", 2))])
         case "icestick":
             plat = icestick.ICEStickPlatform()
