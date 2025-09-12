@@ -13,7 +13,22 @@ name: CI
 # gzip -c cover.vcd | base64 | base64 -d | gunzip > cover-out.vcd
 
 jobs:
+    skip-if-dup:
+      name: Skip If Duplicate
+      continue-on-error: true
+      runs-on: ubuntu-latest
+      # Map a step output to a job output
+      outputs:
+        should_skip: ${{ steps.skip_check.outputs.should_skip }}
+      steps:
+        - id: skip_check
+          uses: fkirc/skip-duplicate-actions@v5
+          with:
+            paths_ignore: '["**/README.md", "doc/**"]'
+
     ci-quickstart:
+      needs: skip-if-dup
+      if: needs.skip-if-dup.outputs.should_skip != 'true'
       name: Minimal Dependencies Check
       runs-on: ubuntu-latest
       steps:
@@ -51,6 +66,8 @@ jobs:
               pdm demo-rust -i csr -p ice40_hx8k_b_evn
 
     ci-basic:
+        needs: skip-if-dup
+        if: needs.skip-if-dup.outputs.should_skip != 'true'
         name: Basic CI Check
         strategy:
           matrix:
@@ -142,6 +159,8 @@ jobs:
                 LD_PRELOAD="" pdm bench-luts
 
     ci-riscof:
+        needs: skip-if-dup
+        if: needs.skip-if-dup.outputs.should_skip != 'true'
         name: RISCOF Check
         runs-on: ubuntu-latest
         steps:
@@ -179,6 +198,8 @@ jobs:
                 LD_PRELOAD="" pdm riscof-all
 
     ci-rvformal:
+      needs: skip-if-dup
+      if: needs.skip-if-dup.outputs.should_skip != 'true'
       name: RISC-V Formal Check
       runs-on: ubuntu-latest
 
