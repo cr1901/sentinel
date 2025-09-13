@@ -100,27 +100,57 @@ reportIncompatibleMethodOverride = false
 reportMissingImports = false  # sys.path modified
 
 [tool.pdm.build]
-# src/sentinel/microcode.asm seems to be included already.
-includes = [
-    "src/sentinel",
-]
-# Exclude all files in submodules, and non-(raw)-binaries.
+# PDM seems to "do the right thing" for wheel files- it even includes
+# microcode.asm! However, the profile module isn't ready yet, and the sdist
+# includes a bunch of local files I don't want (as well as the submodules).
+#
+# Basically, the below rules to create the sdist attempt to emulate a shallow
+# clone (minus the .git directory) _on a best effort basis_ (for instance, the
+# sdists don't seem to save directory entries, just files contained within).
 excludes = [
-    "tests/*/*/.*",
-    "tests/*/*/*",
-    "tests/upstream/binaries/*.dump",
-    "tests/upstream/binaries/*.elf"
+    "src/sentinel/profile.py",  # Not ready yet.
+    "doc/_*",  # Build dirs.
+    "doc/Transparent Logo.png",  # Raw files from Kei.
+    "doc/Transparent.png-*",
+    "doc/development/rationale.md",  # Not ready yet.
+    "tests/sim/witness/*",  # Includes local test files.
+    "tests/*/*/*",  # Exclude all files in submodules...
+    "tests/upstream/riscv-tests/.git*",
+    "tests/formal/riscv-formal/.git*",
+    "tests/upstream/binaries/*.elf",  # and non-(raw)-binaries.
+    "examples/*.py",  # Includes local test files.
+    "sentinel-rt/examples/*"  # Includes local test files.
 ]
-# README.md and LICENSE.md seem to be included already.
+# README.md, LICENSE.md, and pyproject.toml seem to be included already.
 source-includes = [
+    # Top-level
     ".gitignore",
+    ".gitmodules",
+    ".readthedocs.yaml",
     "CHANGELOG.md",
     "cliff.toml",
     "examples",
     "sentinel-rt",
     "Cargo.toml",
+    "Cargo.lock",
+    "dodo.py",
+    "pdm.lock",
+    # Subdirs
+    ".cargo",
+    ".github",
+    "ci",
+    "doc",
+    "doc/_static/*",
+    "examples/attosoc.py",
+    "sentinel-rt/examples/attosoc.rs",
+    "sentinel-rt/examples/device.x",
     "tests",
-    "tests/upstream/binaries/*"
+    "tests/sim/witness/csrrc_bad_rd.yw",
+    "tests/riscof/bin/*",
+    "tests/riscof/sail_cSim/*",
+    "tests/riscof/sentinel/*",
+    "tests/upstream/binaries/*[!.]",
+    "tests/upstream/binaries/*.dump",
 ]
 
 [tool.pdm.version]
