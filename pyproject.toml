@@ -113,44 +113,39 @@ excludes = [
     "doc/Transparent Logo.png",  # Raw files from Kei.
     "doc/Transparent.png-*",
     "doc/development/rationale.md",  # Not ready yet.
-    "tests/sim/witness/*",  # Includes local test files.
-    "tests/*/*/*",  # Exclude all files in submodules...
-    "tests/upstream/riscv-tests/.git*",
-    "tests/formal/riscv-formal/.git*",
+    "tests/formal/*/",  # Exclude relevant files in submodules...
+    "tests/riscof/risc*/",
+    "tests/sim/*/",
     "tests/upstream/binaries/*.elf",  # and non-(raw)-binaries.
-    "examples/*.py",  # Includes local test files.
-    "sentinel-rt/examples/*"  # Includes local test files.
+    "tests/upstream/riscv-tests",
+    "examples",  # Includes local test files.
+    "sentinel-rt/examples"  # Includes local test files.
+    # These seem to be racy and may or may not include files in the wheel...
+    # "examples/*.py",
+    # "sentinel-rt/examples/*"
 ]
 # README.md, LICENSE.md, and pyproject.toml seem to be included already.
 source-includes = [
     # Top-level
-    ".gitignore",
-    ".gitmodules",
+    ".git?*",
+    "Cargo*",
     ".readthedocs.yaml",
     "CHANGELOG.md",
     "cliff.toml",
-    "examples",
-    "sentinel-rt",
-    "Cargo.toml",
-    "Cargo.lock",
     "dodo.py",
     "pdm.lock",
-    # Subdirs
+    # Subdirs not matched above.
     ".cargo",
-    ".github",
     "ci",
     "doc",
     "doc/_static/*",
+    "examples",
     "examples/attosoc.py",
+    "sentinel-rt",
     "sentinel-rt/examples/attosoc.rs",
     "sentinel-rt/examples/device.x",
     "tests",
     "tests/sim/witness/csrrc_bad_rd.yw",
-    "tests/riscof/bin/*",
-    "tests/riscof/sail_cSim/*",
-    "tests/riscof/sentinel/*",
-    "tests/upstream/binaries/*[!.]",
-    "tests/upstream/binaries/*.dump",
 ]
 
 [tool.pdm.version]
