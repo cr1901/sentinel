@@ -1,5 +1,99 @@
 # Quick Start
 
+## Pre-Generated Verilog
+
+### From Releases
+
+Each [Github Release](https://github.com/cr1901/sentinel/releases) contains a
+standalone generated Verilog file of Sentinel CPU. If you opt to download the
+Verilog from releases, **you do not need Python installed to use Sentinel**.
+You can automate downloading the Verilog with a script like this:
+
+```
+SENTINEL_VER=v0.1.0-beta
+
+wget -O sentinel-v-$SENTINEL_VER.zip https://github.com/cr1901/sentinel/releases/download/$SENTINEL_VER/sentinel-v-$SENTINEL_VER.zip
+unzip sentinel-v-$SENTINEL_VER.zip
+```
+
+### From Arbitrary Commits
+
+Generating Verilog of development versions- or any commit without a release-
+requires a bit of extra setup. However, it still has the advantage of not
+needing to (directly) interact with a source checkout if all you want is 
+some Verilog to vendor/use as part of a non-Amaranth project. To generate 
+the Verilog, you can use a script similar to this, substituting `next` with any
+desired branch, tag, or commit:
+
+```python
+"""Create a script for generating Sentinel Verilog."""
+
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#    "sentinel @ git+https://github.com/cr1901/sentinel@next",
+#    "amaranth[builtin-yosys]>=0.5.4",
+# ]
+# ///
+
+import sentinel.gen
+
+if __name__ == "__main__":
+    sentinel.gen._main()
+```
+
+Note from the `script` metadata comment block that **the above Python script
+must be run using a tool that understand [PEP 723](https://peps.python.org/pep-0723/)
+metadata**. Such tools include `pipx`, `pdm`, or `hatch`, or `uv`. Assuming you
+saved the above script as a file called `download-sentinel.py`, you can
+generate Verilog with:
+
+```{todo}
+Put other tool invocations here.
+```
+
+```
+pdm run download-sentinel.py -o sentinel.v
+```
+
+````{tip}
+The `download-sentinel.py` script takes arguments to customize generation! You
+can get help by using:
+
+```{todo}
+Put other tool invocations here.
+```
+
+```{code-block} sh
+pdm run download-sentinel.py --help
+```
+````
+
+
+<!-- ```{tip}
+The above script could possibly be represented as a Heredoc parameterized on
+`next` to dynamically choose which version of the Sentinel source code is
+checked out!
+``` -->
+
+
+```{note}
+Unfortunately, it is [normal](https://github.com/cr1901/sentinel/issues/65)
+for Verilog generation to take a long time when the PEP 723 tool has to download
+the Sentinel git repo- it takes upwards of 30 seconds from starting the script
+to getting Verilog output.
+
+I will continue to look into why it's so slow; I believe submodules are to
+blame. In the meantime, keep the performance in mind, and avoid frequent
+regeneration, maybe a maximum of once per day.
+
+Thankfully, needing _only_ the Verilog of a development version of Sentinel
+should be rare. Using the above PEP 723 script with PyPI wheels should be
+unaffected, although you can directly download Verilog from the equivalent release. 
+```
+
+## Using The Source
+
 From a checkout of Sentinel's source, you have a few options to try out
 Sentinel risk free! _The below commands assume you and are running commands at
 the source code root, and that you've [installed](installation.md#prerequisites)

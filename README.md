@@ -48,10 +48,35 @@ lighthouse into the logo :).
 
 ## Quick Quick Start
 
-The absolute fastest way to get started is to check out the source code,
-install `pdm`, use `pdm` to create a virtual environment with appropriate
-tools, and generate an `.env.toolchain` file that `pdm` uses to set some
-environment variables for Amaranth:
+### Verilog Programmers
+
+If you're primarily a Verilog/VHDL programmer, each Sentinel [release](https://github.com/cr1901/sentinel/releases)
+includes ready-to-use, standalone Verilog as an asset. If you wish to use Verilog
+generated from an arbitrary commit _without_ getting involved with the source, see
+[Pre-Generated Verilog](https://sentinel-cpu.readthedocs.io/en/latest/usage/quickstart.html#pre-generated-verilog)
+section of the Quick Start docs.
+
+### Amaranth Programmers
+
+For Amaranth programmers wishing to use Sentinel without playing with the source,
+you can install `sentinel-cpu` using `pip` or `pdm`. When a PyPI package is
+available, you will probably want one of the following:
+
+* `pip install sentinel-cpu`
+* `pdm add sentinel-cpu`
+
+However, since there's no PyPI package right now, I recommend substituting
+the `sentinel-cpu` [Name-Based Lookup](https://peps.python.org/pep-0508/#specification)
+with the `git+https://github.com/cr1901/sentinel@main` URL-based lookup. See
+the [As A Dependency](https://sentinel-cpu.readthedocs.io/en/latest/usage/installation.html#as-a-dependency)
+section of the Installation docs for other useful command-lines.
+
+### Source Code Demos
+
+For those who want to play with the source, the absolute fastest way to get
+started is to check out the source code, install `pdm`, use `pdm` to create
+a virtual environment with appropriate tools, and generate an `.env.toolchain`
+file that `pdm` uses to set some environment variables for Amaranth:
 
 ```
 pipx install pdm
@@ -116,7 +141,7 @@ section.
   * Source code guidelines are found on the
     [Development Guidelines](https://sentinel-cpu.readthedocs.io/en/latest/development/guidelines.html)
     page.
-* For other use cases, consult the [Quickstart](https://sentinel-cpu.readthedocs.io/en/latest/usage/quickstart.html)
+* For other use cases, consult the [Quick Start](https://sentinel-cpu.readthedocs.io/en/latest/usage/quickstart.html)
   page. Note that they are a little less quick than the [Quick Quick Start](#quick-quick-start) :).
 * Sentinel has multiple test suites. External submodules [have](./tests/formal/README.md)
   [their](./tests/upstream/README.md) [own](./tests/riscof/README.md)
