@@ -9,13 +9,25 @@ standalone generated Verilog file of Sentinel CPU. If you opt to download the
 Verilog from releases, **you do not need Python installed to use Sentinel**.
 You can automate downloading the Verilog with a script like this:
 
-```
+````{tab} sh
+```sh
 SENTINEL_VER=v0.1.0-beta
 
 wget -O sentinel-v-$SENTINEL_VER.zip https://github.com/cr1901/sentinel/releases/download/$SENTINEL_VER/sentinel-v-$SENTINEL_VER.zip
 unzip sentinel-v-$SENTINEL_VER.zip
 ```
+````
 
+````{tab} Powershell
+```powershell
+set SentinelVer v0.1.0-beta
+
+wget -OutFile sentinel-v-$SentinelVer.zip https://github.com/cr1901/sentinel/releases/download/$SentinelVer/sentinel-v-$SentinelVer.zip
+Expand-Archive -Path sentinel-v-$SentinelVer.zip -DestinationPath .
+```
+````
+
+(arbitrary)=
 ### From Arbitrary Commits
 
 Generating Verilog of development versions- or any commit without a release-
@@ -32,7 +44,7 @@ desired branch, tag, or commit:
 # requires-python = ">=3.11"
 # dependencies = [
 #    "sentinel @ git+https://github.com/cr1901/sentinel@next",
-#    "amaranth[builtin-yosys]>=0.5.4",
+#    "amaranth[builtin-yosys]>=0.5.8",
 # ]
 # ///
 
@@ -48,26 +60,67 @@ metadata**. Such tools include `pipx`, `pdm`, or `hatch`, or `uv`. Assuming you
 saved the above script as a file called `download-sentinel.py`, you can
 generate Verilog with:
 
-```{todo}
-Put other tool invocations here.
-```
 
+````{tab} pipx
+```sh
+pipx run download-sentinel.py -o sentinel.v
 ```
+````
+
+````{tab} pdm
+```sh
 pdm run download-sentinel.py -o sentinel.v
 ```
+````
 
-````{tip}
+````{tab} hatch
+```sh
+hatch run download-sentinel.py -o sentinel.v
+```
+````
+
+````{tab} uv
+```sh
+uvx download-sentinel.py -o sentinel.v
+```
+````
+
+`````{tip}
 The `download-sentinel.py` script takes arguments to customize generation! You
 can get help by using:
 
-```{todo}
-Put other tool invocations here.
-```
+````{tab} pipx
+:title: pipx
 
-```{code-block} sh
+```sh
+pipx run download-sentinel.py --help
+```
+````
+
+````{tab} pdm
+:title: pdm
+
+```sh
 pdm run download-sentinel.py --help
 ```
 ````
+
+````{tab} hatch
+:title: hatch
+
+```sh
+hatch run download-sentinel.py --help
+```
+````
+
+````{tab} uv
+:title: uv
+
+```sh
+uvx download-sentinel.py --help
+```
+````
+`````
 
 
 <!-- ```{tip}
@@ -79,17 +132,17 @@ checked out!
 
 ```{note}
 Unfortunately, it is [normal](https://github.com/cr1901/sentinel/issues/65)
-for Verilog generation to take a long time when the PEP 723 tool has to download
-the Sentinel git repo- it takes upwards of 30 seconds from starting the script
-to getting Verilog output.
-
+for Verilog generation to take a long time when any of the above tools have
+to download the Sentinel git repo- upwards of 30 seconds, from my experiments!
 I will continue to look into why it's so slow; I believe submodules are to
 blame. In the meantime, keep the performance in mind, and avoid frequent
 regeneration, maybe a maximum of once per day.
 
 Thankfully, needing _only_ the Verilog of a development version of Sentinel
-should be rare. Using the above PEP 723 script with PyPI wheels should be
-unaffected, although you can directly download Verilog from the equivalent release. 
+should be rare. Using the script with PyPI wheels should not take long to
+generate Verilog, although PyPI wheels will have an equivalent
+[Release](https://github.com/cr1901/sentinel/releases) from which you can
+directly download the Verilog.
 ```
 
 ## Using The Source

@@ -5,7 +5,7 @@
 groups = ["default", "dev", "doc", "examples", "lint", "remote", "riscof", "yowasp"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:3f7d9b8735a3fce963eb540d25cee5a707b2767ab516e128ba9b92a851bb16b1"
+content_hash = "sha256:fd321a802353513ee0fa412fa7502bcbb8936688de88cfa8078de305a67d3656"
 
 [[metadata.targets]]
 requires_python = ">=3.11"
@@ -1320,6 +1320,20 @@ dependencies = [
 files = [
     {file = "sphinx_autobuild-2025.8.25-py3-none-any.whl", hash = "sha256:b750ac7d5a18603e4665294323fd20f6dcc0a984117026d1986704fa68f0379a"},
     {file = "sphinx_autobuild-2025.8.25.tar.gz", hash = "sha256:9cf5aab32853c8c31af572e4fecdc09c997e2b8be5a07daf2a389e270e85b213"},
+]
+
+[[package]]
+name = "sphinx-inline-tabs"
+version = "2025.12.21.14"
+requires_python = ">=3.8"
+summary = "Add inline tabbed content to your Sphinx documentation."
+groups = ["doc"]
+dependencies = [
+    "sphinx>=3",
+]
+files = [
+    {file = "sphinx_inline_tabs-2025.12.21.14-py3-none-any.whl", hash = "sha256:e685c782b58d4e01490bcc4e2367cf7135ec28e7283a05e89095394e4ca6e81a"},
+    {file = "sphinx_inline_tabs-2025.12.21.14.tar.gz", hash = "sha256:c71a75800326e613fb4e410eed92a0934214741326aca9897c18018b9f968cb6"},
 ]
 
 [[package]]

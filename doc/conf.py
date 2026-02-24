@@ -66,7 +66,8 @@ extensions = ["myst_parser",
               "sphinx.ext.doctest",
               "sphinx.ext.napoleon",
               "sphinx.ext.todo",
-              "sphinx_prompt"]
+              "sphinx_prompt",
+              "sphinx_inline_tabs"]
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
