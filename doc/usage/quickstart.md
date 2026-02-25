@@ -54,6 +54,28 @@ if __name__ == "__main__":
     sentinel.gen._main()
 ```
 
+<!-- Keep in sync with imports above! -->
+
+```{testcode}
+:hide:
+
+import sys
+from unittest.mock import patch
+
+import sentinel.gen
+
+with patch.object(sys, 'argv', sys.argv[0:1] + ["--help"]):
+    sentinel.gen._main()
+```
+
+```{testoutput}
+:hide:
+
+Traceback (most recent call last):
+...
+SystemExit: 0
+```
+
 Note from the `script` metadata comment block that **the above Python script
 must be run using a tool that understand [PEP 723](https://peps.python.org/pep-0723/)
 metadata**. Such tools include `pipx`, `pdm`, or `hatch`, or `uv`. Assuming you
