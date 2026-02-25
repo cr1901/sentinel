@@ -33,9 +33,8 @@ Expand-Archive -Path sentinel-v-$SentinelVer.zip -DestinationPath .
 Generating Verilog of development versions- or any commit without a release-
 requires a bit of extra setup. However, it still has the advantage of not
 needing to (directly) interact with a source checkout if all you want is 
-some Verilog to vendor/use as part of a non-Amaranth project. To generate 
-the Verilog, you can use a script similar to this, substituting `next` with any
-desired branch, tag, or commit:
+some Verilog. To generate the Verilog, you can use a script similar to this,
+substituting `next` with any desired branch, tag, or commit:
 
 ```python
 """Create a script for generating Sentinel Verilog."""
@@ -76,11 +75,11 @@ Traceback (most recent call last):
 SystemExit: 0
 ```
 
-Note from the `script` metadata comment block that **the above Python script
-must be run using a tool that understand [PEP 723](https://peps.python.org/pep-0723/)
-metadata**. Such tools include `pipx`, `pdm`, or `hatch`, or `uv`. Assuming you
-saved the above script as a file called `download-sentinel.py`, you can
-generate Verilog with:
+The above Python script is meant to be run using a tool that understands
+[inline script metadata](https://peps.python.org/pep-0723/), such `pipx`, `pdm`,
+`hatch`, or `uv`. If you don't have any of these tools installed, see the
+"Python-only" tab. Assuming you saved the above script as a file called
+`download-sentinel.py`, you can generate Verilog with:
 
 
 ````{tab} pipx
@@ -107,39 +106,65 @@ uvx download-sentinel.py -o sentinel.v
 ```
 ````
 
+`````{tab} Python-only
+
+You can invoke `python` to run `pipx` [without installing](https://pipx.pypa.io/stable/installation/#using-pipx-without-installing-via-zipapp).
+First, ensure that you've downloaded `pipx.pyz`:
+
+````{tab} sh
+```sh
+PIPX_VER=1.8.0
+
+wget -O pipx.pyz https://github.com/pypa/pipx/releases/download/$PIPX_VER/pipx.pyz
+```
+````
+
+````{tab} Powershell
+```powershell
+set PipXVer 1.8.0
+
+wget -OutFile pipx.pyz https://github.com/pypa/pipx/releases/$PipXVer/pipx.pyz
+```
+````
+
+Then run:
+
+```
+python pipx.pyz run download-sentinel.py -o sentinel.v
+```
+`````
+
 `````{tip}
 The `download-sentinel.py` script takes arguments to customize generation! You
 can get help by using:
 
 ````{tab} pipx
-:title: pipx
-
 ```sh
 pipx run download-sentinel.py --help
 ```
 ````
 
 ````{tab} pdm
-:title: pdm
-
 ```sh
 pdm run download-sentinel.py --help
 ```
 ````
 
 ````{tab} hatch
-:title: hatch
-
 ```sh
 hatch run download-sentinel.py --help
 ```
 ````
 
 ````{tab} uv
-:title: uv
-
 ```sh
 uvx download-sentinel.py --help
+```
+````
+
+````{tab} Python-only
+```sh
+python pipx.pyz run download-sentinel.py --help
 ```
 ````
 `````
