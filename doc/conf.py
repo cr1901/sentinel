@@ -12,6 +12,7 @@ import os
 import importlib.metadata
 import warnings
 from packaging.version import Version
+from docutils.nodes import literal_block
 
 project = 'sentinel'
 copyright = '2024, William D. Jones'
@@ -84,7 +85,7 @@ napoleon_custom_sections = ["Registers"]
 
 myst_footnote_transition = False
 myst_heading_anchors = 3
-myst_enable_extensions = ["deflist"]
+myst_enable_extensions = ["deflist", "substitution"]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -96,3 +97,22 @@ html_theme_options = {
 }
 
 html_logo = "Transparent.png"
+
+# Dynamic version control in docs
+
+sent_latest_tag = "v0.1.0-beta"
+
+if (Version(sent_latest_tag) != sent_ver) and not sent_ver.is_devrelease:
+    msg = "you need to increment `sent_latest_tag` so that docs are in sync with repo"
+    raise RuntimeError(msg)
+
+myst_substitutions = {
+    "sent_latest_tag": sent_latest_tag,
+}
+
+# An extremely dumb way to do codeblock substitutions with minimal code.
+def source_read_handler(app, docname, content):
+    content[0] = content[0].replace("__SENT_LATEST_TAG_IN_CODEBLOCK__", sent_latest_tag)
+
+def setup(app):
+    app.connect('source-read', source_read_handler)
