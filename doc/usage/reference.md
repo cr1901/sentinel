@@ -39,7 +39,8 @@ Generating Verilog of development versions- or any commit without a release-
 requires a bit of extra setup. However, it still has the advantage of not
 needing to (directly) interact with a source checkout if all you want is 
 some Verilog. To generate the Verilog, you can use a script similar to this,
-substituting `next` with any desired branch, tag, or commit:
+substituting `refs/heads/next.zip` with any desired branch (`refs/heads/$BRANCH.zip`),
+tag (`refs/tags/$TAG.zip`), or commit (`$COMMIT.zip`):
 
 ```python
 """Create a script for generating Sentinel Verilog."""
@@ -47,7 +48,7 @@ substituting `next` with any desired branch, tag, or commit:
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#    "sentinel @ git+https://github.com/cr1901/sentinel@next",
+#    "sentinel @ https://github.com/cr1901/sentinel/archive/refs/heads/next.zip",
 #    "amaranth[builtin-yosys]>=0.5.8",
 # ]
 # ///
@@ -84,60 +85,75 @@ The above Python script is meant to be run using a tool that understands
 [inline script metadata](https://peps.python.org/pep-0723/), such `pipx`, `pdm`,
 `hatch`, or `uv`. If you don't have any of these tools installed, see the
 "Python-only" tab. Assuming you saved the above script as a file called
-`download-sentinel.py`, you can generate Verilog with:
+`download-sentinel.py`, you can generate Verilog with the sequence of commands:
 
+* First, regardless of which tool you have, you need to set an environment
+  variable, due to [how the source code is built](https://backend.pdm-project.org/metadata/#read-from-scm-tag-supporting-git-and-hg):
 
-````{tab} pipx
-```sh
-pipx run download-sentinel.py -o sentinel.v
-```
-````
+  ````{tab} sh
+  ```sh
+  export PDM_BUILD_SCM_VERSION=__SENT_CURRENT_VERSION_IN_CODEBLOCK__
+  ```
+  ````
+  
+  ````{tab} Powershell
+  ```powershell
+  $env:PDM_BUILD_SCM_VERSION='__SENT_CURRENT_VERSION_IN_CODEBLOCK__'
+  ```
+  ````
 
-````{tab} pdm
-```sh
-pdm run download-sentinel.py -o sentinel.v
-```
-````
+* Then, you can run `download-sentinel.py` to generate Verilog:
 
-````{tab} hatch
-```sh
-hatch run download-sentinel.py -o sentinel.v
-```
-````
-
-````{tab} uv
-```sh
-uvx download-sentinel.py -o sentinel.v
-```
-````
-
-`````{tab} Python-only
-
-You can invoke `python` to run `pipx` [without installing](https://pipx.pypa.io/stable/installation/#using-pipx-without-installing-via-zipapp).
-First, ensure that you've downloaded `pipx.pyz`:
-
-````{tab} sh
-```sh
-PIPX_VER=1.8.0
-
-wget -O pipx.pyz https://github.com/pypa/pipx/releases/download/$PIPX_VER/pipx.pyz
-```
-````
-
-````{tab} Powershell
-```powershell
-set PipXVer 1.8.0
-
-wget -OutFile pipx.pyz https://github.com/pypa/pipx/releases/$PipXVer/pipx.pyz
-```
-````
-
-Then run:
-
-```
-python pipx.pyz run download-sentinel.py -o sentinel.v
-```
-`````
+  ````{tab} pipx
+  ```sh
+  pipx run download-sentinel.py -o sentinel.v
+  ```
+  ````
+  
+  ````{tab} pdm
+  ```sh
+  pdm run download-sentinel.py -o sentinel.v
+  ```
+  ````
+  
+  ````{tab} hatch
+  ```sh
+  hatch run download-sentinel.py -o sentinel.v
+  ```
+  ````
+  
+  ````{tab} uv
+  ```sh
+  uvx download-sentinel.py -o sentinel.v
+  ```
+  ````
+  
+  `````{tab} Python-only
+  You can invoke `python` to run `pipx` [without installing](https://pipx.pypa.io/stable/installation/#using-pipx-without-installing-via-zipapp).
+  First, ensure that you've downloaded `pipx.pyz`:
+  
+  ````{tab} sh
+  ```sh
+  PIPX_VER=1.8.0
+  
+  wget -O pipx.pyz https://github.com/pypa/pipx/releases/download/$PIPX_VER/pipx.pyz
+  ```
+  ````
+  
+  ````{tab} Powershell
+  ```powershell
+  set PipXVer 1.8.0
+  
+  wget -OutFile pipx.pyz https://github.com/pypa/pipx/releases/$PipXVer/pipx.pyz
+  ```
+  ````
+  
+  Then run:
+  
+  ```
+  python pipx.pyz run download-sentinel.py -o sentinel.v
+  ```
+  `````
 
 `````{tip}
 The `download-sentinel.py` script takes arguments to customize generation! You
@@ -180,22 +196,6 @@ The above script could possibly be represented as a Heredoc parameterized on
 `next` to dynamically choose which version of the Sentinel source code is
 checked out!
 ``` -->
-
-
-```{note}
-Unfortunately, it is [normal](https://github.com/cr1901/sentinel/issues/65)
-for Verilog generation to take a long time when any of the above tools have
-to download the Sentinel git repo- upwards of 30 seconds, from my experiments!
-I will continue to look into why it's so slow; I believe submodules are to
-blame. In the meantime, keep the performance in mind, and avoid frequent
-regeneration, maybe a maximum of once per day.
-
-Thankfully, needing _only_ the Verilog of a development version of Sentinel
-should be rare. Using the script with PyPI wheels should not take long to
-generate Verilog, although PyPI wheels will have an equivalent
-[Release](https://github.com/cr1901/sentinel/releases) from which you can
-directly download the Verilog.
-```
 
 ## Generating Verilog From An Installed Package/As A Dependency
 

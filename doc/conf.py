@@ -113,6 +113,7 @@ myst_substitutions = {
 # An extremely dumb way to do codeblock substitutions with minimal code.
 def source_read_handler(app, docname, content):
     content[0] = content[0].replace("__SENT_LATEST_TAG_IN_CODEBLOCK__", sent_latest_tag)
+    content[0] = content[0].replace("__SENT_CURRENT_VERSION_IN_CODEBLOCK__", version)
 
 def setup(app):
     app.connect('source-read', source_read_handler)
