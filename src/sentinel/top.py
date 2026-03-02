@@ -2,7 +2,11 @@
 
 from amaranth import Signal, Module
 from amaranth.lib.wiring import Component, Signature, Out, In, connect, flipped
-from amaranth_soc import wishbone
+
+try:
+    from amaranth_soc import wishbone
+except ImportError:
+    wishbone = None
 
 from .alu import ALU, ASrcMux, BSrcMux
 from .align import AddressAlign, WriteDataAlign
@@ -206,10 +210,29 @@ class Top(Component):
         self.wdata_align = WriteDataAlign()
 
         sig = {
-                "bus": Out(wishbone.Signature(addr_width=30, data_width=32,
-                                              granularity=8)),
-                "irq": In(1)
+            "irq": In(1)
         }
+
+        if wishbone:
+            # Implementation-detail: Do not hard-depend on amaranth-soc until
+            # it's released on PyPI. This allows me to release sentinel on PyPI
+            # independently of amaranth-soc for now. But if the wishbone module
+            # is in scope, use it. It should produce the same Signature as
+            # that in the else block.
+            sig["bus"] = Out(wishbone.Signature(addr_width=30, data_width=32,
+                                                granularity=8))
+        else:
+            sig["bus"] = Out(Signature({
+                    "adr":   Out(30),
+                    "dat_w": Out(32),
+                    "dat_r": In(32),
+                    "sel":   Out(4),
+                    "cyc":   Out(1),
+                    "stb":   Out(1),
+                    "we":    Out(1),
+                    "ack":   In(1),
+            }))
+
         if self.formal:
             sig["rvfi"] = Out(Signature({
                     "exception": Out(1),
