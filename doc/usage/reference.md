@@ -218,6 +218,14 @@ provide a shortcut for Verilog generation in your `pyproject.toml`
 gen = { call = "sentinel.gen:generate", help="generate Sentinel Verilog file" }
 ```
 
+<!-- Keep in sync with function names above! -->
+
+```{testcode}
+:hide:
+
+from sentinel.gen import generate
+```
+
 ## Use In Amaranth Code
 
 Right now, even from Python, Sentinel consists of rather few tunable knobs.
